@@ -149,6 +149,9 @@ func renderPerformanceReportHTML(data *models.PerformanceReportData, fontDir str
 }
 
 func (s *ReportService) htmlToPDF(htmlBytes []byte, opts pdfOptions) ([]byte, error) {
+	if _, err := pdf.ResolveChromePath(); err != nil {
+		return nil, err
+	}
 	tmpDir, err := os.MkdirTemp("", "cheungprey-html-pdf-*")
 	if err != nil {
 		return nil, fmt.Errorf("create temp dir: %w", err)
