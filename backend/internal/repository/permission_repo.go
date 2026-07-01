@@ -170,6 +170,52 @@ func normalizePermissions(perms models.PermissionSet) map[string]bool {
 	return out
 }
 
+func (r *Repository) ListRoles() ([]models.Role, error) {
+	var rows []models.Role
+	_, err := r.AdminClient.From("roles").
+		Select("role,label,is_system", "exact", false).
+		Order("is_system", nil).
+		Order("role", nil).
+		ExecuteTo(&rows)
+	if err != nil {
+		return nil, fmt.Errorf("list roles: %w", err)
+	}
+	return rows, nil
+}
+
+func (r *Repository) CreateRole(role, label string) error {
+	_, _, err := r.AdminClient.From("roles").
+		Insert(map[string]any{"role": role, "label": label, "is_system": false}, false, "", "", "").
+		Execute()
+	if err != nil {
+		return fmt.Errorf("create role: %w", err)
+	}
+	return nil
+}
+
+func (r *Repository) UpdateRole(role, label string) error {
+	_, _, err := r.AdminClient.From("roles").
+		Update(map[string]any{"label": label, "updated_at": "now()"}, "", "").
+		Eq("role", role).
+		Execute()
+	if err != nil {
+		return fmt.Errorf("update role: %w", err)
+	}
+	return nil
+}
+
+func (r *Repository) DeleteRole(role string) error {
+	_, _, err := r.AdminClient.From("roles").
+		Delete("", "").
+		Eq("role", role).
+		Eq("is_system", "false").
+		Execute()
+	if err != nil {
+		return fmt.Errorf("delete role: %w", err)
+	}
+	return nil
+}
+
 func (r *Repository) SeedRolePermissionsIfEmpty() error {
 	list, err := r.ListRolePermissions()
 	if err != nil {

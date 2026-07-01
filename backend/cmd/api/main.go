@@ -91,6 +91,10 @@ func main() {
 				admin.GET("/statistics", adminHandler.GetStatistics)
 				admin.GET("/role-permissions", permissionHandler.ListRolePermissions)
 				admin.PUT("/role-permissions/:role", permissionHandler.UpdateRolePermissions)
+				admin.GET("/roles", permissionHandler.ListRoles)
+				admin.POST("/roles", permissionHandler.CreateRole)
+				admin.PUT("/roles/:role", permissionHandler.UpdateRole)
+				admin.DELETE("/roles/:role", permissionHandler.DeleteRole)
 			}
 
 			records := protected.Group("/records")

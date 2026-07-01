@@ -65,3 +65,60 @@ func (h *PermissionHandler) ListFeatures(c *gin.Context) {
 	}
 	utils.JSON(c, http.StatusOK, features)
 }
+
+func (h *PermissionHandler) ListRoles(c *gin.Context) {
+	if !auth.RequireFeatureHandler(c, models.FeatureUsers) {
+		return
+	}
+	list, err := h.repo.ListRoles()
+	if err != nil {
+		utils.InternalError(c, "Failed to load roles")
+		return
+	}
+	utils.JSON(c, http.StatusOK, list)
+}
+
+func (h *PermissionHandler) CreateRole(c *gin.Context) {
+	if !auth.RequireFeatureHandler(c, models.FeatureUsers) {
+		return
+	}
+	var req models.CreateRoleRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, err.Error())
+		return
+	}
+	if err := h.repo.CreateRole(req.Role, req.Label); err != nil {
+		utils.InternalError(c, "Failed to create role")
+		return
+	}
+	utils.JSON(c, http.StatusCreated, gin.H{"message": "Role created"})
+}
+
+func (h *PermissionHandler) UpdateRole(c *gin.Context) {
+	if !auth.RequireFeatureHandler(c, models.FeatureUsers) {
+		return
+	}
+	role := c.Param("role")
+	var req models.UpdateRoleRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, err.Error())
+		return
+	}
+	if err := h.repo.UpdateRole(role, req.Label); err != nil {
+		utils.InternalError(c, "Failed to update role")
+		return
+	}
+	utils.JSON(c, http.StatusOK, gin.H{"message": "Role updated"})
+}
+
+func (h *PermissionHandler) DeleteRole(c *gin.Context) {
+	if !auth.RequireFeatureHandler(c, models.FeatureUsers) {
+		return
+	}
+	role := c.Param("role")
+	if err := h.repo.DeleteRole(role); err != nil {
+		utils.InternalError(c, "Failed to delete role")
+		return
+	}
+	utils.JSON(c, http.StatusOK, gin.H{"message": "Role deleted"})
+}

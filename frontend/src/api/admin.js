@@ -16,4 +16,8 @@ export const adminAPI = {
   updateRolePermissions: (role, permissions) =>
     client.put(`/admin/role-permissions/${role}`, { permissions }),
   getFeatures: () => client.get("/permissions/features"),
+  getRoles: () => client.get("/admin/roles"),
+  createRole: (data) => client.post("/admin/roles", data),
+  updateRole: (role, data) => client.put(`/admin/roles/${role}`, data),
+  deleteRole: (role) => client.delete(`/admin/roles/${role}`),
 };

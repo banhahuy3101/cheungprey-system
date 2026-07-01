@@ -62,6 +62,21 @@ type UpdateRolePermissionsRequest struct {
 	Permissions PermissionSet `json:"permissions" binding:"required"`
 }
 
+type Role struct {
+	Role      string `json:"role"`
+	Label     string `json:"label"`
+	IsSystem  bool   `json:"is_system"`
+}
+
+type CreateRoleRequest struct {
+	Role  string `json:"role" binding:"required"`
+	Label string `json:"label" binding:"required"`
+}
+
+type UpdateRoleRequest struct {
+	Label string `json:"label" binding:"required"`
+}
+
 type UpdateUserRolesRequest struct {
 	Roles []UserRole `json:"roles" binding:"required,min=1"`
 }
