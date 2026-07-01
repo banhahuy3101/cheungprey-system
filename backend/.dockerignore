@@ -1,0 +1,5 @@
+bin/
+app
+.env
+.env.*
+supabase/.temp/

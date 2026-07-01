@@ -13,6 +13,7 @@ import (
 	"github.com/chromedp/chromedp"
 
 	"github.com/banhahuy/cheungprey-system/backend/internal/models"
+	"github.com/banhahuy/cheungprey-system/backend/pkg/pdf"
 	"github.com/banhahuy/cheungprey-system/backend/pkg/periodlabel"
 )
 
@@ -63,16 +64,7 @@ func (s *ReportService) GenerateMemberReport(members []models.Member) ([]byte, e
 
 	reportURL := "file://" + htmlPath
 
-	allocCtx, allocCancel := chromedp.NewExecAllocator(context.Background(),
-		chromedp.ExecPath("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"),
-		chromedp.Flag("headless", true),
-		chromedp.Flag("disable-gpu", true),
-		chromedp.Flag("no-sandbox", true),
-		chromedp.Flag("allow-file-access-from-files", true),
-	)
-	defer allocCancel()
-
-	ctx, cancel := chromedp.NewContext(allocCtx)
+	ctx, cancel := pdf.ChromeAllocator(context.Background())
 	defer cancel()
 
 	ctx, cancel = context.WithTimeout(ctx, 30*time.Second)
@@ -170,16 +162,7 @@ func (s *ReportService) htmlToPDF(htmlBytes []byte, opts pdfOptions) ([]byte, er
 
 	reportURL := "file://" + htmlPath
 
-	allocCtx, allocCancel := chromedp.NewExecAllocator(context.Background(),
-		chromedp.ExecPath("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"),
-		chromedp.Flag("headless", true),
-		chromedp.Flag("disable-gpu", true),
-		chromedp.Flag("no-sandbox", true),
-		chromedp.Flag("allow-file-access-from-files", true),
-	)
-	defer allocCancel()
-
-	ctx, cancel := chromedp.NewContext(allocCtx)
+	ctx, cancel := pdf.ChromeAllocator(context.Background())
 	defer cancel()
 
 	ctx, cancel = context.WithTimeout(ctx, 120*time.Second)

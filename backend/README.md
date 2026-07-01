@@ -50,9 +50,10 @@ Set **Root Directory** to `backend`, then use:
 | Build Command | `go build -o app ./cmd/api` |
 | Start Command | `./app` |
 
-Or use the repo `render.yaml` Blueprint.
+Or use the repo `render.yaml` Blueprint (Docker image includes Chromium for PDF reports).
 
 Required env vars on Render: `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY`, `SUPABASE_JWKS_URL`.
+Optional: `CHROME_PATH=/usr/bin/chromium` (set automatically in Docker deploy).
 
 ## Routes
 

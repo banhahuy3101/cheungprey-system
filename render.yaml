@@ -2,10 +2,10 @@
 services:
   - type: web
     name: cheungprey-api
-    runtime: go
+    runtime: docker
     rootDir: backend
-    buildCommand: go build -o app ./cmd/api
-    startCommand: ./app
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
     healthCheckPath: /health
     envVars:
       - key: SUPABASE_URL
@@ -18,3 +18,5 @@ services:
         sync: false
       - key: CORS_ORIGIN
         sync: false
+      - key: CHROME_PATH
+        value: /usr/bin/chromium
