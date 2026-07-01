@@ -15,6 +15,7 @@ import (
 	"github.com/banhahuy/cheungprey-system/backend/internal/services"
 	"github.com/banhahuy/cheungprey-system/backend/internal/service"
 	"github.com/banhahuy/cheungprey-system/backend/pkg/config"
+	"github.com/banhahuy/cheungprey-system/backend/pkg/middleware"
 )
 
 func main() {
@@ -48,6 +49,7 @@ func main() {
 	performanceHandler := handlers.NewPerformanceHandler(repo, reportService)
 
 	r := gin.Default()
+	r.Use(middleware.CORS())
 
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{"status": "ok", "message": "server is running"})
