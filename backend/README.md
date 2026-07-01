@@ -29,10 +29,30 @@ Get the values from your Supabase dashboard: **Project Settings → API**.
 ## Run
 
 ```bash
-go run .
+go run ./cmd/api
 ```
 
 Server starts on port `8080` by default (override via `PORT` env).
+
+## Build
+
+```bash
+go build -o bin/api ./cmd/api
+./bin/api
+```
+
+## Deploy (Render)
+
+Set **Root Directory** to `backend`, then use:
+
+| Setting | Value |
+|---|---|
+| Build Command | `go build -o app ./cmd/api` |
+| Start Command | `./app` |
+
+Or use the repo `render.yaml` Blueprint.
+
+Required env vars on Render: `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY`, `SUPABASE_JWKS_URL`.
 
 ## Routes
 

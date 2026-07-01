@@ -1,2 +1,7 @@
 backend/supabase/.temp/
 supabase/.temp/
+backend/.env
+frontend/.env
+frontend/.env.local
+backend/bin/
+backend/app
