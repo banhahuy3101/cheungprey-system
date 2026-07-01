@@ -49,7 +49,7 @@ export default function Register() {
     <div className="login-page">
       <div className="login-card">
         <div className="login-header">
-          <h1>គណបក្សប្រជាជនកម្ពុជា</h1>
+          <h1>ប្រព័ន្ធគ្រប់គ្រងស្រុកជើងព្រៃ</h1>
           <h2>បង្កើតគណនីថ្មី</h2>
         </div>
         <form onSubmit={handleSubmit}>

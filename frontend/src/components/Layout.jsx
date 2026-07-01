@@ -56,8 +56,8 @@ export default function Layout() {
 
       <aside className={`sidebar ${sidebarOpen ? "open" : ""}`}>
         <div className="sidebar-brand">
-          <h2>គ.ប.ក</h2>
-          <span>ឃុំជាំងព្រៀង</span>
+          <h2>ស.ជើងព្រៃ</h2>
+          <span>ប្រព័ន្ធគ្រប់គ្រងស្រុកជើងព្រៃ</span>
         </div>
 
         <nav className="sidebar-nav">
@@ -101,7 +101,7 @@ export default function Layout() {
           >
             <LuMenu size={24} />
           </button>
-          <h3 className="page-title">ប្រព័ន្ធគ្រប់គ្រងទិន្នន័យ</h3>
+          <h3 className="page-title">ប្រព័ន្ធគ្រប់គ្រងស្រុកជើងព្រៃ</h3>
           <div className="topbar-right">
             <span className="user-role">{roleLabel}</span>
           </div>

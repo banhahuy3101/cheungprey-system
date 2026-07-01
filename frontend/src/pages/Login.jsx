@@ -28,8 +28,8 @@ export default function Login() {
   const { login } = useAuth();
   const navigate = useNavigate();
   const [form, setForm] = useState({
-    email: "admin@cheungprey.org.kh",
-    password: "Demo123!",
+    email: "",
+    password: "",
   });
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -79,9 +79,8 @@ export default function Login() {
     <div className="login-page">
       <div className="login-card">
         <div className="login-header">
-          <h1>គណបក្សប្រជាជនកម្ពុជា</h1>
-          <h2>ឃុំជាំងព្រៀង</h2>
-          <p>ប្រព័ន្ធគ្រប់គ្រងទិន្នន័យ</p>
+          <h1>ប្រព័ន្ធគ្រប់គ្រងស្រុកជើងព្រៃ</h1>
+          <h2>សម្រាប់ស្រុកជើងព្រៃ</h2>
         </div>
         <form onSubmit={handleSubmit}>
           <div className="form-group">
@@ -122,9 +121,7 @@ export default function Login() {
         <p className="login-footer">
           មិនទាន់មានគណនី? <Link to="/register">បង្កើតគណនីថ្មី</Link>
         </p>
-        <p className="login-footer" style={{ fontSize: "0.8rem", color: "#888", marginTop: "0.5rem" }}>
-          Default password for all users: <strong>Demo123!</strong>
-        </p>
+
       </div>
     </div>
   );
