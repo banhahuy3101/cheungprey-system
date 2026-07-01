@@ -3,6 +3,7 @@ package services
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"fmt"
 	"html/template"
 	"os"
@@ -98,9 +99,47 @@ func (s *ReportService) GenerateMemberReport(members []models.Member) ([]byte, e
 	return pdfBuf, nil
 }
 
+func formatPerformanceValue(dataType string, val *models.PerformanceData) string {
+	if val == nil {
+		return "—"
+	}
+	switch dataType {
+	case "number", "text":
+		if val.ValueNumber != nil {
+			return fmt.Sprintf("%g", *val.ValueNumber)
+		}
+	case "percentage":
+		if val.ValuePercentage != nil {
+			return fmt.Sprintf("%g%%", *val.ValuePercentage)
+		}
+	case "binary":
+		if val.ValueBinary != nil {
+			if *val.ValueBinary {
+				return "បាន/មាន"
+			}
+			return "មិនបាន/គ្មាន"
+		}
+	}
+	return "—"
+}
+
+func fontDataURI(fontDir, filename string) (string, error) {
+	data, err := os.ReadFile(filepath.Join(fontDir, filename))
+	if err != nil {
+		return "", err
+	}
+	return "data:font/ttf;base64," + base64.StdEncoding.EncodeToString(data), nil
+}
+
 func renderPerformanceReportHTML(data *models.PerformanceReportData, fontDir string) ([]byte, error) {
-	battambangPath := filepath.Join(fontDir, "Battambang-Regular.ttf")
-	battambangBoldPath := filepath.Join(fontDir, "Battambang-Bold.ttf")
+	battambangURI, err := fontDataURI(fontDir, "Battambang-Regular.ttf")
+	if err != nil {
+		return nil, fmt.Errorf("load khmer font: %w", err)
+	}
+	battambangBoldURI, err := fontDataURI(fontDir, "Battambang-Bold.ttf")
+	if err != nil {
+		return nil, fmt.Errorf("load khmer bold font: %w", err)
+	}
 
 	funcMap := template.FuncMap{
 		"add": func(a, b int) int { return a + b },
@@ -113,9 +152,9 @@ func renderPerformanceReportHTML(data *models.PerformanceReportData, fontDir str
 		periodRangeLabel = data.Period.LabelKh
 	}
 	var htmlBuf bytes.Buffer
-	err := tmpl.Execute(&htmlBuf, map[string]any{
-		"BattambangFontPath":     "file://" + battambangPath,
-		"BattambangBoldFontPath": "file://" + battambangBoldPath,
+	err = tmpl.Execute(&htmlBuf, map[string]any{
+		"BattambangFontPath":     template.URL(battambangURI),
+		"BattambangBoldFontPath": template.URL(battambangBoldURI),
 		"Data":                   data,
 		"PeriodRangeLabel":       periodRangeLabel,
 		"GeneratedAt":            time.Now().Format("02/01/2006 15:04"),
@@ -179,7 +218,11 @@ func (s *ReportService) htmlToPDF(htmlBytes []byte, opts pdfOptions) ([]byte, er
 }
 
 func (s *ReportService) GeneratePerformanceReport(data *models.PerformanceReportData) ([]byte, error) {
-	return s.generatePerformanceReportPDF(data)
+	htmlBytes, err := renderPerformanceReportHTML(data, s.fontDir)
+	if err != nil {
+		return nil, err
+	}
+	return s.htmlToPDF(htmlBytes, landscapeA4PDFOptions())
 }
 
 func base64Std(data []byte) string {
