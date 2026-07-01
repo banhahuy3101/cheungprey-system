@@ -47,4 +47,46 @@ func TestPerformanceReportTemplateExecutes(t *testing.T) {
 	}
 }
 
+func TestPerformanceReportPDFKhmer(t *testing.T) {
+	svc := NewReportService("../../fonts")
+	data := &models.PerformanceReportData{
+		Zone: models.GeographicZone{NameKh: "បន្ទាយនាង"},
+		Period: models.PerformancePeriod{
+			LabelKh:   "ឆ្នាំ ២០២៦",
+			StartDate: "2022-01-01",
+			EndDate:   "2026-06-30",
+		},
+		Domains: []models.PerformanceReportDomain{
+			{
+				Domain: models.PerformanceDomain{Code: "VII", NameKh: "វិស័យសេដ្ឋកិច្ច"},
+				SubDomains: []models.PerformanceReportSubDomain{
+					{
+						SubDomain: models.PerformanceSubDomain{Code: "7.2", NameKh: "កសិកម្ម"},
+						Indicators: []models.PerformanceReportIndicator{
+							{
+								Indicator: models.PerformanceIndicator{
+									NameKh:   "ចំនួនកសិករប្រើប្រាស់បច្ចេកវិទ្យាថ្មី",
+									DataType: "binary",
+								},
+								Value: &models.PerformanceData{
+									ID:          uuid.New(),
+									ValueBinary: boolPtr(true),
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	pdfBytes, err := svc.GeneratePerformanceReport(data)
+	if err != nil {
+		t.Fatalf("generate pdf: %v", err)
+	}
+	if len(pdfBytes) < 100 || pdfBytes[0] != '%' || pdfBytes[1] != 'P' || pdfBytes[2] != 'D' || pdfBytes[3] != 'F' {
+		t.Fatalf("expected PDF header, got %d bytes", len(pdfBytes))
+	}
+}
+
 func boolPtr(v bool) *bool { return &v }

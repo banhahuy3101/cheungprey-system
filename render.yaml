@@ -1,22 +1,20 @@
-# Render web service — set env vars in dashboard (copy from backend/.env)
-services:
-  - type: web
-    name: cheungprey-api
-    runtime: docker
-    rootDir: backend
-    dockerfilePath: ./Dockerfile
-    dockerContext: .
-    healthCheckPath: /health
-    envVars:
-      - key: SUPABASE_URL
-        sync: false
-      - key: SUPABASE_PUBLISHABLE_KEY
-        sync: false
-      - key: SUPABASE_SECRET_KEY
-        sync: false
-      - key: SUPABASE_JWKS_URL
-        sync: false
-      - key: CORS_ORIGIN
-        sync: false
-      - key: CHROME_PATH
-        value: /usr/bin/chromium
+# Render web service — set env vars in dashboard (copy from backend/.env)
+services:
+  - type: web
+    name: cheungprey-api
+    runtime: go
+    rootDir: backend
+    buildCommand: go build -o app ./cmd/api
+    startCommand: ./app
+    healthCheckPath: /health
+    envVars:
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_PUBLISHABLE_KEY
+        sync: false
+      - key: SUPABASE_SECRET_KEY
+        sync: false
+      - key: SUPABASE_JWKS_URL
+        sync: false
+      - key: CORS_ORIGIN
+        sync: false

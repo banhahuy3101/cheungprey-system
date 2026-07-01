@@ -104,29 +104,7 @@ func renderPerformanceReportHTML(data *models.PerformanceReportData, fontDir str
 
 	funcMap := template.FuncMap{
 		"add": func(a, b int) int { return a + b },
-		"formatValue": func(dataType string, val *models.PerformanceData) string {
-			if val == nil {
-				return "—"
-			}
-			switch dataType {
-			case "number", "text":
-				if val.ValueNumber != nil {
-					return fmt.Sprintf("%g", *val.ValueNumber)
-				}
-			case "percentage":
-				if val.ValuePercentage != nil {
-					return fmt.Sprintf("%g%%", *val.ValuePercentage)
-				}
-			case "binary":
-				if val.ValueBinary != nil {
-					if *val.ValueBinary {
-						return "បាន/មាន"
-					}
-					return "មិនបាន/គ្មាន"
-				}
-			}
-			return "—"
-		},
+		"formatValue": formatPerformanceValue,
 	}
 
 	tmpl := template.Must(template.New("report").Funcs(funcMap).Parse(performanceReportHTML))
@@ -201,11 +179,7 @@ func (s *ReportService) htmlToPDF(htmlBytes []byte, opts pdfOptions) ([]byte, er
 }
 
 func (s *ReportService) GeneratePerformanceReport(data *models.PerformanceReportData) ([]byte, error) {
-	htmlBytes, err := renderPerformanceReportHTML(data, s.fontDir)
-	if err != nil {
-		return nil, err
-	}
-	return s.htmlToPDF(htmlBytes, landscapeA4PDFOptions())
+	return s.generatePerformanceReportPDF(data)
 }
 
 func base64Std(data []byte) string {
