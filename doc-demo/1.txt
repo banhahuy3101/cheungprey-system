@@ -1,0 +1,20 @@
+Email: admin@cheungprey.org.kh
+Password: Demo123!
+Role: super_admin
+User ID: b32e53bd-dff6-4665-952f-1265221a1a0b
+
+All users use DEFAULT_USER_PASSWORD (Demo123!) unless changed in Settings.
+
+
+
+Resetting ALL users to default password: Demo123!
+OK recorder.demo@cheungprey.org.kh -> Demo123! [verified]
+OK village.chief@cheungprey.org.kh -> Demo123! [verified]
+OK commune.chief@cheungprey.org.kh -> Demo123! [verified]
+OK district.chief@cheungprey.org.kh -> Demo123! [verified]
+OK test2@test.com -> Demo123! [verified]
+OK testuser123@cheungprey.org.kh -> Demo123! [verified]
+OK test1@test.com -> Demo123! [verified]
+OK test@test.com -> Demo123! [verified]
+OK admin@cheungprey.org.kh -> Demo123! [verified]
+Done. Reset 9/9 users.
