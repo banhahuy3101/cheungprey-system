@@ -4,8 +4,9 @@ import { LuUser, LuMail, LuPhone, LuMapPin, LuShield, LuPencil, LuCheck, LuArrow
 import { useAuth } from "../hooks/useAuth";
 import { adminAPI } from "../api/admin";
 import { isAdmin as userIsAdmin } from "../utils/permissions";
+import { useRoleOptions } from "../hooks/useRoleOptions";
 
-const ROLE_OPTIONS = [
+const ROLE_OPTIONS_FALLBACK = [
   { value: "recorder", label: "Recorder" },
   { value: "village_chief", label: "Village Chief" },
   { value: "commune_clerk", label: "Commune Clerk" },
@@ -15,10 +16,6 @@ const ROLE_OPTIONS = [
   { value: "super_admin", label: "Super Admin" },
 ];
 
-const ROLE_LABEL_MAP = Object.fromEntries(
-  ROLE_OPTIONS.map((r) => [r.value, r.label])
-);
-
 function formatDate(value) {
   if (!value || value.startsWith("0001-01-01")) return "-";
   return value.slice(0, 10);
@@ -27,6 +24,7 @@ function formatDate(value) {
 export default function Profile() {
   const { user, refreshProfile } = useAuth();
   const navigate = useNavigate();
+  const { roleOptions } = useRoleOptions();
 
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({
@@ -197,7 +195,7 @@ export default function Profile() {
                 <div className="form-group">
                   <label>តួនាទី</label>
                   <select name="role" value={form.role} onChange={handleChange}>
-                    {ROLE_OPTIONS.map((r) => (
+                    {(roleOptions.length ? roleOptions : ROLE_OPTIONS_FALLBACK).map((r) => (
                       <option key={r.value} value={r.value}>{r.label}</option>
                     ))}
                   </select>

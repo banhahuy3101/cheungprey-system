@@ -59,8 +59,12 @@ func (r *Repository) SetUserRoles(userID uuid.UUID, roles []models.UserRole) err
 		return fmt.Errorf("set user roles: %w", err)
 	}
 	primary := models.PrimaryRole(roles)
+	profileRole := primary
+	if _, ok := models.RoleHierarchy[primary]; !ok {
+		profileRole = models.RoleRegularUser
+	}
 	_, _, err = r.AdminClient.From("profiles").
-		Update(map[string]any{"role": primary, "updated_at": "now()"}, "", "").
+		Update(map[string]any{"role": profileRole, "updated_at": "now()"}, "", "").
 		Eq("id", userID.String()).
 		Execute()
 	return err
@@ -118,6 +122,14 @@ func (r *Repository) GetAllRolePermissionsMap() (map[models.UserRole]models.Perm
 			m[role] = models.DefaultPermissionsForRole(role)
 		}
 	}
+	if roleList, err := r.ListRoles(); err == nil {
+		for _, row := range roleList {
+			role := models.UserRole(row.Role)
+			if _, ok := m[role]; !ok {
+				m[role] = models.DefaultPermissionsForRole(role)
+			}
+		}
+	}
 	return m, nil
 }
 
@@ -171,26 +183,94 @@ func normalizePermissions(perms models.PermissionSet) map[string]bool {
 }
 
 func (r *Repository) ListRoles() ([]models.Role, error) {
+	byKey := make(map[string]models.Role, 16)
+	for _, row := range builtinRoles() {
+		byKey[row.Role] = row
+	}
+
 	var rows []models.Role
-	_, err := r.AdminClient.From("roles").
+	if _, err := r.AdminClient.From("roles").
 		Select("role,label,is_system", "exact", false).
 		Order("is_system", nil).
 		Order("role", nil).
-		ExecuteTo(&rows)
-	if err != nil {
-		return nil, fmt.Errorf("list roles: %w", err)
+		ExecuteTo(&rows); err == nil {
+		for _, row := range rows {
+			byKey[row.Role] = row
+		}
 	}
-	return rows, nil
+
+	if perms, err := r.ListRolePermissions(); err == nil {
+		for _, item := range perms {
+			key := string(item.Role)
+			if _, ok := byKey[key]; !ok {
+				byKey[key] = models.Role{Role: key, Label: key, IsSystem: false}
+			}
+		}
+	}
+
+	result := make([]models.Role, 0, len(byKey))
+	for _, row := range byKey {
+		result = append(result, row)
+	}
+	sortRoles(result)
+	return result, nil
+}
+
+func sortRoles(rows []models.Role) {
+	for i := 0; i < len(rows); i++ {
+		for j := i + 1; j < len(rows); j++ {
+			if rows[j].Role < rows[i].Role {
+				rows[i], rows[j] = rows[j], rows[i]
+			}
+		}
+	}
+}
+
+func builtinRoles() []models.Role {
+	return []models.Role{
+		{Role: "super_admin", Label: "Super Admin", IsSystem: true},
+		{Role: "admin", Label: "Admin", IsSystem: true},
+		{Role: "district_chief", Label: "District Chief", IsSystem: true},
+		{Role: "commune_chief", Label: "Commune Chief", IsSystem: true},
+		{Role: "commune_clerk", Label: "Commune Clerk", IsSystem: true},
+		{Role: "village_chief", Label: "Village Chief", IsSystem: true},
+		{Role: "recorder", Label: "Recorder", IsSystem: true},
+		{Role: "regular_user", Label: "Regular User", IsSystem: true},
+	}
 }
 
 func (r *Repository) CreateRole(role, label string) error {
-	_, _, err := r.AdminClient.From("roles").
+	userRole := models.UserRole(role)
+	if exists, err := r.roleExists(role); err != nil {
+		return fmt.Errorf("check role: %w", err)
+	} else if exists {
+		return fmt.Errorf("role already exists")
+	}
+
+	_, _, catalogErr := r.AdminClient.From("roles").
 		Insert(map[string]any{"role": role, "label": label, "is_system": false}, false, "", "", "").
 		Execute()
-	if err != nil {
-		return fmt.Errorf("create role: %w", err)
+
+	if err := r.UpdateRolePermissions(userRole, models.DefaultPermissionsForRole(userRole)); err != nil {
+		if catalogErr != nil {
+			return fmt.Errorf("create role permissions (apply migration 019_custom_roles.sql): %w", err)
+		}
+		return fmt.Errorf("seed role permissions: %w", err)
 	}
 	return nil
+}
+
+func (r *Repository) roleExists(role string) (bool, error) {
+	list, err := r.ListRolePermissions()
+	if err != nil {
+		return false, err
+	}
+	for _, row := range list {
+		if string(row.Role) == role {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 func (r *Repository) UpdateRole(role, label string) error {
@@ -205,15 +285,33 @@ func (r *Repository) UpdateRole(role, label string) error {
 }
 
 func (r *Repository) DeleteRole(role string) error {
-	_, _, err := r.AdminClient.From("roles").
+	if isSystemRole(role) {
+		return fmt.Errorf("cannot delete system role")
+	}
+	_, _, _ = r.AdminClient.From("roles").
 		Delete("", "").
 		Eq("role", role).
 		Eq("is_system", "false").
 		Execute()
+	_, _, err := r.AdminClient.From("role_permissions").
+		Delete("", "").
+		Eq("role", role).
+		Execute()
 	if err != nil {
-		return fmt.Errorf("delete role: %w", err)
+		return fmt.Errorf("delete role permissions: %w", err)
 	}
 	return nil
+}
+
+func isSystemRole(role string) bool {
+	switch models.UserRole(role) {
+	case models.RoleSuperAdmin, models.RoleAdmin, models.RoleDistrictChief,
+		models.RoleCommuneChief, models.RoleCommuneClerk, models.RoleVillageChief,
+		models.RoleRecorder, models.RoleRegularUser:
+		return true
+	default:
+		return false
+	}
 }
 
 func (r *Repository) SeedRolePermissionsIfEmpty() error {

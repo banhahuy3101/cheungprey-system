@@ -88,7 +88,12 @@ func (h *PermissionHandler) CreateRole(c *gin.Context) {
 		return
 	}
 	if err := h.repo.CreateRole(req.Role, req.Label); err != nil {
-		utils.InternalError(c, "Failed to create role")
+		msg := err.Error()
+		if msg == "role already exists" {
+			utils.BadRequest(c, msg)
+			return
+		}
+		utils.InternalError(c, msg)
 		return
 	}
 	utils.JSON(c, http.StatusCreated, gin.H{"message": "Role created"})

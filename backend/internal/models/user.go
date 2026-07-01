@@ -30,6 +30,13 @@ var RoleHierarchy = map[UserRole]int{
 	RoleRegularUser:   0,
 }
 
+func RoleLevel(role UserRole) int {
+	if level, ok := RoleHierarchy[role]; ok {
+		return level
+	}
+	return RoleHierarchy[RoleRegularUser]
+}
+
 type Profile struct {
 	ID          uuid.UUID     `json:"id"`
 	FullName    string        `json:"full_name"`

@@ -145,7 +145,10 @@ func RequireRole(allowedRoles ...models.UserRole) gin.HandlerFunc {
 }
 
 func ValidateRoleAssignment(assignerRole, targetRole models.UserRole) error {
-	if models.RoleHierarchy[assignerRole] <= models.RoleHierarchy[targetRole] {
+	if assignerRole == models.RoleSuperAdmin {
+		return nil
+	}
+	if models.RoleLevel(assignerRole) <= models.RoleLevel(targetRole) {
 		return fmt.Errorf("cannot assign role equal to or higher than your own")
 	}
 	return nil

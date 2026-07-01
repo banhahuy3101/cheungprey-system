@@ -35,10 +35,19 @@ export default function SettingsRolePermissions() {
       const rows = permRes.data?.data ?? permRes.data ?? [];
       const featList = featRes.data?.data ?? featRes.data ?? [];
 
+      const mergedRoles = [...roleList];
+      const known = new Set(mergedRoles.map((r) => r.role));
+      for (const row of rows) {
+        if (!known.has(row.role)) {
+          mergedRoles.push({ role: row.role, label: row.role, is_system: false });
+          known.add(row.role);
+        }
+      }
+
       const next = {};
       for (const row of rows) next[row.role] = { ...(row.permissions || {}) };
 
-      setRoles(roleList);
+      setRoles(mergedRoles);
       setMatrix(next);
       setFeatures(featList.map((f) => f.key || f));
     } catch {

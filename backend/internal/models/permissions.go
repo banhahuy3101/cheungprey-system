@@ -91,7 +91,7 @@ type UserAccess struct {
 func PrimaryRole(roles []UserRole) UserRole {
 	primary := RoleRegularUser
 	for _, r := range roles {
-		if RoleHierarchy[r] > RoleHierarchy[primary] {
+		if RoleLevel(r) > RoleLevel(primary) {
 			primary = r
 		}
 	}

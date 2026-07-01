@@ -4,12 +4,13 @@ import { adminAPI } from "../api/admin";
 import { useAuth } from "../hooks/useAuth";
 import Select from "../components/Select";
 import { isAdmin } from "../utils/permissions";
+import { useRoleOptions } from "../hooks/useRoleOptions";
 import {
   getDefaultUserPassword,
   createUserFormDefaults,
 } from "../config/userSettings";
 
-const ROLE_OPTIONS = [
+const ROLE_OPTIONS_FALLBACK = [
   { value: "recorder", label: "Recorder" },
   { value: "village_chief", label: "Village Chief" },
   { value: "commune_clerk", label: "Commune Clerk" },
@@ -19,10 +20,6 @@ const ROLE_OPTIONS = [
   { value: "super_admin", label: "Super Admin" },
 ];
 
-const ROLE_LABEL_MAP = Object.fromEntries(
-  ROLE_OPTIONS.map((r) => [r.value, r.label])
-);
-
 function formatDate(value) {
   if (!value || value.startsWith("0001-01-01")) return "-";
   return value.slice(0, 10);
@@ -30,6 +27,7 @@ function formatDate(value) {
 
 export default function Admin() {
   const { user } = useAuth();
+  const { roleOptions, roleLabelMap } = useRoleOptions();
   const [users, setUsers] = useState([]);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -270,7 +268,7 @@ export default function Admin() {
 
   const RoleCheckboxes = ({ roles, onToggle }) => (
     <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem 1rem" }}>
-      {ROLE_OPTIONS.map((r) => (
+      {(roleOptions.length ? roleOptions : ROLE_OPTIONS_FALLBACK).map((r) => (
         <label key={r.value} style={{ display: "flex", alignItems: "center", gap: "0.35rem", fontSize: "0.9rem" }}>
           <input
             type="checkbox"
@@ -377,7 +375,7 @@ export default function Admin() {
                       <td>
                         <div style={{ display: "flex", flexWrap: "wrap", gap: "0.25rem" }}>
                           {(u.roles?.length ? u.roles : [u.role]).map((r) => (
-                            <span key={r} className="badge">{ROLE_LABEL_MAP[r] || r}</span>
+                            <span key={r} className="badge">{roleLabelMap[r] || r}</span>
                           ))}
                         </div>
                       </td>
@@ -532,7 +530,7 @@ export default function Admin() {
                       <span className="profile-detail-value">
                         {(profileForm.roles || [profileForm.role]).map((r) => (
                           <span key={r} className="badge" style={{ marginRight: "0.25rem" }}>
-                            {ROLE_LABEL_MAP[r] || r}
+                            {roleLabelMap[r] || r}
                           </span>
                         ))}
                       </span>
