@@ -30,7 +30,21 @@ func CORS() gin.HandlerFunc {
 				origins = append(origins, o)
 			}
 		}
-		cfg.AllowOrigins = origins
+		cfg.AllowOriginFunc = func(origin string) bool {
+			if origin == "" {
+				return true
+			}
+			for _, o := range origins {
+				if origin == o {
+					return true
+				}
+			}
+			// Render static sites proxy /api same-origin; browser still sends Origin.
+			if strings.HasSuffix(origin, ".onrender.com") {
+				return true
+			}
+			return false
+		}
 	}
 
 	return cors.New(cfg)
