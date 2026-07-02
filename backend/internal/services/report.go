@@ -126,7 +126,7 @@ func (s *ReportService) htmlToPDF(htmlBytes []byte, opts pdfOptions) ([]byte, er
 	text = regexp.MustCompile("<[^>]*>").ReplaceAllString(text, " ")
 	text = regexp.MustCompile(`\s+`).ReplaceAllString(text, " ")
 
-	pdf.MultiCell(nil, text)
+	pdf.MultiCell(&gopdf.Rect{W: 190, H: 277}, text)
 	var buf bytes.Buffer
 	if err := pdf.Write(&buf); err != nil {
 		return nil, err
