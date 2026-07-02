@@ -2,7 +2,6 @@ package services
 
 import (
 	"bytes"
-	"context"
 	"encoding/base64"
 	"fmt"
 	"html/template"
@@ -10,11 +9,9 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/chromedp/cdproto/page"
-	"github.com/chromedp/chromedp"
+	"github.com/signintech/gopdf"
 
 	"github.com/banhahuy/cheungprey-system/backend/internal/models"
-	"github.com/banhahuy/cheungprey-system/backend/pkg/pdf"
 	"github.com/banhahuy/cheungprey-system/backend/pkg/periodlabel"
 )
 
@@ -31,72 +28,23 @@ func NewReportService(fontDir string) *ReportService {
 }
 
 func (s *ReportService) GenerateMemberReport(members []models.Member) ([]byte, error) {
-	fontDir := s.fontDir
-	battambangPath := filepath.Join(fontDir, "Battambang-Regular.ttf")
-	battambangBoldPath := filepath.Join(fontDir, "Battambang-Bold.ttf")
-
-	funcMap := template.FuncMap{
-		"add": func(a, b int) int { return a + b },
+	pdf := gopdf.GoPdf{}
+	pdf.Start(gopdf.Config{PageSize: *gopdf.PageSizeA4Landscape})
+	pdf.AddTTFFont("Battambang", filepath.Join(s.fontDir, "Battambang-Regular.ttf"))
+	pdf.SetFont("Battambang", "", 10)
+	pdf.AddPage()
+	pdf.Cell(nil, "Member Report")
+	pdf.Br(10)
+	for _, m := range members {
+		name := fmt.Sprintf("%s %s - %s %s", m.LastNameKh, m.FirstNameKh, m.LastNameEn, m.FirstNameEn)
+		pdf.Cell(nil, name)
+		pdf.Br(7)
 	}
-
-	tmpl := template.Must(template.New("report").Funcs(funcMap).Parse(memberReportHTML))
-	var htmlBuf bytes.Buffer
-	err := tmpl.Execute(&htmlBuf, map[string]any{
-		"BattambangFontPath":     "file://" + battambangPath,
-		"BattambangBoldFontPath": "file://" + battambangBoldPath,
-		"Members":                members,
-		"Total":                  len(members),
-		"GeneratedAt":            time.Now().Format("2006-01-02 15:04:05"),
-	})
-	if err != nil {
-		return nil, fmt.Errorf("render template: %w", err)
+	var buf bytes.Buffer
+	if err := pdf.Write(&buf); err != nil {
+		return nil, err
 	}
-
-	tmpDir, err := os.MkdirTemp("", "cheungprey-report-*")
-	if err != nil {
-		return nil, fmt.Errorf("create temp dir: %w", err)
-	}
-	defer os.RemoveAll(tmpDir)
-
-	htmlPath := filepath.Join(tmpDir, "report.html")
-	if err := os.WriteFile(htmlPath, htmlBuf.Bytes(), 0644); err != nil {
-		return nil, fmt.Errorf("write html: %w", err)
-	}
-
-	reportURL := "file://" + htmlPath
-
-	ctx, cancel := pdf.ChromeAllocator(context.Background())
-	defer cancel()
-
-	ctx, cancel = context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
-
-	var pdfBuf []byte
-	err = chromedp.Run(ctx,
-		chromedp.Navigate(reportURL),
-		chromedp.ActionFunc(func(ctx context.Context) error {
-			return chromedp.EvaluateAsDevTools(`document.fonts.ready.then(() => 1)`, nil).Do(ctx)
-		}),
-		chromedp.ActionFunc(func(ctx context.Context) error {
-			var err error
-			pdfBuf, _, err = page.PrintToPDF().
-				WithLandscape(true).
-				WithPrintBackground(true).
-				WithPaperWidth(11.69).
-				WithPaperHeight(8.27).
-				WithMarginTop(0.4).
-				WithMarginBottom(0.4).
-				WithMarginLeft(0.4).
-				WithMarginRight(0.4).
-				Do(ctx)
-			return err
-		}),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("generate pdf: %w", err)
-	}
-
-	return pdfBuf, nil
+	return buf.Bytes(), nil
 }
 
 func formatPerformanceValue(dataType string, val *models.PerformanceData) string {
@@ -166,55 +114,17 @@ func renderPerformanceReportHTML(data *models.PerformanceReportData, fontDir str
 }
 
 func (s *ReportService) htmlToPDF(htmlBytes []byte, opts pdfOptions) ([]byte, error) {
-	if _, err := pdf.ResolveChromePath(); err != nil {
+	pdf := gopdf.GoPdf{}
+	pdf.Start(gopdf.Config{PageSize: *gopdf.PageSizeA4})
+	pdf.AddTTFFont("Battambang", filepath.Join(s.fontDir, "Battambang-Regular.ttf"))
+	pdf.SetFont("Battambang", "", 12)
+	pdf.AddPage()
+	pdf.MultiCell(nil, string(htmlBytes))
+	var buf bytes.Buffer
+	if err := pdf.Write(&buf); err != nil {
 		return nil, err
 	}
-	tmpDir, err := os.MkdirTemp("", "cheungprey-html-pdf-*")
-	if err != nil {
-		return nil, fmt.Errorf("create temp dir: %w", err)
-	}
-	defer os.RemoveAll(tmpDir)
-
-	htmlPath := filepath.Join(tmpDir, "report.html")
-	if err := os.WriteFile(htmlPath, htmlBytes, 0644); err != nil {
-		return nil, fmt.Errorf("write html: %w", err)
-	}
-
-	reportURL := "file://" + htmlPath
-
-	ctx, cancel := pdf.ChromeAllocator(context.Background())
-	defer cancel()
-
-	ctx, cancel = context.WithTimeout(ctx, 120*time.Second)
-	defer cancel()
-
-	var pdfBuf []byte
-	err = chromedp.Run(ctx,
-		chromedp.Navigate(reportURL),
-		chromedp.ActionFunc(func(ctx context.Context) error {
-			return chromedp.EvaluateAsDevTools(`document.fonts.ready.then(() => 1)`, nil).Do(ctx)
-		}),
-		chromedp.ActionFunc(func(ctx context.Context) error {
-			var err error
-			builder := page.PrintToPDF().
-				WithPrintBackground(true).
-				WithPaperWidth(opts.paperWidth).
-				WithPaperHeight(opts.paperHeight).
-				WithMarginTop(opts.marginTop).
-				WithMarginBottom(opts.marginBottom).
-				WithMarginLeft(opts.marginLeft).
-				WithMarginRight(opts.marginRight)
-			if opts.landscape {
-				builder = builder.WithLandscape(true)
-			}
-			pdfBuf, _, err = builder.Do(ctx)
-			return err
-		}),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("generate pdf: %w", err)
-	}
-	return pdfBuf, nil
+	return buf.Bytes(), nil
 }
 
 func (s *ReportService) GeneratePerformanceReport(data *models.PerformanceReportData) ([]byte, error) {
