@@ -1,0 +1,43 @@
+{
+  "family": "cheungprey-api",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "1024",
+  "memory": "2048",
+  "runtimePlatform": {
+    "cpuArchitecture": "ARM64",
+    "operatingSystemFamily": "LINUX"
+  },
+  "executionRoleArn": "arn:aws:iam::476021469163:role/ecsTaskExecutionRole",
+  "containerDefinitions": [
+    {
+      "name": "api",
+      "image": "476021469163.dkr.ecr.ap-southeast-1.amazonaws.com/cheungprey-api:latest",
+      "essential": true,
+      "portMappings": [
+        {
+          "containerPort": 8080,
+          "hostPort": 8080,
+          "protocol": "tcp"
+        }
+      ],
+      "environment": [
+        { "name": "PORT", "value": "8080" },
+        { "name": "SUPABASE_URL", "value": "SUPABASE_URL_PLACEHOLDER" },
+        { "name": "SUPABASE_PUBLISHABLE_KEY", "value": "SUPABASE_PUBLISHABLE_KEY_PLACEHOLDER" },
+        { "name": "SUPABASE_SECRET_KEY", "value": "SUPABASE_SECRET_KEY_PLACEHOLDER" },
+        { "name": "SUPABASE_JWKS_URL", "value": "SUPABASE_JWKS_URL_PLACEHOLDER" },
+        { "name": "CORS_ORIGIN", "value": "https://cheung-prey-system.onrender.com,https://cheungprey-system.onrender.com,http://localhost:5173" },
+        { "name": "CHROME_PATH", "value": "/usr/bin/chromium" }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/cheungprey-api",
+          "awslogs-region": "ap-southeast-1",
+          "awslogs-stream-prefix": "ecs"
+        }
+      }
+    }
+  ]
+}

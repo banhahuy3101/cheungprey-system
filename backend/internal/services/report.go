@@ -2,17 +2,19 @@ package services
 
 import (
 	"bytes"
-	"encoding/base64"
+	"context"
 	"fmt"
-	"html/template"
+	"io"
 	"os"
 	"path/filepath"
-	"regexp"
+	"text/template"
 	"time"
 
-	"github.com/signintech/gopdf"
+	"github.com/chromedp/cdproto/page"
+	"github.com/chromedp/chromedp"
 
 	"github.com/banhahuy/cheungprey-system/backend/internal/models"
+	"github.com/banhahuy/cheungprey-system/backend/pkg/pdf"
 	"github.com/banhahuy/cheungprey-system/backend/pkg/periodlabel"
 )
 
@@ -28,24 +30,72 @@ func NewReportService(fontDir string) *ReportService {
 	return &ReportService{fontDir: absDir}
 }
 
+const (
+	reportFontRegular = "fonts/Battambang-Regular.ttf"
+	reportFontBold    = "fonts/Battambang-Bold.ttf"
+)
+
+func copyReportFonts(destDir, sourceDir string) error {
+	if err := os.MkdirAll(destDir, 0755); err != nil {
+		return err
+	}
+	for _, name := range []string{"Battambang-Regular.ttf", "Battambang-Bold.ttf"} {
+		src := filepath.Join(sourceDir, name)
+		dst := filepath.Join(destDir, name)
+		in, err := os.Open(src)
+		if err != nil {
+			return fmt.Errorf("open font %s: %w", name, err)
+		}
+		out, err := os.Create(dst)
+		if err != nil {
+			in.Close()
+			return fmt.Errorf("create font %s: %w", name, err)
+		}
+		_, copyErr := io.Copy(out, in)
+		closeErr := errorsJoin(in.Close(), out.Close())
+		if copyErr != nil {
+			return fmt.Errorf("copy font %s: %w", name, copyErr)
+		}
+		if closeErr != nil {
+			return closeErr
+		}
+	}
+	return nil
+}
+
+func errorsJoin(errs ...error) error {
+	for _, err := range errs {
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (s *ReportService) GenerateMemberReport(members []models.Member) ([]byte, error) {
-	pdf := gopdf.GoPdf{}
-	pdf.Start(gopdf.Config{PageSize: *gopdf.PageSizeA4Landscape})
-	pdf.AddTTFFont("Battambang", filepath.Join(s.fontDir, "Battambang-Regular.ttf"))
-	pdf.SetFont("Battambang", "", 10)
-	pdf.AddPage()
-	pdf.Cell(&gopdf.Rect{W: 277, H: 10}, "Member Report")
-	pdf.Br(10)
-	for _, m := range members {
-		name := fmt.Sprintf("%s %s - %s %s", m.LastNameKh, m.FirstNameKh, m.LastNameEn, m.FirstNameEn)
-		pdf.Cell(&gopdf.Rect{W: 277, H: 7}, name)
-		pdf.Br(7)
+	return s.htmlToPDF(func() ([]byte, error) {
+		return renderMemberReportHTML(members, reportFontRegular, reportFontBold)
+	}, landscapeA4PDFOptions())
+}
+
+func renderMemberReportHTML(members []models.Member, regularFont, boldFont string) ([]byte, error) {
+	funcMap := template.FuncMap{
+		"add": func(a, b int) int { return a + b },
 	}
-	var buf bytes.Buffer
-	if err := pdf.Write(&buf); err != nil {
-		return nil, err
+
+	tmpl := template.Must(template.New("report").Funcs(funcMap).Parse(memberReportHTML))
+	var htmlBuf bytes.Buffer
+	err := tmpl.Execute(&htmlBuf, map[string]any{
+		"BattambangFontPath":     regularFont,
+		"BattambangBoldFontPath": boldFont,
+		"Members":                members,
+		"Total":                  len(members),
+		"GeneratedAt":            time.Now().Format("2006-01-02 15:04:05"),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("render template: %w", err)
 	}
-	return buf.Bytes(), nil
+	return htmlBuf.Bytes(), nil
 }
 
 func formatPerformanceValue(dataType string, val *models.PerformanceData) string {
@@ -72,26 +122,9 @@ func formatPerformanceValue(dataType string, val *models.PerformanceData) string
 	return "—"
 }
 
-func fontDataURI(fontDir, filename string) (string, error) {
-	data, err := os.ReadFile(filepath.Join(fontDir, filename))
-	if err != nil {
-		return "", err
-	}
-	return "data:font/ttf;base64," + base64.StdEncoding.EncodeToString(data), nil
-}
-
-func renderPerformanceReportHTML(data *models.PerformanceReportData, fontDir string) ([]byte, error) {
-	battambangURI, err := fontDataURI(fontDir, "Battambang-Regular.ttf")
-	if err != nil {
-		return nil, fmt.Errorf("load khmer font: %w", err)
-	}
-	battambangBoldURI, err := fontDataURI(fontDir, "Battambang-Bold.ttf")
-	if err != nil {
-		return nil, fmt.Errorf("load khmer bold font: %w", err)
-	}
-
+func renderPerformanceReportHTML(data *models.PerformanceReportData, regularFont, boldFont string) ([]byte, error) {
 	funcMap := template.FuncMap{
-		"add": func(a, b int) int { return a + b },
+		"add":         func(a, b int) int { return a + b },
 		"formatValue": formatPerformanceValue,
 	}
 
@@ -101,9 +134,9 @@ func renderPerformanceReportHTML(data *models.PerformanceReportData, fontDir str
 		periodRangeLabel = data.Period.LabelKh
 	}
 	var htmlBuf bytes.Buffer
-	err = tmpl.Execute(&htmlBuf, map[string]any{
-		"BattambangFontPath":     template.URL(battambangURI),
-		"BattambangBoldFontPath": template.URL(battambangBoldURI),
+	err := tmpl.Execute(&htmlBuf, map[string]any{
+		"BattambangFontPath":     regularFont,
+		"BattambangBoldFontPath": boldFont,
 		"Data":                   data,
 		"PeriodRangeLabel":       periodRangeLabel,
 		"GeneratedAt":            time.Now().Format("02/01/2006 15:04"),
@@ -114,61 +147,74 @@ func renderPerformanceReportHTML(data *models.PerformanceReportData, fontDir str
 	return htmlBuf.Bytes(), nil
 }
 
-func (s *ReportService) htmlToPDF(htmlBytes []byte, opts pdfOptions) ([]byte, error) {
-	pdf := gopdf.GoPdf{}
-	pdf.Start(gopdf.Config{PageSize: *gopdf.PageSizeA4})
-	pdf.AddTTFFont("Battambang", filepath.Join(s.fontDir, "Battambang-Regular.ttf"))
-	pdf.SetFont("Battambang", "", 11)
-	pdf.AddPage()
-
-	// Strip HTML tags crudely for now (real fix = proper text extraction)
-	text := string(htmlBytes)
-	text = regexp.MustCompile("<[^>]*>").ReplaceAllString(text, " ")
-	text = regexp.MustCompile(`\s+`).ReplaceAllString(text, " ")
-
-	pdf.MultiCell(&gopdf.Rect{W: 190, H: 277}, text)
-	var buf bytes.Buffer
-	if err := pdf.Write(&buf); err != nil {
+func (s *ReportService) htmlToPDF(renderHTML func() ([]byte, error), opts pdfOptions) ([]byte, error) {
+	if _, err := pdf.ResolveChromePath(); err != nil {
 		return nil, err
 	}
-	return buf.Bytes(), nil
+	tmpDir, err := os.MkdirTemp("", "cheungprey-html-pdf-*")
+	if err != nil {
+		return nil, fmt.Errorf("create temp dir: %w", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	if err := copyReportFonts(filepath.Join(tmpDir, "fonts"), s.fontDir); err != nil {
+		return nil, fmt.Errorf("prepare khmer fonts: %w", err)
+	}
+
+	htmlBytes, err := renderHTML()
+	if err != nil {
+		return nil, err
+	}
+
+	htmlPath := filepath.Join(tmpDir, "report.html")
+	if err := os.WriteFile(htmlPath, htmlBytes, 0644); err != nil {
+		return nil, fmt.Errorf("write html: %w", err)
+	}
+
+	reportURL := "file://" + htmlPath
+
+	ctx, cancel := pdf.ChromeAllocator(context.Background())
+	defer cancel()
+
+	ctx, cancel = context.WithTimeout(ctx, 120*time.Second)
+	defer cancel()
+
+	var pdfBuf []byte
+	err = chromedp.Run(ctx,
+		chromedp.Navigate(reportURL),
+		chromedp.ActionFunc(func(ctx context.Context) error {
+			return chromedp.EvaluateAsDevTools(`document.fonts.ready.then(() => 1)`, nil).Do(ctx)
+		}),
+		chromedp.ActionFunc(func(ctx context.Context) error {
+			var err error
+			builder := page.PrintToPDF().
+				WithPrintBackground(true).
+				WithPaperWidth(opts.paperWidth).
+				WithPaperHeight(opts.paperHeight).
+				WithMarginTop(opts.marginTop).
+				WithMarginBottom(opts.marginBottom).
+				WithMarginLeft(opts.marginLeft).
+				WithMarginRight(opts.marginRight)
+			if opts.landscape {
+				builder = builder.WithLandscape(true)
+			}
+			pdfBuf, _, err = builder.Do(ctx)
+			return err
+		}),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("generate pdf: %w", err)
+	}
+	if len(pdfBuf) < 4 || string(pdfBuf[:4]) != "%PDF" {
+		return nil, fmt.Errorf("generate pdf: invalid pdf output")
+	}
+	return pdfBuf, nil
 }
 
 func (s *ReportService) GeneratePerformanceReport(data *models.PerformanceReportData) ([]byte, error) {
-	pdf := gopdf.GoPdf{}
-	pdf.Start(gopdf.Config{PageSize: *gopdf.PageSizeA4})
-	pdf.AddTTFFont("Battambang", filepath.Join(s.fontDir, "Battambang-Regular.ttf"))
-	pdf.SetFont("Battambang", "", 12)
-	pdf.AddPage()
-
-	pdf.Cell(&gopdf.Rect{W: 190, H: 8}, "Performance Report")
-	pdf.Br(8)
-	pdf.Cell(&gopdf.Rect{W: 190, H: 8}, data.Zone.NameKh+" / "+data.Period.LabelKh)
-	pdf.Br(10)
-
-	for _, d := range data.Domains {
-		pdf.Cell(&gopdf.Rect{W: 190, H: 8}, d.Domain.NameKh)
-		pdf.Br(6)
-		for _, sd := range d.SubDomains {
-			pdf.Cell(&gopdf.Rect{W: 190, H: 8}, "  - "+sd.SubDomain.NameKh)
-			pdf.Br(5)
-			for _, ind := range sd.Indicators {
-				val := ""
-				if ind.Value != nil && ind.Value.ValueNumber != nil {
-					val = fmt.Sprintf(" = %.2f", *ind.Value.ValueNumber)
-				}
-				pdf.Cell(&gopdf.Rect{W: 190, H: 8}, "    "+ind.Indicator.NameKh+val)
-				pdf.Br(5)
-			}
-		}
-		pdf.Br(4)
-	}
-
-	var buf bytes.Buffer
-	if err := pdf.Write(&buf); err != nil {
-		return nil, err
-	}
-	return buf.Bytes(), nil
+	return s.htmlToPDF(func() ([]byte, error) {
+		return renderPerformanceReportHTML(data, reportFontRegular, reportFontBold)
+	}, landscapeA4PDFOptions())
 }
 
 func base64Std(data []byte) string {
@@ -205,12 +251,12 @@ const performanceReportHTML = `<!DOCTYPE html>
 <style>
 @font-face {
   font-family: 'Battambang';
-  src: url({{.BattambangFontPath}}) format('truetype');
+  src: url('{{.BattambangFontPath}}') format('truetype');
   font-weight: normal;
 }
 @font-face {
   font-family: 'Battambang';
-  src: url({{.BattambangBoldFontPath}}) format('truetype');
+  src: url('{{.BattambangBoldFontPath}}') format('truetype');
   font-weight: bold;
 }
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -325,12 +371,12 @@ const memberReportHTML = `<!DOCTYPE html>
 <style>
 @font-face {
   font-family: 'Battambang';
-  src: url({{.BattambangFontPath}}) format('truetype');
+  src: url('{{.BattambangFontPath}}') format('truetype');
   font-weight: normal;
 }
 @font-face {
   font-family: 'Battambang';
-  src: url({{.BattambangBoldFontPath}}) format('truetype');
+  src: url('{{.BattambangBoldFontPath}}') format('truetype');
   font-weight: bold;
 }
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -412,10 +458,12 @@ tr:nth-child(even) td { background: #f0f3f4; }
 </html>`
 
 func (s *ReportService) GeneratePartyReportDocument(doc *models.ReportDocument) ([]byte, error) {
-	fontDir := s.fontDir
-	battambangPath := filepath.Join(fontDir, "Battambang-Regular.ttf")
-	battambangBoldPath := filepath.Join(fontDir, "Battambang-Bold.ttf")
+	return s.htmlToPDF(func() ([]byte, error) {
+		return renderPartyReportHTML(doc, reportFontRegular, reportFontBold)
+	}, portraitA4PDFOptions())
+}
 
+func renderPartyReportHTML(doc *models.ReportDocument, regularFont, boldFont string) ([]byte, error) {
 	reportMonth := 0
 	reportYear := 0
 	if doc.ReportMonth != nil {
@@ -433,18 +481,17 @@ func (s *ReportService) GeneratePartyReportDocument(doc *models.ReportDocument) 
 	tmpl := template.Must(template.New("partyReport").Funcs(funcMap).Parse(partyReportHTML))
 	var htmlBuf bytes.Buffer
 	err := tmpl.Execute(&htmlBuf, map[string]any{
-		"BattambangFontPath":     "file://" + battambangPath,
-		"BattambangBoldFontPath": "file://" + battambangBoldPath,
+		"BattambangFontPath":     regularFont,
+		"BattambangBoldFontPath": boldFont,
 		"Doc":                    doc,
 		"ReportMonth":            reportMonth,
 		"ReportYear":             reportYear,
-		"PoliticalHTML":          template.HTML(doc.PoliticalSituationSummary),
+		"PoliticalHTML":          doc.PoliticalSituationSummary,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("render party report template: %w", err)
 	}
-
-	return s.htmlToPDF(htmlBuf.Bytes(), portraitA4PDFOptions())
+	return htmlBuf.Bytes(), nil
 }
 
 const partyReportHTML = `<!DOCTYPE html>
@@ -454,12 +501,12 @@ const partyReportHTML = `<!DOCTYPE html>
 <style>
 @font-face {
   font-family: 'Battambang';
-  src: url({{.BattambangFontPath}}) format('truetype');
+  src: url('{{.BattambangFontPath}}') format('truetype');
   font-weight: normal;
 }
 @font-face {
   font-family: 'Battambang';
-  src: url({{.BattambangBoldFontPath}}) format('truetype');
+  src: url('{{.BattambangBoldFontPath}}') format('truetype');
   font-weight: bold;
 }
 * { margin: 0; padding: 0; box-sizing: border-box; }

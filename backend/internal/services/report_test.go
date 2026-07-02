@@ -11,7 +11,6 @@ import (
 )
 
 func TestPerformanceReportTemplateExecutes(t *testing.T) {
-	svc := NewReportService("../../fonts")
 	data := &models.PerformanceReportData{
 		Zone: models.GeographicZone{NameKh: "បន្ទាយនាង"},
 		Period: models.PerformancePeriod{
@@ -44,14 +43,12 @@ func TestPerformanceReportTemplateExecutes(t *testing.T) {
 	}
 
 	// Template render only — skip Chrome PDF step.
-	fontDir := svc.fontDir
-	if _, err := renderPerformanceReportHTML(data, fontDir); err != nil {
+	if _, err := renderPerformanceReportHTML(data, reportFontRegular, reportFontBold); err != nil {
 		t.Fatalf("template execute: %v", err)
 	}
 }
 
 func TestPerformanceReportHTMLKhmerFonts(t *testing.T) {
-	svc := NewReportService("../../fonts")
 	data := &models.PerformanceReportData{
 		Zone: models.GeographicZone{NameKh: "ស្រុកជើងព្រៃ"},
 		Period: models.PerformancePeriod{
@@ -83,12 +80,12 @@ func TestPerformanceReportHTMLKhmerFonts(t *testing.T) {
 		},
 	}
 
-	html, err := renderPerformanceReportHTML(data, svc.fontDir)
+	html, err := renderPerformanceReportHTML(data, reportFontRegular, reportFontBold)
 	if err != nil {
 		t.Fatalf("render html: %v", err)
 	}
-	if !bytes.Contains(html, []byte("data:font/ttf;base64,")) {
-		t.Fatal("expected embedded khmer font data URI in html")
+	if !bytes.Contains(html, []byte("fonts/Battambang-Regular.ttf")) {
+		t.Fatal("expected local khmer font path in html")
 	}
 	if !bytes.Contains(html, []byte("ស្រុកជើងព្រៃ")) {
 		t.Fatal("expected khmer text in html")

@@ -1,11 +1,15 @@
-# Render web service — set env vars in dashboard (copy from backend/.env)
+# Render Blueprint — sync from repo or copy routes/env into the dashboard manually.
+#
+# Frontend on Render (HTTPS) cannot call AWS ECS (HTTP) directly — browsers block mixed content.
+# Option A (static site): VITE_API_URL=/api + rewrite /api/* → AWS (see cheung-prey-system routes).
+# Option B (Docker web): nginx proxies /api using API_UPSTREAM env (no dashboard rewrite needed).
+
 services:
   - type: web
     name: cheungprey-api
-    runtime: go
+    runtime: docker
     rootDir: backend
-    buildCommand: chmod +x render-build.sh && ./render-build.sh
-    startCommand: ./app
+    dockerfilePath: ./Dockerfile
     healthCheckPath: /health
     envVars:
       - key: SUPABASE_URL
@@ -17,6 +21,35 @@ services:
       - key: SUPABASE_JWKS_URL
         sync: false
       - key: CORS_ORIGIN
-        sync: false
+        value: https://cheung-prey-system.onrender.com,https://cheungprey-web.onrender.com,http://localhost:5173
       - key: CHROME_PATH
         value: /usr/bin/chromium
+
+  # Recommended: Docker frontend with built-in /api proxy (replace static site if rewrites fail).
+  - type: web
+    name: cheungprey-web
+    runtime: docker
+    rootDir: frontend
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /
+    envVars:
+      - key: API_UPSTREAM
+        value: http://13.212.156.15:8080
+
+  # Existing static site — requires Dashboard rewrites (Render ignores public/_redirects).
+  - type: web
+    name: cheung-prey-system
+    runtime: static
+    rootDir: frontend
+    buildCommand: npm ci && npm run build
+    staticPublishPath: dist
+    envVars:
+      - key: VITE_API_URL
+        value: /api
+    routes:
+      - type: rewrite
+        source: /api/*
+        destination: http://13.212.156.15:8080/api/*
+      - type: rewrite
+        source: /*
+        destination: /index.html

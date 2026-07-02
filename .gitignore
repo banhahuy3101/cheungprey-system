@@ -3,5 +3,6 @@ supabase/.temp/
 backend/.env
 frontend/.env
 frontend/.env.local
-frontend/.env.development.localbackend/bin/
+frontend/.env.development.local
+backend/bin/
 backend/app

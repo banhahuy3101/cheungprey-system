@@ -56,27 +56,29 @@ func ApplyReportTemplate(html string, doc *models.ReportDocument) string {
 
 func (s *ReportService) GeneratePartyReportFromTemplate(doc *models.ReportDocument, templateHTML string) ([]byte, error) {
 	merged := ApplyReportTemplate(templateHTML, doc)
-	merged = injectKhmerFonts(merged, s.fontDir)
-	return s.htmlToPDF([]byte(merged), portraitA4PDFOptions())
+	merged = injectKhmerFonts(merged)
+	return s.htmlToPDF(func() ([]byte, error) {
+		return []byte(merged), nil
+	}, portraitA4PDFOptions())
 }
 
-func injectKhmerFonts(html, fontDir string) string {
+func injectKhmerFonts(html string) string {
 	if strings.Contains(html, "@font-face") {
 		return html
 	}
 	fontCSS := fmt.Sprintf(`<style>
 @font-face {
   font-family: 'Battambang';
-  src: url('file://%s/Battambang-Regular.ttf') format('truetype');
+  src: url('%s') format('truetype');
   font-weight: normal;
 }
 @font-face {
   font-family: 'Battambang';
-  src: url('file://%s/Battambang-Bold.ttf') format('truetype');
+  src: url('%s') format('truetype');
   font-weight: bold;
 }
 body { font-family: 'Battambang', sans-serif; }
-</style>`, fontDir, fontDir)
+</style>`, reportFontRegular, reportFontBold)
 
 	if strings.Contains(strings.ToLower(html), "<head>") {
 		return strings.Replace(html, "<head>", "<head>"+fontCSS, 1)

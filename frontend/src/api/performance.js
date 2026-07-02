@@ -51,8 +51,21 @@ export const performanceAPI = {
       responseType: "blob",
       timeout: 120000,
     });
-    const blob = new Blob([res.data], { type: "application/pdf" });
-    const url = window.URL.createObjectURL(blob);
+    const blob = res.data;
+    const header = await blob.slice(0, 5).text();
+    if (!header.startsWith("%PDF")) {
+      const message = await blob.text().catch(() => "");
+      let detail = "Server did not return a valid PDF";
+      try {
+        const json = JSON.parse(message);
+        detail = json.error || json.message || detail;
+      } catch {
+        if (message) detail = message.slice(0, 200);
+      }
+      throw new Error(detail);
+    }
+    const pdfBlob = new Blob([blob], { type: "application/pdf" });
+    const url = window.URL.createObjectURL(pdfBlob);
     const link = document.createElement("a");
     link.href = url;
     link.download = `performance_${zoneId}_${String(periodId).slice(0, 8)}.pdf`;
