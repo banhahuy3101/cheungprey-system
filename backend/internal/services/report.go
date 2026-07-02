@@ -135,11 +135,40 @@ func (s *ReportService) htmlToPDF(htmlBytes []byte, opts pdfOptions) ([]byte, er
 }
 
 func (s *ReportService) GeneratePerformanceReport(data *models.PerformanceReportData) ([]byte, error) {
-	htmlBytes, err := renderPerformanceReportHTML(data, s.fontDir)
-	if err != nil {
+	pdf := gopdf.GoPdf{}
+	pdf.Start(gopdf.Config{PageSize: *gopdf.PageSizeA4})
+	pdf.AddTTFFont("Battambang", filepath.Join(s.fontDir, "Battambang-Regular.ttf"))
+	pdf.SetFont("Battambang", "", 12)
+	pdf.AddPage()
+
+	pdf.Cell(&gopdf.Rect{W: 190, H: 8}, "Performance Report")
+	pdf.Br(8)
+	pdf.Cell(&gopdf.Rect{W: 190, H: 8}, data.Zone.NameKh+" / "+data.Period.LabelKh)
+	pdf.Br(10)
+
+	for _, d := range data.Domains {
+		pdf.Cell(&gopdf.Rect{W: 190, H: 8}, d.Domain.NameKh)
+		pdf.Br(6)
+		for _, sd := range d.SubDomains {
+			pdf.Cell(&gopdf.Rect{W: 190, H: 8}, "  - "+sd.SubDomain.NameKh)
+			pdf.Br(5)
+			for _, ind := range sd.Indicators {
+				val := ""
+				if ind.Value != nil && ind.Value.ValueNumber != nil {
+					val = fmt.Sprintf(" = %.2f", *ind.Value.ValueNumber)
+				}
+				pdf.Cell(&gopdf.Rect{W: 190, H: 8}, "    "+ind.Indicator.NameKh+val)
+				pdf.Br(5)
+			}
+		}
+		pdf.Br(4)
+	}
+
+	var buf bytes.Buffer
+	if err := pdf.Write(&buf); err != nil {
 		return nil, err
 	}
-	return s.htmlToPDF(htmlBytes, landscapeA4PDFOptions())
+	return buf.Bytes(), nil
 }
 
 func base64Std(data []byte) string {
