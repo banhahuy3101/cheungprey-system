@@ -7,6 +7,7 @@ import (
 	"html/template"
 	"os"
 	"path/filepath"
+	"regexp"
 	"time"
 
 	"github.com/signintech/gopdf"
@@ -117,9 +118,15 @@ func (s *ReportService) htmlToPDF(htmlBytes []byte, opts pdfOptions) ([]byte, er
 	pdf := gopdf.GoPdf{}
 	pdf.Start(gopdf.Config{PageSize: *gopdf.PageSizeA4})
 	pdf.AddTTFFont("Battambang", filepath.Join(s.fontDir, "Battambang-Regular.ttf"))
-	pdf.SetFont("Battambang", "", 12)
+	pdf.SetFont("Battambang", "", 11)
 	pdf.AddPage()
-	pdf.MultiCell(nil, string(htmlBytes))
+
+	// Strip HTML tags crudely for now (real fix = proper text extraction)
+	text := string(htmlBytes)
+	text = regexp.MustCompile("<[^>]*>").ReplaceAllString(text, " ")
+	text = regexp.MustCompile(`\s+`).ReplaceAllString(text, " ")
+
+	pdf.MultiCell(nil, text)
 	var buf bytes.Buffer
 	if err := pdf.Write(&buf); err != nil {
 		return nil, err
