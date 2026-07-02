@@ -34,11 +34,11 @@ func (s *ReportService) GenerateMemberReport(members []models.Member) ([]byte, e
 	pdf.AddTTFFont("Battambang", filepath.Join(s.fontDir, "Battambang-Regular.ttf"))
 	pdf.SetFont("Battambang", "", 10)
 	pdf.AddPage()
-	pdf.Cell(nil, "Member Report")
+	pdf.Cell(&gopdf.Rect{W: 277, H: 10}, "Member Report")
 	pdf.Br(10)
 	for _, m := range members {
 		name := fmt.Sprintf("%s %s - %s %s", m.LastNameKh, m.FirstNameKh, m.LastNameEn, m.FirstNameEn)
-		pdf.Cell(nil, name)
+		pdf.Cell(&gopdf.Rect{W: 277, H: 7}, name)
 		pdf.Br(7)
 	}
 	var buf bytes.Buffer
