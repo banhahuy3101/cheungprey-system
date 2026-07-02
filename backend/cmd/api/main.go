@@ -41,7 +41,7 @@ func main() {
 	adminHandler := handlers.NewAdminHandler(repo, cfg)
 	permissionHandler := handlers.NewPermissionHandler(repo)
 	hierarchyHandler := handlers.NewHierarchyHandler(repo)
-	reportService := services.NewReportService("backend/fonts")
+	reportService := services.NewReportService("fonts")
 	reportHandler := handlers.NewReportHandler(repo, reportService)
 	partyHandler := handlers.NewPartyHandler(repo)
 	reportDocumentHandler := handlers.NewReportDocumentHandler(repo, reportService)
