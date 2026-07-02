@@ -4,6 +4,9 @@ import axios from "axios";
 // In production, set VITE_API_URL to the absolute backend URL
 const API_BASE_URL = import.meta.env.VITE_API_URL || "/api";
 
+/** 2 minutes — for slow endpoints (performance data, PDFs, large uploads). */
+export const TWO_MINUTE_TIMEOUT = 120_000;
+
 const client = axios.create({
   baseURL: API_BASE_URL,
   timeout: 15000,

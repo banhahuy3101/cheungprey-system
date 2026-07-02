@@ -1,4 +1,4 @@
-import client from "./client";
+import client, { TWO_MINUTE_TIMEOUT } from "./client";
 import { readApiError } from "../utils/reportTemplate";
 
 export const reportDocumentsAPI = {
@@ -13,7 +13,7 @@ export const reportDocumentsAPI = {
       const res = await client.get(`/report-documents/${id}/pdf`, {
         params,
         responseType: "blob",
-        timeout: 120000,
+        timeout: TWO_MINUTE_TIMEOUT,
       });
       const blob = new Blob([res.data], { type: "application/pdf" });
       const url = window.URL.createObjectURL(blob);
@@ -33,7 +33,7 @@ export const reportDocumentsAPI = {
       const res = await client.get(`/report-documents/${id}/docx`, {
         params: { template_id: templateId },
         responseType: "blob",
-        timeout: 120000,
+        timeout: TWO_MINUTE_TIMEOUT,
       });
       const blob = new Blob([res.data], {
         type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",

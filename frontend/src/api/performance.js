@@ -1,9 +1,10 @@
-import client from "./client";
+import client, { TWO_MINUTE_TIMEOUT } from "./client";
 
 export const performanceAPI = {
   // Domains
   getDomains: () => client.get("/performance/domains"),
-  getDomainsFull: () => client.get("/performance/domains/full"),
+  getDomainsFull: () =>
+    client.get("/performance/domains/full", { timeout: TWO_MINUTE_TIMEOUT }),
   createDomain: (data) => client.post("/performance/domains", data),
   updateDomain: (id, data) => client.put(`/performance/domains/${id}`, data),
   deleteDomain: (id) => client.delete(`/performance/domains/${id}`),
@@ -28,19 +29,23 @@ export const performanceAPI = {
 
   // Data CRUD
   createData: (data) => client.post("/performance/data", data),
-  bulkCreateData: (data) => client.post("/performance/data/bulk", data),
+  bulkCreateData: (data) =>
+    client.post("/performance/data/bulk", data, { timeout: TWO_MINUTE_TIMEOUT }),
   getData: (zoneId, periodId) =>
     client.get("/performance/data", {
       params: { zone_id: zoneId, period_id: periodId },
+      timeout: TWO_MINUTE_TIMEOUT,
     }),
   deleteDataById: (id) => client.delete(`/performance/data/${id}`),
   deleteDataByZoneAndPeriod: (zoneId, periodId) =>
     client.delete("/performance/data", {
       params: { zone_id: zoneId, period_id: periodId },
+      timeout: TWO_MINUTE_TIMEOUT,
     }),
 
   // Submissions
-  getSubmissions: () => client.get("/performance/data/submissions"),
+  getSubmissions: () =>
+    client.get("/performance/data/submissions", { timeout: TWO_MINUTE_TIMEOUT }),
 
   // PDF Report
   getReportUrl: (zoneId, periodId) =>
@@ -49,7 +54,7 @@ export const performanceAPI = {
   downloadReport: async (zoneId, periodId) => {
     const res = await client.get(`/reports/performance/${zoneId}/${periodId}`, {
       responseType: "blob",
-      timeout: 120000,
+      timeout: TWO_MINUTE_TIMEOUT,
     });
     const blob = res.data;
     const header = await blob.slice(0, 5).text();
