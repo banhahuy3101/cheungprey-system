@@ -3,6 +3,7 @@ import { zoneCodeOf } from "../utils/zone";
 import { zoneOptionLabel } from "../hooks/useZoneCascade";
 
 export default function ZoneCascadeSelect({
+  hook,
   provinces,
   districts,
   communes,
@@ -19,6 +20,21 @@ export default function ZoneCascadeSelect({
   showVillage = true,
   compact = false,
 }) {
+  if (hook) {
+    provinces = hook.provinces;
+    districts = hook.districts;
+    communes = hook.communes;
+    villages = hook.villages;
+    selectedProvince = hook.selectedProvince;
+    selectedDistrict = hook.selectedDistrict;
+    selectedCommune = hook.selectedCommune;
+    selectedVillage = hook.selectedVillage;
+    onProvinceChange = hook.onProvinceChange;
+    onDistrictChange = hook.onDistrictChange;
+    onCommuneChange = hook.onCommuneChange;
+    onVillageChange = hook.onVillageChange;
+    isLocked = hook.isLocked;
+  }
   const gridStyle = compact
     ? { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }
     : { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "0.75rem" };
