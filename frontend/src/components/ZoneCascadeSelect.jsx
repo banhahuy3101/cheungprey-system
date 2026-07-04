@@ -34,6 +34,7 @@ export default function ZoneCascadeSelect({
     onCommuneChange = hook.onCommuneChange;
     onVillageChange = hook.onVillageChange;
     isLocked = hook.isLocked;
+    if (hook.showVillage !== undefined) showVillage = hook.showVillage;
   }
   const gridStyle = compact
     ? { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }
@@ -88,7 +89,7 @@ export default function ZoneCascadeSelect({
             disabled={isLocked("village") || !selectedCommune}
             onChange={(e) => onVillageChange(e.target.value)}
           >
-            <option value="">— ឃុំ —</option>
+            <option value="">— ភូមិ —</option>
             {villages.map((z) => (
               <option key={zoneCodeOf(z)} value={zoneCodeOf(z)}>{zoneOptionLabel(z)}</option>
             ))}

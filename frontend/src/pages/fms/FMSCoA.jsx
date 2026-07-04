@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { LuPlus, LuPencil, LuSearch } from "react-icons/lu";
 import { fmsAPI } from "../../api/fms";
 
 export default function FMSCoA() {
@@ -7,6 +8,7 @@ export default function FMSCoA() {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState({ account_code: "", name_en: "", name_kh: "", account_type: "expense", parent_code: "" });
+  const [search, setSearch] = useState("");
 
   const fetchAccounts = async () => {
     setLoading(true);
@@ -30,7 +32,7 @@ export default function FMSCoA() {
       setEditing(null);
       setForm({ account_code: "", name_en: "", name_kh: "", account_type: "expense", parent_code: "" });
       fetchAccounts();
-    } catch (e) { alert(e.response?.data?.error || "Failed") }
+    } catch (e) { alert(e.response?.data?.error || "បរាជ័យ") }
   };
 
   const startEdit = (a) => {
@@ -46,33 +48,89 @@ export default function FMSCoA() {
     { value: "expense", label: "ចំណាយ" },
   ];
 
+  const filtered = accounts.filter(a =>
+    !search || a.account_code.includes(search) || (a.name_kh || "").includes(search) || (a.name_en || "").toLowerCase().includes(search.toLowerCase())
+  );
+
   return (
-    <div className="page">
-      <div className="page-header">
-        <h1>តារាងគណនី (Chart of Accounts)</h1>
-        <button className="btn btn-primary" onClick={() => { setEditing(null); setForm({ account_code: "", name_en: "", name_kh: "", account_type: "expense", parent_code: "" }); setShowForm(true); }}>+ បន្ថែម</button>
+    <div className="page fms-page">
+      <div className="fms-hero">
+        <div className="fms-hero-text">
+          <h2 className="fms-hero-title">តារាងគណនី</h2>
+          <p className="fms-hero-sub">Chart of Accounts — កំណត់ប្រភេទគណនីហិរញ្ញវត្ថុ</p>
+        </div>
+        <div className="fms-hero-actions">
+          <button className="btn btn-primary" onClick={() => { setEditing(null); setForm({ account_code: "", name_en: "", name_kh: "", account_type: "expense", parent_code: "" }); setShowForm(true); }}>
+            <LuPlus /> បន្ថែមគណនី
+          </button>
+        </div>
+      </div>
+
+      <div className="card fms-section-card">
+        <div className="fms-panel-header">
+          <h3 className="fms-panel-title">បញ្ជីគណនី {!loading && <span className="fms-count-badge">{filtered.length}</span>}</h3>
+          <div className="fms-filter-search" style={{ maxWidth: 300 }}>
+            <LuSearch className="fms-search-icon" />
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="ស្វែងរកតាមកូដ ឬឈ្មោះ..." />
+          </div>
+        </div>
+
+        {loading ? (
+          <div className="loading fms-loading-block">កំពុងផ្ទុក...</div>
+        ) : filtered.length === 0 ? (
+          <div className="fms-empty-state">
+            <p>{search ? "រកមិនឃើញ" : "គ្មានគណនី"}</p>
+          </div>
+        ) : (
+          <div className="table-responsive">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>កូដ</th>
+                  <th>ឈ្មោះ (ខ្មែរ)</th>
+                  <th>ឈ្មោះ (English)</th>
+                  <th>ប្រភេទ</th>
+                  <th>ស្ថានភាព</th>
+                  <th>សកម្មភាព</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map(a => (
+                  <tr key={a.account_code}>
+                    <td><strong>{a.account_code}</strong></td>
+                    <td>{a.name_kh}</td>
+                    <td className="fms-td-muted">{a.name_en}</td>
+                    <td><span className={`badge badge-${a.account_type}`}>{accountTypes.find(t => t.value === a.account_type)?.label || a.account_type}</span></td>
+                    <td><span className={`badge ${a.is_active ? "badge-executed" : "badge-draft"}`}>{a.is_active ? "សកម្ម" : "អសកម្ម"}</span></td>
+                    <td><button className="btn btn-sm" onClick={() => startEdit(a)}><LuPencil /> កែ</button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {showForm && (
         <div className="modal-overlay" onClick={() => setShowForm(false)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
-            <h2>{editing ? "កែប្រែ" : "បន្ថែម"} គណនី</h2>
+            <h2>{editing ? "កែប្រែគណនី" : "បន្ថែមគណនី"}</h2>
             {!editing && (
               <div className="form-group">
-                <label>លេខកូដ</label>
-                <input value={form.account_code} onChange={e => setForm({...form, account_code: e.target.value})} />
+                <label>លេខកូដ <span className="required">*</span></label>
+                <input value={form.account_code} onChange={e => setForm({...form, account_code: e.target.value})} placeholder="ឧ. 6001" />
               </div>
             )}
             <div className="form-group">
-              <label>ឈ្មោះ (ខ្មែរ)</label>
+              <label>ឈ្មោះ (ខ្មែរ) <span className="required">*</span></label>
               <input value={form.name_kh} onChange={e => setForm({...form, name_kh: e.target.value})} />
             </div>
             <div className="form-group">
-              <label>ឈ្មោះ (English)</label>
+              <label>ឈ្មោះ (English) <span className="required">*</span></label>
               <input value={form.name_en} onChange={e => setForm({...form, name_en: e.target.value})} />
             </div>
             <div className="form-group">
-              <label>ប្រភេទ</label>
+              <label>ប្រភេទ <span className="required">*</span></label>
               <select value={form.account_type} onChange={e => setForm({...form, account_type: e.target.value})}>
                 {accountTypes.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
               </select>
@@ -83,35 +141,6 @@ export default function FMSCoA() {
             </div>
           </div>
         </div>
-      )}
-
-      {loading ? (
-        <div className="loading">កំពុងផ្ទុក...</div>
-      ) : (
-        <table className="table">
-          <thead>
-            <tr>
-              <th>កូដ</th>
-              <th>ឈ្មោះ (ខ្មែរ)</th>
-              <th>ឈ្មោះ (English)</th>
-              <th>ប្រភេទ</th>
-              <th>សកម្ម</th>
-              <th>សកម្មភាព</th>
-            </tr>
-          </thead>
-          <tbody>
-            {accounts.map(a => (
-              <tr key={a.account_code}>
-                <td><strong>{a.account_code}</strong></td>
-                <td>{a.name_kh}</td>
-                <td>{a.name_en}</td>
-                <td><span className="badge">{a.account_type}</span></td>
-                <td>{a.is_active ? "បាទ" : "ទេ"}</td>
-                <td><button className="btn btn-sm" onClick={() => startEdit(a)}>កែ</button></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
       )}
     </div>
   );

@@ -132,6 +132,7 @@ export function useZoneCascade({ userZone, isAdmin, initialZoneCode, showVillage
     loadFromZoneCode,
     applyHierarchy,
     resetSelection,
+    showVillage,
   };
 }
 
