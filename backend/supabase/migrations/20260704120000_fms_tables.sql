@@ -98,8 +98,7 @@ CREATE POLICY "Users can read own zone fms_transactions"
   ON fms_transactions FOR SELECT TO authenticated
   USING (
     get_user_role() IN ('super_admin', 'admin')
-    OR zone_code = get_user_commune()
-    OR zone_code = get_user_village()
+    OR zone_code = (SELECT zone_code FROM profiles WHERE id = auth.uid())
   );
 
 CREATE POLICY "Admin can manage fms_transactions"

@@ -267,15 +267,30 @@ export default function Admin() {
   };
 
   const RoleCheckboxes = ({ roles, onToggle }) => (
-    <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem 1rem" }}>
+    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem" }}>
       {(roleOptions.length ? roleOptions : ROLE_OPTIONS_FALLBACK).map((r) => (
-        <label key={r.value} style={{ display: "flex", alignItems: "center", gap: "0.35rem", fontSize: "0.9rem" }}>
+        <label 
+          key={r.value} 
+          style={{ 
+            display: "flex", 
+            alignItems: "center", 
+            gap: "0.6rem", 
+            padding: "0.6rem 0.65rem", 
+            borderRadius: "12px", 
+            cursor: "pointer",
+            border: "1px solid transparent",
+            transition: "all 0.15s ease"
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = "#f9fafb"; e.currentTarget.style.borderColor = "#e5e7eb"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.borderColor = "transparent"; }}
+        >
           <input
             type="checkbox"
             checked={(roles || []).includes(r.value)}
             onChange={() => onToggle(r.value)}
+            style={{ width: "18px", height: "18px", accentColor: "#2563eb", cursor: "pointer", borderRadius: "4px", flexShrink: 0 }}
           />
-          {r.label}
+          <span style={{ fontSize: "14px", color: "#374151", fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.label}</span>
         </label>
       ))}
     </div>
@@ -430,56 +445,77 @@ export default function Admin() {
       {/* Create/Edit Modal */}
       {showModal && (
         <div className="modal-overlay" onClick={() => setShowModal(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "460px" }}>
             <div className="modal-header">
               <h3>{editing ? "កែប្រែអ្នកប្រើប្រាស់" : "បន្ថែមអ្នកប្រើប្រាស់ថ្មី"}</h3>
               <button className="btn-icon" onClick={() => setShowModal(false)}><LuX /></button>
             </div>
-            <form onSubmit={handleSubmit}>
-              <div className="modal-body">
-                <div className="form-group">
-                  <label>ឈ្មោះ *</label>
-                  <input name="name" value={form.name} onChange={handleChange} required />
-                </div>
-                <div className="form-group">
-                  <label>អ៊ីមែល *</label>
-                  <input name="email" type="email" value={form.email} onChange={handleChange} required />
-                </div>
-                <div className="form-group">
-                  <label>ពាក្យសម្ងាត់ {editing ? "(ទុកទទេរបើមិនប្តូរ)" : "*"}</label>
-                  <div className="password-field-row">
-                    <input
-                      name="password"
-                      type="text"
-                      value={form.password}
-                      onChange={handleChange}
-                      required={!editing}
-                      minLength={6}
-                    />
-                    {!editing && (
-                      <button
-                        type="button"
-                        className="btn btn-secondary"
-                        onClick={() => setForm({ ...form, password: defaultPassword })}
-                      >
-                        ប្រើដើម
-                      </button>
-                    )}
-                  </div>
-                </div>
-                <div className="form-group">
-                  <label>តួនាទី (អាចជ្រើសច្រើន)</label>
-                  <RoleCheckboxes roles={form.roles} onToggle={toggleFormRole} />
-                </div>
-                {error && <div className="alert alert-error">{error}</div>}
+            <form onSubmit={handleSubmit} style={{ padding: "1.5rem", display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label style={{ display: "block", fontSize: "0.875rem", fontWeight: 500, marginBottom: "0.25rem" }}>ឈ្មោះ *</label>
+                <input 
+                  name="name" 
+                  value={form.name} 
+                  onChange={handleChange} 
+                  required 
+                  style={{ width: "100%", padding: "0.75rem 1rem", border: "1px solid #e5e7eb", borderRadius: "12px", fontSize: "0.95rem" }}
+                />
               </div>
-              <div className="modal-footer">
-                <button type="button" className="btn btn-secondary" onClick={() => setShowModal(false)}>បោះបង់</button>
-                <button type="submit" className="btn btn-primary" disabled={submitting}>
-                  {submitting ? "រក្សាទុក..." : editing ? "ធ្វើបច្ចុប្បន្នភាព" : "រក្សាទុក"}
-                </button>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label style={{ display: "block", fontSize: "0.875rem", fontWeight: 500, marginBottom: "0.25rem" }}>អ៊ីមែល *</label>
+                <input 
+                  name="email" 
+                  type="email" 
+                  value={form.email} 
+                  onChange={handleChange} 
+                  required 
+                  style={{ width: "100%", padding: "0.75rem 1rem", border: "1px solid #e5e7eb", borderRadius: "12px", fontSize: "0.95rem" }}
+                />
               </div>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label style={{ display: "block", fontSize: "0.875rem", fontWeight: 500, marginBottom: "0.25rem" }}>
+                  ពាក្យសម្ងាត់ {editing ? "(ទុកទទេរបើមិនប្តូរ)" : "*"}
+                </label>
+                <div style={{ display: "flex", gap: "0.5rem" }}>
+                  <input
+                    name="password"
+                    type="text"
+                    value={form.password}
+                    onChange={handleChange}
+                    required={!editing}
+                    minLength={6}
+                    style={{ flex: 1, padding: "0.75rem 1rem", border: "1px solid #e5e7eb", borderRadius: "12px", fontSize: "0.95rem" }}
+                  />
+                  {!editing && (
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      style={{ whiteSpace: "nowrap", paddingLeft: "1rem", paddingRight: "1rem" }}
+                      onClick={() => setForm({ ...form, password: defaultPassword })}
+                    >
+                      ប្រើដើម
+                    </button>
+                  )}
+                </div>
+              </div>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label style={{ display: "block", fontSize: "0.875rem", fontWeight: 500, marginBottom: "0.5rem" }}>តួនាទី (អាចជ្រើសច្រើន)</label>
+                <RoleCheckboxes roles={form.roles} onToggle={toggleFormRole} />
+              </div>
+              {error && <div className="alert alert-error" style={{ marginTop: "0.5rem" }}>{error}</div>}
             </form>
+            <div className="modal-footer" style={{ borderTop: "1px solid #e5e7eb", padding: "1rem", display: "flex", gap: "0.75rem" }}>
+              <button type="button" className="btn btn-secondary" style={{ flex: 1 }} onClick={() => setShowModal(false)}>បោះបង់</button>
+              <button 
+                type="submit" 
+                className="btn btn-primary" 
+                style={{ flex: 1 }}
+                disabled={submitting}
+                onClick={handleSubmit}
+              >
+                {submitting ? "កំពុងរក្សាទុក..." : editing ? "ធ្វើបច្ចុប្បន្នភាព" : "រក្សាទុក"}
+              </button>
+            </div>
           </div>
         </div>
       )}

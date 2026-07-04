@@ -27,7 +27,7 @@
         { "name": "SUPABASE_PUBLISHABLE_KEY", "value": "SUPABASE_PUBLISHABLE_KEY_PLACEHOLDER" },
         { "name": "SUPABASE_SECRET_KEY", "value": "SUPABASE_SECRET_KEY_PLACEHOLDER" },
         { "name": "SUPABASE_JWKS_URL", "value": "SUPABASE_JWKS_URL_PLACEHOLDER" },
-        { "name": "CORS_ORIGIN", "value": "https://cheung-prey-system.onrender.com,https://cheungprey-system.onrender.com,http://localhost:5173" },
+        { "name": "CORS_ORIGIN", "value": "https://cheung-prey-system.onrender.com,https://cheungprey-system.onrender.com,http://localhost:5173,http://127.0.0.1:5173" },
         { "name": "CHROME_PATH", "value": "/usr/bin/chromium" }
       ],
       "logConfiguration": {

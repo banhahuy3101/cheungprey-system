@@ -39,6 +39,11 @@ func CORS() gin.HandlerFunc {
 					return true
 				}
 			}
+			// Local Vite dev (localhost or 127.0.0.1).
+			if strings.HasPrefix(origin, "http://localhost:") ||
+				strings.HasPrefix(origin, "http://127.0.0.1:") {
+				return true
+			}
 			// Render static sites proxy /api same-origin; browser still sends Origin.
 			if strings.HasSuffix(origin, ".onrender.com") {
 				return true

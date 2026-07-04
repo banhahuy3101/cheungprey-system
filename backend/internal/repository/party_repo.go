@@ -2,11 +2,25 @@ package repository
 
 import (
 	"fmt"
+	"sort"
+	"strings"
+	"time"
 
 	"github.com/google/uuid"
 
 	"github.com/banhahuy/cheungprey-system/backend/internal/models"
 )
+
+func (r *Repository) ListAllZones() ([]models.GeographicZone, error) {
+	var zones []models.GeographicZone
+	_, err := r.AdminClient.From("geographic_zones").
+		Select("*", "exact", false).
+		ExecuteTo(&zones)
+	if err != nil {
+		return nil, fmt.Errorf("list all zones: %w", err)
+	}
+	return zones, nil
+}
 
 func (r *Repository) ListZones(zoneType string) ([]models.GeographicZone, error) {
 	var zones []models.GeographicZone
@@ -125,17 +139,156 @@ func (r *Repository) CreateFinance(f *models.PartyFinance) error {
 	return err
 }
 
-func (r *Repository) ListFinances(transactionType string) ([]models.PartyFinance, error) {
+func (r *Repository) GetFinanceByID(id uuid.UUID) (*models.PartyFinance, error) {
+	var finances []models.PartyFinance
+	_, err := r.AdminClient.From("party_finances").
+		Select("*", "exact", false).
+		Eq("id", id.String()).
+		ExecuteTo(&finances)
+	if err != nil {
+		return nil, fmt.Errorf("get finance: %w", err)
+	}
+	if len(finances) == 0 {
+		return nil, nil
+	}
+	return &finances[0], nil
+}
+
+func (r *Repository) UpdateFinance(id uuid.UUID, data any) error {
+	_, _, err := r.AdminClient.From("party_finances").
+		Update(data, "", "").
+		Eq("id", id.String()).
+		Execute()
+	return err
+}
+
+func (r *Repository) DeleteFinance(id uuid.UUID) error {
+	_, _, err := r.AdminClient.From("party_finances").
+		Delete("", "").
+		Eq("id", id.String()).
+		Execute()
+	return err
+}
+
+func (r *Repository) ListFinances(params models.FinanceListParams) (*models.FinanceListResult, error) {
 	var finances []models.PartyFinance
 	q := r.AdminClient.From("party_finances").Select("*", "exact", false)
-	if transactionType != "" {
-		q = q.Eq("transaction_type", transactionType)
+	if params.TransactionType != "" {
+		q = q.Eq("transaction_type", params.TransactionType)
+	} else if params.Direction == "expense" {
+		q = q.Eq("transaction_type", models.FinanceTypeExpense)
+	}
+	if params.Status != "" {
+		q = q.Eq("status", params.Status)
+	}
+	if params.From != "" {
+		if t, err := time.Parse("2006-01-02", params.From); err == nil {
+			q = q.Gte("transaction_date", t.Format(time.RFC3339))
+		}
+	}
+	if params.To != "" {
+		if t, err := time.Parse("2006-01-02", params.To); err == nil {
+			end := t.Add(24*time.Hour - time.Nanosecond)
+			q = q.Lte("transaction_date", end.Format(time.RFC3339))
+		}
 	}
 	_, err := q.ExecuteTo(&finances)
 	if err != nil {
 		return nil, fmt.Errorf("list finances: %w", err)
 	}
-	return finances, nil
+
+	if params.Direction == "income" {
+		filtered := finances[:0]
+		for _, f := range finances {
+			if !models.IsFinanceExpense(f.TransactionType) {
+				filtered = append(filtered, f)
+			}
+		}
+		finances = filtered
+	}
+
+	if params.Search != "" {
+		needle := strings.ToLower(params.Search)
+		filtered := finances[:0]
+		for _, f := range finances {
+			if financeMatchesSearch(f, needle) {
+				filtered = append(filtered, f)
+			}
+		}
+		finances = filtered
+	}
+
+	sort.Slice(finances, func(i, j int) bool {
+		return finances[i].TransactionDate.After(finances[j].TransactionDate)
+	})
+
+	total := len(finances)
+	page := params.Page
+	if page < 1 {
+		page = 1
+	}
+	limit := params.Limit
+	if limit == 0 {
+		return &models.FinanceListResult{
+			Finances: finances,
+			Total:    total,
+			Page:     1,
+			Limit:    total,
+		}, nil
+	}
+	if limit < 1 {
+		limit = 20
+	}
+	start := (page - 1) * limit
+	if start > total {
+		start = total
+	}
+	end := start + limit
+	if end > total {
+		end = total
+	}
+
+	return &models.FinanceListResult{
+		Finances: finances[start:end],
+		Total:    total,
+		Page:     page,
+		Limit:    limit,
+	}, nil
+}
+
+func financeMatchesSearch(f models.PartyFinance, needle string) bool {
+	fields := []string{
+		f.TransactionType,
+		f.PaymentMethod,
+	}
+	if f.ContributorNameKh != nil {
+		fields = append(fields, *f.ContributorNameKh)
+	}
+	if f.ContributorNameEn != nil {
+		fields = append(fields, *f.ContributorNameEn)
+	}
+	if f.ReferenceNumber != nil {
+		fields = append(fields, *f.ReferenceNumber)
+	}
+	if f.Notes != nil {
+		fields = append(fields, *f.Notes)
+	}
+	for _, s := range fields {
+		if strings.Contains(strings.ToLower(s), needle) {
+			return true
+		}
+	}
+	return false
+}
+
+func (r *Repository) ListFinancesAll(params models.FinanceListParams) ([]models.PartyFinance, error) {
+	params.Page = 1
+	params.Limit = 0
+	result, err := r.ListFinances(params)
+	if err != nil {
+		return nil, err
+	}
+	return result.Finances, nil
 }
 
 func (r *Repository) CreateFile(f *models.PartyFile) error {
@@ -181,8 +334,10 @@ func (r *Repository) DeleteFile(id uuid.UUID) error {
 	return err
 }
 
-func (r *Repository) GetFinanceSummary() (*models.FinanceSummary, error) {
-	finances, err := r.ListFinances("")
+func (r *Repository) GetFinanceSummary(params models.FinanceListParams) (*models.FinanceSummary, error) {
+	params.Page = 1
+	params.Limit = 0
+	result, err := r.ListFinances(params)
 	if err != nil {
 		return nil, err
 	}
@@ -190,10 +345,16 @@ func (r *Repository) GetFinanceSummary() (*models.FinanceSummary, error) {
 	summary := &models.FinanceSummary{
 		ByType: map[string]float64{},
 	}
-	for _, f := range finances {
-		summary.TotalUSD += f.AmountUSD
+	for _, f := range result.Finances {
+		if models.IsFinanceExpense(f.TransactionType) {
+			summary.TotalExpense += f.AmountUSD
+		} else {
+			summary.TotalIncome += f.AmountUSD
+		}
 		summary.TotalKHR += f.AmountKHR
 		summary.ByType[f.TransactionType] += f.AmountUSD
 	}
+	summary.TotalUSD = summary.TotalIncome
+	summary.Balance = summary.TotalIncome - summary.TotalExpense
 	return summary, nil
 }

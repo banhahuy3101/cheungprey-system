@@ -58,6 +58,36 @@ func (r *Repository) GetCommuneByID(id uuid.UUID) (*models.Commune, error) {
 	return &communes[0], nil
 }
 
+func (r *Repository) GetDistrictByID(id uuid.UUID) (*models.District, error) {
+	var districts []models.District
+	_, err := r.AdminClient.From("districts").
+		Select("*", "exact", false).
+		Eq("id", id.String()).
+		ExecuteTo(&districts)
+	if err != nil {
+		return nil, fmt.Errorf("get district: %w", err)
+	}
+	if len(districts) == 0 {
+		return nil, nil
+	}
+	return &districts[0], nil
+}
+
+func (r *Repository) GetVillageByID(id uuid.UUID) (*models.Village, error) {
+	var villages []models.Village
+	_, err := r.AdminClient.From("villages").
+		Select("*", "exact", false).
+		Eq("id", id.String()).
+		ExecuteTo(&villages)
+	if err != nil {
+		return nil, fmt.Errorf("get village: %w", err)
+	}
+	if len(villages) == 0 {
+		return nil, nil
+	}
+	return &villages[0], nil
+}
+
 func (r *Repository) GetVillagesByCommune(communeID uuid.UUID) ([]models.Village, error) {
 	var villages []models.Village
 	_, err := r.AdminClient.From("villages").

@@ -1,15 +1,16 @@
 import { useState, useEffect, useCallback } from "react";
+import { useLocation } from "react-router-dom";
 import AuthContext from "../context/AuthContext";
 import { authAPI } from "../api/auth";
 
-function isPublicAuthPage() {
-  const path = window.location.pathname;
-  return path === "/login" || path === "/register";
+function isPublicAuthPage(pathname) {
+  return pathname === "/login" || pathname === "/register";
 }
 
 export default function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const location = useLocation();
 
   const loadProfile = useCallback(async () => {
     const token = localStorage.getItem("access_token");
@@ -28,13 +29,13 @@ export default function AuthProvider({ children }) {
   }, []);
 
   useEffect(() => {
-    if (isPublicAuthPage()) {
-      setUser(null);
+    if (isPublicAuthPage(location.pathname)) {
       setLoading(false);
       return undefined;
     }
 
     let cancelled = false;
+    setLoading(true);
     loadProfile().then((profile) => {
       if (!cancelled) {
         setUser(profile);
@@ -44,7 +45,7 @@ export default function AuthProvider({ children }) {
     return () => {
       cancelled = true;
     };
-  }, [loadProfile]);
+  }, [loadProfile, location.pathname]);
 
   const login = async (credentials) => {
     localStorage.removeItem("access_token");
@@ -85,9 +86,15 @@ export default function AuthProvider({ children }) {
     return inner;
   };
 
+  const refreshProfile = useCallback(async () => {
+    const profile = await loadProfile();
+    setUser(profile);
+    return profile;
+  }, [loadProfile]);
+
   return (
     <AuthContext.Provider
-      value={{ user, loading, login, register, logout, updateProfile }}
+      value={{ user, loading, login, register, logout, updateProfile, refreshProfile }}
     >
       {children}
     </AuthContext.Provider>

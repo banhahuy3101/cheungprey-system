@@ -6,11 +6,16 @@ export default function ProtectedRoute({
   children,
   adminOnly = false,
   feature = null,
+  keepLayout = false,
 }) {
   const { user, loading } = useAuth();
 
   if (!loading && !user) {
     return <Navigate to="/login" replace />;
+  }
+
+  if (loading && !keepLayout) {
+    return <div className="loading">កំពុងផ្ទុក...</div>;
   }
 
   if (!loading) {

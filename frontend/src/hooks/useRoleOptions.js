@@ -26,7 +26,10 @@ export function useRoleOptions() {
         if (cancelled) return;
         const list = res.data?.data ?? res.data ?? [];
         if (!Array.isArray(list) || list.length === 0) return;
-        const opts = list.map((r) => ({ value: r.role, label: r.label || r.role }));
+        let opts = list.map((r) => ({ value: r.role, label: r.label || r.role, id: r.id }));
+        if (opts.every(o => typeof o.id === "number")) {
+          opts = opts.sort((a, b) => a.id - b.id);
+        }
         setRoleOptions(opts);
         setRoleLabelMap(Object.fromEntries(opts.map((o) => [o.value, o.label])));
       })

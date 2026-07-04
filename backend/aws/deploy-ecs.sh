@@ -37,7 +37,7 @@ values = {
     'SUPABASE_PUBLISHABLE_KEY': env['SUPABASE_PUBLISHABLE_KEY'],
     'SUPABASE_SECRET_KEY': env['SUPABASE_SECRET_KEY'],
     'SUPABASE_JWKS_URL': env['SUPABASE_JWKS_URL'],
-    'CORS_ORIGIN': env.get('CORS_ORIGIN', 'https://cheung-prey-system.onrender.com,https://cheungprey-system.onrender.com,http://localhost:5173'),
+    'CORS_ORIGIN': env.get('CORS_ORIGIN', 'https://cheung-prey-system.onrender.com,https://cheungprey-system.onrender.com,http://localhost:5173,http://127.0.0.1:5173'),
     'CHROME_PATH': '/usr/bin/chromium',
 }
 for item in tpl['containerDefinitions'][0]['environment']:
