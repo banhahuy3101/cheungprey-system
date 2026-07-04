@@ -43,10 +43,11 @@ func main() {
 	hierarchyHandler := handlers.NewHierarchyHandler(repo)
 	reportService := services.NewReportService("fonts")
 	reportHandler := handlers.NewReportHandler(repo, reportService)
-	partyHandler := handlers.NewPartyHandler(repo)
+	partyHandler := handlers.NewPartyHandler(repo, reportService)
 	reportDocumentHandler := handlers.NewReportDocumentHandler(repo, reportService)
 	reportTemplateHandler := handlers.NewReportTemplateHandler(repo)
 	performanceHandler := handlers.NewPerformanceHandler(repo, reportService)
+	fmsHandler := handlers.NewFMSHandler(repo)
 
 	r := gin.Default()
 	r.Use(middleware.CORS())
@@ -112,6 +113,7 @@ func main() {
 			party := protected.Group("/party")
 			{
 				party.GET("/zones", partyHandler.GetZones)
+				party.GET("/zones/tree", partyHandler.GetZoneTree)
 				party.GET("/structures", partyHandler.GetStructures)
 
 				members := party.Group("")
@@ -135,8 +137,21 @@ func main() {
 				finances.Use(auth.RequireFeature(models.FeatureFinances))
 				{
 					finances.POST("/finances", partyHandler.CreateFinance)
-					finances.GET("/finances", partyHandler.GetFinances)
+					finances.GET("/finances/analytics", partyHandler.GetFinanceAnalytics)
+					finances.GET("/finances/report/pdf", partyHandler.GetFinanceReportPDF)
+					finances.GET("/finances/budgets", partyHandler.ListFinanceBudgets)
+					finances.POST("/finances/budgets", partyHandler.CreateFinanceBudget)
+					finances.PUT("/finances/budgets/:id", partyHandler.UpdateFinanceBudget)
+					finances.DELETE("/finances/budgets/:id", partyHandler.DeleteFinanceBudget)
 					finances.GET("/finances/summary", partyHandler.GetFinanceSummary)
+					finances.GET("/finances", partyHandler.GetFinances)
+					finances.GET("/finances/:id", partyHandler.GetFinanceByID)
+					finances.PUT("/finances/:id", partyHandler.UpdateFinance)
+					finances.DELETE("/finances/:id", partyHandler.DeleteFinance)
+					finances.POST("/finances/:id/submit", partyHandler.SubmitFinance)
+					finances.POST("/finances/:id/approve", partyHandler.ApproveFinance)
+					finances.POST("/finances/:id/reject", partyHandler.RejectFinance)
+					finances.POST("/finances/:id/attachments", partyHandler.AddFinanceAttachment)
 				}
 
 				files := party.Group("")
@@ -214,6 +229,36 @@ func main() {
 				performanceAdmin.DELETE("/indicators/:id", performanceHandler.DeleteIndicator)
 				performanceAdmin.POST("/periods", performanceHandler.CreatePeriod)
 				performanceAdmin.DELETE("/periods/:id", performanceHandler.DeletePeriod)
+			}
+
+			fms := protected.Group("/fms")
+			fms.Use(auth.RequireFeature(models.FeatureFMS))
+			{
+				// Chart of Accounts
+				fms.GET("/coa", fmsHandler.ListCoA)
+				fms.GET("/coa/:code", fmsHandler.GetCoA)
+				fms.POST("/coa", fmsHandler.CreateCoA)
+				fms.PUT("/coa/:code", fmsHandler.UpdateCoA)
+
+				// Budgets
+				fms.GET("/budgets", fmsHandler.ListFMSBudgets)
+				fms.POST("/budgets", fmsHandler.CreateFMSBudget)
+				fms.GET("/budgets/:id", fmsHandler.GetFMSBudget)
+				fms.PUT("/budgets/:id", fmsHandler.UpdateFMSBudget)
+
+				// Transactions
+				fms.POST("/transactions", fmsHandler.CreateFMSTransaction)
+				fms.GET("/transactions", fmsHandler.ListFMSTransactions)
+				fms.GET("/transactions/:id", fmsHandler.GetFMSTransaction)
+				fms.POST("/transactions/:id/approve", fmsHandler.ApproveFMSTransaction)
+				fms.POST("/transactions/:id/reject", fmsHandler.RejectFMSTransaction)
+				fms.POST("/transactions/:id/reverse", fmsHandler.ReverseFMSTransaction)
+
+				// Dashboard
+				fms.GET("/dashboard", fmsHandler.GetFMSDashboard)
+
+				// Audit Log
+				fms.GET("/audit", fmsHandler.ListFMSAuditLog)
 			}
 		}
 	}

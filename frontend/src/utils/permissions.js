@@ -3,6 +3,7 @@ export const FEATURES = {
   members: "members",
   voters: "voters",
   finances: "finances",
+  fms: "fms",
   files: "files",
   records: "records",
   reports: "reports",

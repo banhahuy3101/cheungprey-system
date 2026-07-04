@@ -17,6 +17,7 @@ const (
 	FeatureSettings          Feature = "settings"
 	FeatureUsers             Feature = "users"
 	FeatureTechnical         Feature = "technical"
+	FeatureFMS              Feature = "fms"
 )
 
 var AllFeatures = []Feature{
@@ -49,6 +50,7 @@ var FeatureLabels = map[Feature]string{
 	FeatureSettings:         "ការកំណត់",
 	FeatureUsers:            "គ្រប់គ្រងអ្នកប្រើ",
 	FeatureTechnical:        "Technical",
+	FeatureFMS:              "FMS",
 }
 
 type PermissionSet map[Feature]bool
@@ -125,6 +127,7 @@ func DefaultPermissionsForRole(role UserRole) PermissionSet {
 		p[FeatureMembers] = true
 		p[FeatureVoters] = true
 		p[FeatureFinances] = true
+		p[FeatureFMS] = true
 		p[FeatureFiles] = true
 		p[FeatureRecords] = true
 		p[FeatureReports] = true

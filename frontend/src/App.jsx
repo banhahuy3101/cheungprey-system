@@ -2,16 +2,20 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import AuthProvider from "./components/AuthProvider";
 import ProtectedRoute from "./components/ProtectedRoute";
 import Layout from "./components/Layout";
-import Login from "./pages/Login";
-import Register from "./pages/Register";
-import Dashboard from "./pages/Dashboard";
-import Members from "./pages/Members";
-import Voters from "./pages/Voters";
-import Finances from "./pages/Finances";
-import Files from "./pages/Files";
-import Records from "./pages/Records";
-import Reports from "./pages/Reports";
-import Performance from "./pages/Performance";
+import Login from "./pages/auth/Login";
+import Register from "./pages/auth/Register";
+import Dashboard from "./pages/dashboard/Dashboard";
+import Members from "./pages/members/Members";
+import Voters from "./pages/voters/Voters";
+import Finances from "./pages/finances/Finances";
+import FMSDashboard from "./pages/fms/FMSDashboard";
+import FMSTransactions from "./pages/fms/FMSTransactions";
+import FMSCoA from "./pages/fms/FMSCoA";
+import FMSBudgets from "./pages/fms/FMSBudgets";
+import Files from "./pages/files/Files";
+import Records from "./pages/records/Records";
+import Reports from "./pages/reports/Reports";
+import Performance from "./pages/performance/Performance";
 import Settings from "./pages/Settings";
 import SettingsPeriod from "./pages/SettingsPeriod";
 import SettingsPeriodForm from "./pages/SettingsPeriodForm";
@@ -19,8 +23,8 @@ import SettingsPerformance from "./pages/SettingsPerformance";
 import SettingsRolePermissions from "./pages/SettingsRolePermissions";
 import SettingsTechnical from "./pages/settings/SettingsTechnical";
 import SettingsSystem from "./pages/settings/SettingsSystem";
-import Admin from "./pages/Admin";
-import Profile from "./pages/Profile";
+import Admin from "./pages/admin/Admin";
+import Profile from "./pages/profile/Profile";
 import { FEATURES } from "./utils/permissions";
 
 function FeatureRoute({ feature, children }) {
@@ -37,7 +41,7 @@ function App() {
 
           <Route
             element={
-              <ProtectedRoute>
+              <ProtectedRoute keepLayout>
                 <Layout />
               </ProtectedRoute>
             }
@@ -46,8 +50,20 @@ function App() {
             <Route index element={<Dashboard />} />
 
             <Route path="members" element={<FeatureRoute feature={FEATURES.members}><Members /></FeatureRoute>} />
+            <Route path="members/create" element={<FeatureRoute feature={FEATURES.members}><Members /></FeatureRoute>} />
+            <Route path="members/org" element={<FeatureRoute feature={FEATURES.members}><Members /></FeatureRoute>} />
+            <Route path="members/:id/edit" element={<FeatureRoute feature={FEATURES.members}><Members /></FeatureRoute>} />
+            <Route path="members/:id" element={<FeatureRoute feature={FEATURES.members}><Members /></FeatureRoute>} />
             <Route path="voters" element={<FeatureRoute feature={FEATURES.voters}><Voters /></FeatureRoute>} />
-            <Route path="finances" element={<FeatureRoute feature={FEATURES.finances}><Finances /></FeatureRoute>} />
+            <Route path="finances" element={<Navigate to="/finances/income" replace />} />
+            <Route path="finances/income" element={<FeatureRoute feature={FEATURES.finances}><Finances mode="income" /></FeatureRoute>} />
+            <Route path="finances/expense" element={<FeatureRoute feature={FEATURES.finances}><Finances mode="expense" /></FeatureRoute>} />
+            <Route path="fms" element={<Navigate to="/fms/dashboard" replace />} />
+            <Route path="fms/dashboard" element={<FeatureRoute feature={FEATURES.fms}><FMSDashboard /></FeatureRoute>} />
+            <Route path="fms/transactions/income" element={<FeatureRoute feature={FEATURES.fms}><FMSTransactions type="income" /></FeatureRoute>} />
+            <Route path="fms/transactions/expense" element={<FeatureRoute feature={FEATURES.fms}><FMSTransactions type="expense" /></FeatureRoute>} />
+            <Route path="fms/coa" element={<FeatureRoute feature={FEATURES.fms}><FMSCoA /></FeatureRoute>} />
+            <Route path="fms/budgets" element={<FeatureRoute feature={FEATURES.fms}><FMSBudgets /></FeatureRoute>} />
             <Route path="files" element={<FeatureRoute feature={FEATURES.files}><Files /></FeatureRoute>} />
             <Route path="records" element={<FeatureRoute feature={FEATURES.records}><Records /></FeatureRoute>} />
             <Route path="reports" element={<FeatureRoute feature={FEATURES.reports}><Reports /></FeatureRoute>} />
