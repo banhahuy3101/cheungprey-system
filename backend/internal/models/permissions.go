@@ -34,6 +34,7 @@ var AllFeatures = []Feature{
 	FeatureSettings,
 	FeatureUsers,
 	FeatureTechnical,
+	FeatureFMS,
 }
 
 var FeatureLabels = map[Feature]string{
