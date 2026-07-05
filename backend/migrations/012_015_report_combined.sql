@@ -1,5 +1,5 @@
--- Run this in Supabase Dashboard → SQL Editor (migrations 012–015 combined)
--- Creates report_documents + report_templates with HTML/Word support
+-- Run this in Supabase Dashboard → SQL Editor (migrations 012–013 combined)
+-- Creates report_documents table
 
 CREATE TABLE IF NOT EXISTS report_documents (
   id                          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -44,20 +44,5 @@ ALTER TABLE report_documents ADD COLUMN IF NOT EXISTS human_fatalities INT NOT N
 ALTER TABLE report_documents ADD COLUMN IF NOT EXISTS property_damage_desc TEXT NOT NULL DEFAULT '(គ្មាន)';
 ALTER TABLE report_documents DROP COLUMN IF EXISTS title;
 ALTER TABLE report_documents DROP COLUMN IF EXISTS content;
-
-CREATE TABLE IF NOT EXISTS report_templates (
-  id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  name       TEXT NOT NULL,
-  file_name  TEXT NOT NULL,
-  content    TEXT NOT NULL DEFAULT '',
-  created_by UUID REFERENCES auth.users(id),
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS idx_report_templates_updated_at ON report_templates(updated_at DESC);
-
-ALTER TABLE report_templates ADD COLUMN IF NOT EXISTS format VARCHAR(10) NOT NULL DEFAULT 'html';
-ALTER TABLE report_templates ADD COLUMN IF NOT EXISTS file_data TEXT NOT NULL DEFAULT '';
 
 NOTIFY pgrst, 'reload schema';

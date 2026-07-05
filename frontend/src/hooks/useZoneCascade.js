@@ -47,6 +47,12 @@ export function useZoneCascade({ userZone, isAdmin, initialZoneCode, showVillage
     requestAnimationFrame(() => { skipFetch.current = false; });
   }, [showVillage]);
 
+  useEffect(() => {
+    partyAPI.getZones({ type: "Province" })
+      .then((res) => setProvinces(unwrapList(res)))
+      .catch(() => {});
+  }, []);
+
   const loadFromZoneCode = useCallback(async (zoneCode) => {
     if (!zoneCode) return;
     setLoading(true);

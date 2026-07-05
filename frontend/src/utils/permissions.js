@@ -3,11 +3,9 @@ export const FEATURES = {
   members: "members",
   voters: "voters",
   finances: "finances",
-  fms: "fms",
   files: "files",
   records: "records",
   reports: "reports",
-  report_templates: "report_templates",
   performance: "performance",
   performance_admin: "performance_admin",
   settings: "settings",
@@ -23,7 +21,6 @@ export const FEATURE_LABELS = {
   files: "ឯកសារ",
   records: "កំណត់ត្រា",
   reports: "របាយការណ៍",
-  report_templates: "គំរូរបាយការណ៍",
   performance: "លទ្ធផលការងារ",
   performance_admin: "គ្រប់គ្រង Performance",
   settings: "ការកំណត់",
@@ -35,6 +32,10 @@ export function canAccess(user, feature) {
   if (!user) return false;
   if (user.permissions && feature in user.permissions) {
     return !!user.permissions[feature];
+  }
+  // legacy alias: fms permission maps to finances
+  if (feature === FEATURES.finances && user.permissions?.fms) {
+    return !!user.permissions.fms;
   }
   return false;
 }

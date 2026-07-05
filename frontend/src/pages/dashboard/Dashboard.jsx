@@ -2,9 +2,10 @@ import { useState, useEffect } from "react";
 import { LuUsers, LuUserCheck, LuBanknote, LuTrendingDown, LuWallet, LuFolderOpen } from "react-icons/lu";
 import { partyAPI } from "../../api/party";
 import { adminAPI } from "../../api/admin";
+import { financesAPI } from "../../api/finances";
 import { useAuth } from "../../hooks/useAuth";
 import { canAccess, FEATURES } from "../../utils/permissions";
-import { formatUSD } from "../../utils/finance";
+import { formatFMSUSD } from "../../utils/finances";
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -20,8 +21,14 @@ export default function Dashboard() {
           let finances = null;
           if (showFinances) {
             try {
-              const finRes = await partyAPI.getFinanceSummary();
-              finances = finRes.data?.data || finRes.data;
+              const finRes = await financesAPI.getDashboard({ fiscal_year: new Date().getFullYear() });
+              const dash = finRes.data?.data || finRes.data;
+              finances = dash?.summary ? {
+                total_income: dash.summary.total_income_usd,
+                total_expense: dash.summary.total_expense_usd,
+                balance: dash.summary.balance_usd,
+                by_zone: [],
+              } : null;
             } catch {
               //
             }
@@ -33,12 +40,21 @@ export default function Dashboard() {
             partyAPI.getVoters({ limit: 1 }),
           ];
           if (showFinances) {
-            requests.push(partyAPI.getFinanceSummary());
+            requests.push(financesAPI.getDashboard({ fiscal_year: new Date().getFullYear() }));
           }
           const results = await Promise.all(requests);
-          const financeSummary = showFinances
-            ? (results[2]?.data?.data || results[2]?.data)
-            : null;
+          let financeSummary = null;
+          if (showFinances && results[2]) {
+            const dash = results[2].data?.data || results[2].data;
+            if (dash?.summary) {
+              financeSummary = {
+                total_income: dash.summary.total_income_usd,
+                total_expense: dash.summary.total_expense_usd,
+                balance: dash.summary.balance_usd,
+                by_zone: [],
+              };
+            }
+          }
           setStats({
             total_members: results[0].data?.total || 0,
             total_voters: results[1].data?.total || 0,
@@ -46,7 +62,7 @@ export default function Dashboard() {
           });
         }
       } catch {
-        // ignore
+        //
       } finally {
         setLoading(false);
       }
@@ -74,21 +90,21 @@ export default function Dashboard() {
     ...(showFinances && fin ? [
       {
         label: "ចំណូលសរុប",
-        value: formatUSD(fin.total_income),
+        value: formatFMSUSD(fin.total_income),
         icon: LuBanknote,
         color: "#059669",
         bg: "#ecfdf5",
       },
       {
         label: "ចំណាយសរុប",
-        value: formatUSD(fin.total_expense),
+        value: formatFMSUSD(fin.total_expense),
         icon: LuTrendingDown,
         color: "#dc2626",
         bg: "#fef2f2",
       },
       {
         label: "សមតុល្យ",
-        value: formatUSD(fin.balance),
+        value: formatFMSUSD(fin.balance),
         icon: LuWallet,
         color: fin.balance >= 0 ? "#4f46e5" : "#dc2626",
         bg: fin.balance >= 0 ? "#eef2ff" : "#fef2f2",
@@ -124,34 +140,6 @@ export default function Dashboard() {
               </div>
             </div>
           ))}
-        </div>
-      )}
-
-      {showFinances && fin?.by_zone?.length > 0 && (
-        <div className="card mt-4">
-          <h3 style={{ marginBottom: "0.75rem" }}>ហិរញ្ញវត្ថុតាមតំបន់</h3>
-          <div className="table-responsive">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>តំបន់</th>
-                  <th>ចំណូល</th>
-                  <th>ចំណាយ</th>
-                  <th>សមតុល្យ</th>
-                </tr>
-              </thead>
-              <tbody>
-                {fin.by_zone.slice(0, 5).map((z) => (
-                  <tr key={z.zone_code}>
-                    <td>{z.zone_name_kh || z.zone_code}</td>
-                    <td style={{ color: "#059669" }}>{formatUSD(z.total_income)}</td>
-                    <td style={{ color: "#dc2626" }}>{formatUSD(z.total_expense)}</td>
-                    <td>{formatUSD(z.balance)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
         </div>
       )}
 

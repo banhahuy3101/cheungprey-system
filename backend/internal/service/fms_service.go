@@ -2,6 +2,7 @@ package service
 
 import (
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -98,6 +99,7 @@ func (s *FMSService) CreateBudget(userID uuid.UUID, req *models.CreateFMSBudgetR
 		CreatedBy:       &userID,
 	}
 	if err := s.repo.CreateFMSBudget(budget); err != nil {
+		log.Printf("CreateBudget error: %v", err)
 		return nil, err
 	}
 	return s.enrichBudget(budget)

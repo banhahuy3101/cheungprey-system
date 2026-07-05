@@ -1,25 +1,37 @@
-import Select from "./Select";
 import { zoneCodeOf } from "../utils/zone";
 import { zoneOptionLabel } from "../hooks/useZoneCascade";
 
 export default function ZoneCascadeSelect({
   hook,
-  provinces,
-  districts,
-  communes,
-  villages,
-  selectedProvince,
-  selectedDistrict,
-  selectedCommune,
-  selectedVillage,
-  onProvinceChange,
-  onDistrictChange,
-  onCommuneChange,
-  onVillageChange,
-  isLocked,
+  provinces: _provinces,
+  districts: _districts,
+  communes: _communes,
+  villages: _villages,
+  selectedProvince: _selectedProvince,
+  selectedDistrict: _selectedDistrict,
+  selectedCommune: _selectedCommune,
+  selectedVillage: _selectedVillage,
+  onProvinceChange: _onProvinceChange,
+  onDistrictChange: _onDistrictChange,
+  onCommuneChange: _onCommuneChange,
+  onVillageChange: _onVillageChange,
+  isLocked: _isLocked,
   showVillage = true,
-  compact = false,
 }) {
+  let provinces = _provinces;
+  let districts = _districts;
+  let communes = _communes;
+  let villages = _villages;
+  let selectedProvince = _selectedProvince;
+  let selectedDistrict = _selectedDistrict;
+  let selectedCommune = _selectedCommune;
+  let selectedVillage = _selectedVillage;
+  let onProvinceChange = _onProvinceChange;
+  let onDistrictChange = _onDistrictChange;
+  let onCommuneChange = _onCommuneChange;
+  let onVillageChange = _onVillageChange;
+  let isLocked = _isLocked;
+
   if (hook) {
     provinces = hook.provinces;
     districts = hook.districts;
@@ -29,22 +41,19 @@ export default function ZoneCascadeSelect({
     selectedDistrict = hook.selectedDistrict;
     selectedCommune = hook.selectedCommune;
     selectedVillage = hook.selectedVillage;
-    onProvinceChange = hook.onProvinceChange;
-    onDistrictChange = hook.onDistrictChange;
-    onCommuneChange = hook.onCommuneChange;
-    onVillageChange = hook.onVillageChange;
+    onProvinceChange = (code) => hook.setProvince(code);
+    onDistrictChange = (code) => hook.setDistrict(code);
+    onCommuneChange = (code) => hook.setCommune(code);
+    onVillageChange = (code) => hook.setSelectedVillage(code);
     isLocked = hook.isLocked;
     if (hook.showVillage !== undefined) showVillage = hook.showVillage;
   }
-  const gridStyle = compact
-    ? { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }
-    : { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "0.75rem" };
 
   return (
-    <div style={gridStyle}>
-      <div className="form-group" style={{ margin: 0 }}>
-        <label>ខេត្ត</label>
-        <Select
+    <div style={{ display: "flex", flexWrap: "wrap", gap: "0.75rem", flex: 1 }}>
+      <div className="form-group" style={{ margin: 0, flex: 1, minWidth: 140 }}>
+        <label>ខេត្ត *</label>
+        <select
           value={selectedProvince}
           disabled={isLocked("province")}
           onChange={(e) => onProvinceChange(e.target.value)}
@@ -53,11 +62,11 @@ export default function ZoneCascadeSelect({
           {provinces.map((z) => (
             <option key={zoneCodeOf(z)} value={zoneCodeOf(z)}>{zoneOptionLabel(z)}</option>
           ))}
-        </Select>
+        </select>
       </div>
-      <div className="form-group" style={{ margin: 0 }}>
-        <label>ស្រុក</label>
-        <Select
+      <div className="form-group" style={{ margin: 0, flex: 1, minWidth: 140 }}>
+        <label>ស្រុក *</label>
+        <select
           value={selectedDistrict}
           disabled={isLocked("district") || !selectedProvince}
           onChange={(e) => onDistrictChange(e.target.value)}
@@ -66,11 +75,11 @@ export default function ZoneCascadeSelect({
           {districts.map((z) => (
             <option key={zoneCodeOf(z)} value={zoneCodeOf(z)}>{zoneOptionLabel(z)}</option>
           ))}
-        </Select>
+        </select>
       </div>
-      <div className="form-group" style={{ margin: 0 }}>
+      <div className="form-group" style={{ margin: 0, flex: 1, minWidth: 140 }}>
         <label>ឃុំ *</label>
-        <Select
+        <select
           value={selectedCommune}
           disabled={isLocked("commune") || !selectedDistrict}
           onChange={(e) => onCommuneChange(e.target.value)}
@@ -79,12 +88,12 @@ export default function ZoneCascadeSelect({
           {communes.map((z) => (
             <option key={zoneCodeOf(z)} value={zoneCodeOf(z)}>{zoneOptionLabel(z)}</option>
           ))}
-        </Select>
+        </select>
       </div>
       {showVillage && (
-        <div className="form-group" style={{ margin: 0 }}>
+        <div className="form-group" style={{ margin: 0, flex: 1, minWidth: 140 }}>
           <label>ភូមិ</label>
-          <Select
+          <select
             value={selectedVillage}
             disabled={isLocked("village") || !selectedCommune}
             onChange={(e) => onVillageChange(e.target.value)}
@@ -93,7 +102,7 @@ export default function ZoneCascadeSelect({
             {villages.map((z) => (
               <option key={zoneCodeOf(z)} value={zoneCodeOf(z)}>{zoneOptionLabel(z)}</option>
             ))}
-          </Select>
+          </select>
         </div>
       )}
     </div>

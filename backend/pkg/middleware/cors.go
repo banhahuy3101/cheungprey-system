@@ -13,7 +13,7 @@ func CORS() gin.HandlerFunc {
 	cfg := cors.Config{
 		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"},
 		AllowHeaders:     []string{"Authorization", "Content-Type", "Accept", "Origin"},
-		ExposeHeaders:    []string{"Content-Length", "Content-Type"},
+		ExposeHeaders:    []string{"Content-Length", "Content-Type", "Content-Disposition"},
 		AllowCredentials: false,
 		MaxAge:           12 * time.Hour,
 	}

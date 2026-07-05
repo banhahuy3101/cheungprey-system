@@ -28,7 +28,14 @@ func HasFeature(c *gin.Context, feature models.Feature) bool {
 	if err != nil || perms == nil {
 		return false
 	}
-	return perms[feature]
+	if perms[feature] {
+		return true
+	}
+	// legacy alias: "fms" permission key grants finances access
+	if feature == models.FeatureFinances && perms["fms"] {
+		return true
+	}
+	return false
 }
 
 func RequireFeature(feature models.Feature) gin.HandlerFunc {

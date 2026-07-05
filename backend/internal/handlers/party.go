@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"encoding/base64"
-	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -11,52 +10,19 @@ import (
 	"github.com/banhahuy/cheungprey-system/backend/internal/auth"
 	"github.com/banhahuy/cheungprey-system/backend/internal/models"
 	"github.com/banhahuy/cheungprey-system/backend/internal/repository"
-	"github.com/banhahuy/cheungprey-system/backend/internal/service"
 	"github.com/banhahuy/cheungprey-system/backend/internal/services"
 	"github.com/banhahuy/cheungprey-system/backend/pkg/utils"
 )
 
 type PartyHandler struct {
 	repo    *repository.Repository
-	finance *service.FinanceService
 	reports *services.ReportService
 }
 
 func NewPartyHandler(repo *repository.Repository, reports *services.ReportService) *PartyHandler {
 	return &PartyHandler{
 		repo:    repo,
-		finance: service.NewFinanceService(repo),
 		reports: reports,
-	}
-}
-
-func (h *PartyHandler) financeAccess(c *gin.Context) service.FinanceAccessContext {
-	userID, _ := auth.GetUserID(c)
-	profile, _ := auth.GetProfile(c)
-	return h.finance.AccessContext(userID, profile)
-}
-
-func financeServiceError(c *gin.Context, err error, fallback string) {
-	if err == nil {
-		return
-	}
-	switch err.Error() {
-	case "forbidden":
-		utils.Error(c, http.StatusForbidden, "គ្មានសិទ្ធិធ្វើប្រតិបត្តិការនេះ")
-	case "forbidden zone":
-		utils.Error(c, http.StatusForbidden, "អ្នកគ្មានសិទ្ធិកត់ត្វាតំបន់នេះ")
-	case "not found":
-		utils.Error(c, http.StatusNotFound, "រកមិនឃើញប្រតិបត្តិការ")
-	case "invalid zone":
-		utils.BadRequest(c, "សូមជ្រើសរើសឃុំ (ខេត្ត → ស្រុក → ឃុំ)")
-	case "profile zone missing":
-		utils.Error(c, http.StatusForbidden, "គណនីអ្នកមិនមានតំបន់កំណត់ — សូមទាក់ទងអ្នកគ្រប់គ្រង")
-	case "invalid transaction type":
-		utils.BadRequest(c, "ប្រភេទប្រតិបត្តិការមិនត្រឹមត្រូវ")
-	case "no fields to update":
-		utils.BadRequest(c, err.Error())
-	default:
-		utils.InternalError(c, fallback)
 	}
 }
 
@@ -316,129 +282,6 @@ func (h *PartyHandler) GetVoters(c *gin.Context) {
 	utils.JSON(c, http.StatusOK, voters)
 }
 
-func (h *PartyHandler) CreateFinance(c *gin.Context) {
-	userID, _ := auth.GetUserID(c)
-	var req models.CreateFinanceRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, err.Error())
-		return
-	}
-
-	finance, err := h.finance.Create(h.financeAccess(c), userID, &req)
-	if err != nil {
-		financeServiceError(c, err, "Failed to record transaction")
-		return
-	}
-
-	utils.JSON(c, http.StatusCreated, finance)
-}
-
-func (h *PartyHandler) GetFinanceByID(c *gin.Context) {
-	id, err := uuid.Parse(c.Param("id"))
-	if err != nil {
-		utils.BadRequest(c, "Invalid finance ID")
-		return
-	}
-
-	finance, err := h.finance.GetByID(h.financeAccess(c), id)
-	if err != nil {
-		if err.Error() == "forbidden" {
-			utils.Error(c, http.StatusForbidden, "Forbidden")
-			return
-		}
-		utils.Error(c, http.StatusNotFound, "Transaction not found")
-		return
-	}
-
-	utils.JSON(c, http.StatusOK, finance)
-}
-
-func (h *PartyHandler) UpdateFinance(c *gin.Context) {
-	id, err := uuid.Parse(c.Param("id"))
-	if err != nil {
-		utils.BadRequest(c, "Invalid finance ID")
-		return
-	}
-
-	var req models.UpdateFinanceRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, err.Error())
-		return
-	}
-
-	updated, err := h.finance.Update(h.financeAccess(c), id, &req)
-	if err != nil {
-		financeServiceError(c, err, "Failed to update transaction")
-		return
-	}
-
-	utils.JSON(c, http.StatusOK, updated)
-}
-
-func (h *PartyHandler) DeleteFinance(c *gin.Context) {
-	id, err := uuid.Parse(c.Param("id"))
-	if err != nil {
-		utils.BadRequest(c, "Invalid finance ID")
-		return
-	}
-
-	if err := h.finance.Delete(h.financeAccess(c), id); err != nil {
-		financeServiceError(c, err, "Failed to delete transaction")
-		return
-	}
-
-	utils.JSON(c, http.StatusOK, gin.H{"message": "Transaction deleted"})
-}
-
-func (h *PartyHandler) GetFinances(c *gin.Context) {
-	params := financeListParamsFromQuery(c)
-	result, err := h.finance.List(h.financeAccess(c), params)
-	if err != nil {
-		utils.InternalError(c, "Failed to fetch finances")
-		return
-	}
-	utils.JSON(c, http.StatusOK, result)
-}
-
-func financeListParamsFromQuery(c *gin.Context) models.FinanceListParams {
-	txType := c.Query("transaction_type")
-	if txType == "" {
-		txType = c.Query("type")
-	}
-	page := 1
-	limit := 20
-	if p := c.Query("page"); p != "" {
-		if n, err := parseIntDefault(p, 1); err == nil && n > 0 {
-			page = n
-		}
-	}
-	if l := c.Query("limit"); l != "" {
-		if n, err := parseIntDefault(l, 20); err == nil && n > 0 {
-			limit = n
-		}
-	}
-	return models.FinanceListParams{
-		TransactionType: txType,
-		Direction:       c.Query("direction"),
-		From:            c.Query("from"),
-		To:              c.Query("to"),
-		Search:          c.Query("q"),
-		ZoneCode:        c.Query("zone_code"),
-		Status:          c.Query("status"),
-		Page:            page,
-		Limit:           limit,
-	}
-}
-
-func parseIntDefault(s string, def int) (int, error) {
-	var n int
-	_, err := fmt.Sscanf(s, "%d", &n)
-	if err != nil {
-		return def, err
-	}
-	return n, nil
-}
-
 func (h *PartyHandler) UploadFile(c *gin.Context) {
 	var req models.UploadFileRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -525,180 +368,4 @@ func (h *PartyHandler) DeleteFile(c *gin.Context) {
 	utils.JSON(c, http.StatusOK, gin.H{"message": "File deleted"})
 }
 
-func (h *PartyHandler) GetFinanceSummary(c *gin.Context) {
-	params := financeListParamsFromQuery(c)
-	params.Page = 1
-	params.Limit = 0
-	summary, err := h.finance.Summary(h.financeAccess(c), params)
-	if err != nil {
-		utils.InternalError(c, "Failed to get summary")
-		return
-	}
-	utils.JSON(c, http.StatusOK, summary)
-}
 
-func (h *PartyHandler) GetFinanceAnalytics(c *gin.Context) {
-	params := financeListParamsFromQuery(c)
-	analytics, err := h.finance.Analytics(h.financeAccess(c), params)
-	if err != nil {
-		utils.InternalError(c, "Failed to get analytics")
-		return
-	}
-	utils.JSON(c, http.StatusOK, analytics)
-}
-
-func (h *PartyHandler) GetFinanceReportPDF(c *gin.Context) {
-	params := financeListParamsFromQuery(c)
-	params.Page = 1
-	params.Limit = 0
-	data, err := h.finance.BuildReportData(h.financeAccess(c), params)
-	if err != nil {
-		utils.InternalError(c, "Failed to build report")
-		return
-	}
-	pdfBytes, err := h.reports.GenerateFinanceReport(data)
-	if err != nil {
-		utils.InternalError(c, "Failed to generate PDF")
-		return
-	}
-	filename := "finance_report"
-	if data.ZoneCode != "" {
-		filename += "_" + data.ZoneCode
-	}
-	c.Header("Content-Type", "application/pdf")
-	c.Header("Content-Disposition", "attachment; filename="+filename+".pdf")
-	c.Data(http.StatusOK, "application/pdf", pdfBytes)
-}
-
-func (h *PartyHandler) ListFinanceBudgets(c *gin.Context) {
-	params := financeListParamsFromQuery(c)
-	budgets, err := h.finance.ListBudgets(h.financeAccess(c), params.ZoneCode, params.From, params.To)
-	if err != nil {
-		utils.InternalError(c, "Failed to list budgets")
-		return
-	}
-	utils.JSON(c, http.StatusOK, budgets)
-}
-
-func (h *PartyHandler) CreateFinanceBudget(c *gin.Context) {
-	userID, _ := auth.GetUserID(c)
-	var req models.CreateFinanceBudgetRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, err.Error())
-		return
-	}
-	b, err := h.finance.CreateBudget(h.financeAccess(c), userID, &req)
-	if err != nil {
-		if err.Error() == "forbidden" || err.Error() == "forbidden zone" {
-			utils.Error(c, http.StatusForbidden, "Forbidden")
-			return
-		}
-		utils.InternalError(c, "Failed to create budget")
-		return
-	}
-	utils.JSON(c, http.StatusCreated, b)
-}
-
-func (h *PartyHandler) UpdateFinanceBudget(c *gin.Context) {
-	id, err := uuid.Parse(c.Param("id"))
-	if err != nil {
-		utils.BadRequest(c, "Invalid budget ID")
-		return
-	}
-	var req models.UpdateFinanceBudgetRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, err.Error())
-		return
-	}
-	b, err := h.finance.UpdateBudget(h.financeAccess(c), id, &req)
-	if err != nil {
-		if err.Error() == "forbidden" {
-			utils.Error(c, http.StatusForbidden, "Forbidden")
-			return
-		}
-		utils.InternalError(c, "Failed to update budget")
-		return
-	}
-	utils.JSON(c, http.StatusOK, b)
-}
-
-func (h *PartyHandler) DeleteFinanceBudget(c *gin.Context) {
-	id, err := uuid.Parse(c.Param("id"))
-	if err != nil {
-		utils.BadRequest(c, "Invalid budget ID")
-		return
-	}
-	if err := h.finance.DeleteBudget(h.financeAccess(c), id); err != nil {
-		utils.Error(c, http.StatusForbidden, "Forbidden")
-		return
-	}
-	utils.JSON(c, http.StatusOK, gin.H{"message": "Budget deleted"})
-}
-
-func (h *PartyHandler) SubmitFinance(c *gin.Context) {
-	id, err := uuid.Parse(c.Param("id"))
-	if err != nil {
-		utils.BadRequest(c, "Invalid finance ID")
-		return
-	}
-	f, err := h.finance.Submit(h.financeAccess(c), id)
-	if err != nil {
-		financeServiceError(c, err, "Failed to submit transaction")
-		return
-	}
-	utils.JSON(c, http.StatusOK, f)
-}
-
-func (h *PartyHandler) ApproveFinance(c *gin.Context) {
-	userID, _ := auth.GetUserID(c)
-	id, err := uuid.Parse(c.Param("id"))
-	if err != nil {
-		utils.BadRequest(c, "Invalid finance ID")
-		return
-	}
-	f, err := h.finance.Approve(h.financeAccess(c), userID, id)
-	if err != nil {
-		financeServiceError(c, err, "Failed to approve transaction")
-		return
-	}
-	utils.JSON(c, http.StatusOK, f)
-}
-
-func (h *PartyHandler) RejectFinance(c *gin.Context) {
-	id, err := uuid.Parse(c.Param("id"))
-	if err != nil {
-		utils.BadRequest(c, "Invalid finance ID")
-		return
-	}
-	var req models.RejectFinanceRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, err.Error())
-		return
-	}
-	f, err := h.finance.Reject(h.financeAccess(c), id, req.Reason)
-	if err != nil {
-		financeServiceError(c, err, "Failed to reject transaction")
-		return
-	}
-	utils.JSON(c, http.StatusOK, f)
-}
-
-func (h *PartyHandler) AddFinanceAttachment(c *gin.Context) {
-	userID, _ := auth.GetUserID(c)
-	id, err := uuid.Parse(c.Param("id"))
-	if err != nil {
-		utils.BadRequest(c, "Invalid finance ID")
-		return
-	}
-	var req models.AddFinanceAttachmentRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, err.Error())
-		return
-	}
-	file, err := h.finance.AddAttachment(h.financeAccess(c), userID, id, &req)
-	if err != nil {
-		utils.Error(c, http.StatusForbidden, "Forbidden")
-		return
-	}
-	utils.JSON(c, http.StatusCreated, file)
-}

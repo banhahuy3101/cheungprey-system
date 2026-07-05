@@ -6,14 +6,14 @@ const TABS = [
   { to: "/finances/expense", icon: LuTrendingDown, label: "ចំណាយ" },
 ];
 
-export default function FinanceModeTabs() {
+export default function FinanceTxnTabs() {
   return (
-    <nav className="finance-mode-tabs" aria-label="ប្រភេទហិរញ្ញវត្ថុ">
+    <nav className="fms-txn-tabs" aria-label="ប្រភេទហិរញ្ញវត្ថុ">
       {TABS.map(({ to, icon: Icon, label }) => (
         <NavLink
           key={to}
           to={to}
-          className={({ isActive }) => `finance-mode-tab ${isActive ? "active" : ""}`}
+          className={({ isActive }) => `fms-txn-tab ${isActive ? "active" : ""}`}
         >
           <Icon />
           {label}

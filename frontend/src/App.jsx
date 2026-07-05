@@ -7,11 +7,10 @@ import Register from "./pages/auth/Register";
 import Dashboard from "./pages/dashboard/Dashboard";
 import Members from "./pages/members/Members";
 import Voters from "./pages/voters/Voters";
-import Finances from "./pages/finances/Finances";
-import FMSDashboard from "./pages/fms/FMSDashboard";
-import FMSTransactions from "./pages/fms/FMSTransactions";
-import FMSCoA from "./pages/fms/FMSCoA";
-import FMSBudgets from "./pages/fms/FMSBudgets";
+import FinancesDashboard from "./pages/finances/dashboard/page";
+import FinancesTransactions from "./pages/finances/transactions/page";
+import FinancesCoA from "./pages/finances/coa/page";
+import FinancesBudgets from "./pages/finances/budgets/page";
 import Files from "./pages/files/Files";
 import Records from "./pages/records/Records";
 import Reports from "./pages/reports/Reports";
@@ -55,19 +54,23 @@ function App() {
             <Route path="members/:id/edit" element={<FeatureRoute feature={FEATURES.members}><Members /></FeatureRoute>} />
             <Route path="members/:id" element={<FeatureRoute feature={FEATURES.members}><Members /></FeatureRoute>} />
             <Route path="voters" element={<FeatureRoute feature={FEATURES.voters}><Voters /></FeatureRoute>} />
-            <Route path="finances" element={<Navigate to="/finances/income" replace />} />
-            <Route path="finances/income" element={<FeatureRoute feature={FEATURES.finances}><Finances mode="income" /></FeatureRoute>} />
-            <Route path="finances/expense" element={<FeatureRoute feature={FEATURES.finances}><Finances mode="expense" /></FeatureRoute>} />
-            <Route path="fms" element={<Navigate to="/fms/dashboard" replace />} />
-            <Route path="fms/dashboard" element={<FeatureRoute feature={FEATURES.fms}><FMSDashboard /></FeatureRoute>} />
-            <Route path="fms/transactions/income" element={<FeatureRoute feature={FEATURES.fms}><FMSTransactions type="income" /></FeatureRoute>} />
-            <Route path="fms/transactions/expense" element={<FeatureRoute feature={FEATURES.fms}><FMSTransactions type="expense" /></FeatureRoute>} />
-            <Route path="fms/coa" element={<FeatureRoute feature={FEATURES.fms}><FMSCoA /></FeatureRoute>} />
-            <Route path="fms/budgets" element={<FeatureRoute feature={FEATURES.fms}><FMSBudgets /></FeatureRoute>} />
+
+            <Route path="finances" element={<Navigate to="/finances/dashboard" replace />} />
+            <Route path="finances/dashboard" element={<FeatureRoute feature={FEATURES.finances}><FinancesDashboard /></FeatureRoute>} />
+            <Route path="finances/income" element={<FeatureRoute feature={FEATURES.finances}><FinancesTransactions type="income" /></FeatureRoute>} />
+            <Route path="finances/expense" element={<FeatureRoute feature={FEATURES.finances}><FinancesTransactions type="expense" /></FeatureRoute>} />
+            <Route path="finances/coa" element={<FeatureRoute feature={FEATURES.finances}><FinancesCoA /></FeatureRoute>} />
+            <Route path="finances/budgets" element={<FeatureRoute feature={FEATURES.finances}><FinancesBudgets /></FeatureRoute>} />
+            <Route path="fms/*" element={<Navigate to="/finances/dashboard" replace />} />
+            <Route path="fms/dashboard" element={<Navigate to="/finances/dashboard" replace />} />
+            <Route path="fms/transactions/income" element={<Navigate to="/finances/income" replace />} />
+            <Route path="fms/transactions/expense" element={<Navigate to="/finances/expense" replace />} />
+            <Route path="fms/coa" element={<Navigate to="/finances/coa" replace />} />
+            <Route path="fms/budgets" element={<Navigate to="/finances/budgets" replace />} />
+
             <Route path="files" element={<FeatureRoute feature={FEATURES.files}><Files /></FeatureRoute>} />
             <Route path="records" element={<FeatureRoute feature={FEATURES.records}><Records /></FeatureRoute>} />
             <Route path="reports" element={<FeatureRoute feature={FEATURES.reports}><Reports /></FeatureRoute>} />
-            <Route path="reports/templates" element={<FeatureRoute feature={FEATURES.reports}><Reports /></FeatureRoute>} />
             <Route path="reports/create" element={<FeatureRoute feature={FEATURES.reports}><Reports /></FeatureRoute>} />
             <Route path="reports/:id/edit" element={<FeatureRoute feature={FEATURES.reports}><Reports /></FeatureRoute>} />
             <Route path="reports/:id" element={<FeatureRoute feature={FEATURES.reports}><Reports /></FeatureRoute>} />

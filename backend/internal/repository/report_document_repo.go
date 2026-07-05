@@ -11,28 +11,13 @@ import (
 
 func (r *Repository) CreateReportDocument(doc *models.ReportDocument) error {
 	row := map[string]any{
-		"id":                          doc.ID.String(),
-		"party_name":                  doc.PartyName,
-		"province_name":               doc.ProvinceName,
-		"district_name":               doc.DistrictName,
-		"document_reference_number":   doc.DocumentReferenceNumber,
-		"generation_date_khmer":       doc.GenerationDateKhmer,
-		"political_situation_summary": doc.PoliticalSituationSummary,
-		"total_crimes_count":          doc.TotalCrimesCount,
-		"homicide_cases":              doc.HomicideCases,
-		"suicide_cases":               doc.SuicideCases,
-		"misdemeanor_cases":           doc.MisdemeanorCases,
-		"human_fatalities":            doc.HumanFatalities,
-		"property_damage_desc":        doc.PropertyDamageDesc,
-		"status":                      doc.Status,
-		"created_at":                  doc.CreatedAt,
-		"updated_at":                  doc.UpdatedAt,
-	}
-	if doc.ReportMonth != nil {
-		row["report_month"] = *doc.ReportMonth
-	}
-	if doc.ReportYear != nil {
-		row["report_year"] = *doc.ReportYear
+		"id":          doc.ID.String(),
+		"title":       doc.Title,
+		"description": doc.Description,
+		"content":     doc.Content,
+		"status":      doc.Status,
+		"created_at":  doc.CreatedAt,
+		"updated_at":  doc.UpdatedAt,
 	}
 	if doc.CreatedBy != uuid.Nil {
 		row["created_by"] = doc.CreatedBy.String()

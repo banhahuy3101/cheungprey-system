@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	htmltemplate "html/template"
 	"io"
 	"os"
 	"path/filepath"
@@ -70,6 +71,35 @@ func errorsJoin(errs ...error) error {
 		}
 	}
 	return nil
+}
+
+type pdfOptions struct {
+	landscape                      bool
+	showPageNumbers                bool
+	paperWidth, paperHeight        float64
+	marginTop, marginBottom        float64
+	marginLeft, marginRight        float64
+}
+
+func portraitA4PDFOptions(showPageNumbers ...bool) pdfOptions {
+	opts := pdfOptions{
+		paperWidth: 8.27, paperHeight: 11.69,
+		marginTop: 0.55, marginBottom: 0.55,
+		marginLeft: 0.65, marginRight: 0.55,
+	}
+	if len(showPageNumbers) > 0 {
+		opts.showPageNumbers = showPageNumbers[0]
+	}
+	return opts
+}
+
+func landscapeA4PDFOptions() pdfOptions {
+	return pdfOptions{
+		landscape:   true,
+		paperWidth: 16.5, paperHeight: 11.7,
+		marginTop: 0.3, marginBottom: 0.3,
+		marginLeft: 0.3, marginRight: 0.3,
+	}
 }
 
 func (s *ReportService) GenerateMemberReport(members []models.Member) ([]byte, error) {
@@ -197,6 +227,11 @@ func (s *ReportService) htmlToPDF(renderHTML func() ([]byte, error), opts pdfOpt
 				WithMarginRight(opts.marginRight)
 			if opts.landscape {
 				builder = builder.WithLandscape(true)
+			}
+			if opts.showPageNumbers {
+				builder = builder.
+					WithDisplayHeaderFooter(true).
+					WithFooterTemplate(`<div style="width:100%;text-align:center;font-size:9pt;font-family:'Battambang',sans-serif;color:#475569;">ទំព័រ <span class="pageNumber"></span></div>`)
 			}
 			pdfBuf, _, err = builder.Do(ctx)
 			return err
@@ -457,44 +492,33 @@ tr:nth-child(even) td { background: #f0f3f4; }
 </body>
 </html>`
 
-func (s *ReportService) GeneratePartyReportDocument(doc *models.ReportDocument) ([]byte, error) {
+func (s *ReportService) GenerateReportPDF(doc *models.ReportDocument, showPageNumbers ...bool) ([]byte, error) {
 	return s.htmlToPDF(func() ([]byte, error) {
-		return renderPartyReportHTML(doc, reportFontRegular, reportFontBold)
-	}, portraitA4PDFOptions())
+		return renderSimpleReportHTML(doc, reportFontRegular, reportFontBold)
+	}, portraitA4PDFOptions(showPageNumbers...))
 }
 
-func renderPartyReportHTML(doc *models.ReportDocument, regularFont, boldFont string) ([]byte, error) {
-	reportMonth := 0
-	reportYear := 0
-	if doc.ReportMonth != nil {
-		reportMonth = *doc.ReportMonth
-	}
-	if doc.ReportYear != nil {
-		reportYear = *doc.ReportYear
-	}
+// Deprecated alias — use GenerateReportPDF.
+func (s *ReportService) GeneratePartyReportDocument(doc *models.ReportDocument) ([]byte, error) {
+	return s.GenerateReportPDF(doc)
+}
 
-	funcMap := template.FuncMap{
-		"khmerDigits": periodlabel.ToKhmerDigits,
-		"khmerMonth":  periodlabel.KhmerMonthName,
-	}
-
-	tmpl := template.Must(template.New("partyReport").Funcs(funcMap).Parse(partyReportHTML))
+func renderSimpleReportHTML(doc *models.ReportDocument, regularFont, boldFont string) ([]byte, error) {
+	tmpl := htmltemplate.Must(htmltemplate.New("simpleReport").Parse(simpleReportHTML))
 	var htmlBuf bytes.Buffer
 	err := tmpl.Execute(&htmlBuf, map[string]any{
 		"BattambangFontPath":     regularFont,
 		"BattambangBoldFontPath": boldFont,
 		"Doc":                    doc,
-		"ReportMonth":            reportMonth,
-		"ReportYear":             reportYear,
-		"PoliticalHTML":          doc.PoliticalSituationSummary,
+		"Content":                htmltemplate.HTML(doc.Content),
 	})
 	if err != nil {
-		return nil, fmt.Errorf("render party report template: %w", err)
+		return nil, fmt.Errorf("render report template: %w", err)
 	}
 	return htmlBuf.Bytes(), nil
 }
 
-const partyReportHTML = `<!DOCTYPE html>
+const simpleReportHTML = `<!DOCTYPE html>
 <html lang="km">
 <head>
 <meta charset="utf-8">
@@ -512,122 +536,52 @@ const partyReportHTML = `<!DOCTYPE html>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body {
   font-family: 'Battambang', sans-serif;
-  color: #000;
+  color: #0f172a;
   font-size: 11pt;
-  line-height: 1.6;
+  line-height: 1.75;
+  padding: 0.05in 0.1in;
 }
-.header-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 18px;
+.report-content { font-size: 11pt; }
+.report-content p { margin: 0.5em 0; }
+.report-content h1 { font-size: 16pt; margin: 1em 0 0.4em; }
+.report-content h2 { font-size: 14pt; margin: 0.85em 0 0.35em; }
+.report-content h3 { font-size: 12pt; margin: 0.75em 0 0.3em; }
+.report-content h4 { font-size: 11pt; margin: 0.65em 0 0.25em; }
+.report-content ul, .report-content ol { padding-left: 1.4em; margin: 0.45em 0; }
+.report-content blockquote {
+  border-left: 3px solid #cbd5e1;
+  padding-left: 0.85em;
+  margin: 0.65em 0;
+  color: #64748b;
 }
-.header-left, .header-right {
-  width: 48%;
-  font-size: 10pt;
-  line-height: 1.5;
+.report-content img { max-width: 100%; height: auto; margin: 0.65em 0; border-radius: 4px; }
+.report-content table { width: 100%; border-collapse: collapse; margin: 0.65em 0; font-size: 10pt; }
+.report-content th, .report-content td {
+  border: 1px solid #cbd5e1;
+  padding: 5px 7px;
+  vertical-align: top;
 }
-.header-right {
-  text-align: right;
+.report-content th { background: #f8fafc; font-weight: bold; }
+.report-content mark { border-radius: 2px; padding: 0 2px; }
+.report-content pre {
+  background: #0f172a;
+  color: #e2e8f0;
+  padding: 0.75em 0.9em;
+  border-radius: 6px;
+  overflow-x: auto;
+  margin: 0.65em 0;
+  font-size: 9.5pt;
 }
-.doc-title {
-  text-align: center;
-  font-weight: bold;
-  font-size: 13pt;
-  margin: 12px 0 6px;
-  text-decoration: underline;
-}
-.doc-subtitle {
-  text-align: center;
-  font-size: 11pt;
-  margin-bottom: 16px;
-}
-.section-title {
-  font-weight: bold;
-  margin: 14px 0 8px;
-}
-.narrative {
-  text-align: justify;
-  margin-bottom: 14px;
-  white-space: pre-wrap;
-}
-.stats-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin-top: 8px;
-}
-.stats-table td, .stats-table th {
-  border: 1px solid #000;
-  padding: 6px 8px;
-  vertical-align: middle;
-  font-size: 10.5pt;
-}
-.stats-table th {
-  font-weight: bold;
-  text-align: center;
-  background: #f3f3f3;
-}
-.num {
-  text-align: center;
-  width: 80px;
+.report-content code {
+  background: #f1f5f9;
+  padding: 0.1em 0.3em;
+  border-radius: 3px;
+  font-size: 0.92em;
 }
 </style>
 </head>
 <body>
-<div class="header-row">
-  <div class="header-left">
-    <div>{{.Doc.PartyName}}</div>
-    <div>ខេត្ត{{.Doc.ProvinceName}}</div>
-    <div>ស្រុក{{.Doc.DistrictName}}</div>
-    {{if .Doc.DocumentReferenceNumber}}<div>លេខ {{.Doc.DocumentReferenceNumber}}</div>{{end}}
-  </div>
-  <div class="header-right">
-    {{if .Doc.GenerationDateKhmer}}{{.Doc.GenerationDateKhmer}}{{end}}
-  </div>
-</div>
-
-<div class="doc-title">របាយការណ៍ស្ដីពីសភាពនយោបាយ និងសន្តិសុខ</div>
-<div class="doc-subtitle">ខែ{{khmerMonth .ReportMonth}} ឆ្នាំ{{khmerDigits .ReportYear}}</div>
-
-<div class="section-title">I. សភាពនយោបាយ និងសន្តិសុខ</div>
-<div class="section-title" style="font-weight:normal;">ក. សភាពនយោបាយ និងសន្តិសុខទូទៅ</div>
-<div class="narrative">{{.PoliticalHTML}}</div>
-
-<div class="section-title" style="font-weight:normal;">ខ. ស្ថិតិបទល្មើស និងគ្រោះថ្នាក់</div>
-<table class="stats-table">
-  <thead>
-    <tr>
-      <th>ខ្លឹមសារ</th>
-      <th class="num">ចំនួន</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td>សភាពការណ៍បទល្មើស កើតឡើង</td>
-      <td class="num">{{khmerDigits .Doc.TotalCrimesCount}}</td>
-    </tr>
-    <tr>
-      <td>ឃាតកម្ម</td>
-      <td class="num">{{khmerDigits .Doc.HomicideCases}}</td>
-    </tr>
-    <tr>
-      <td>អត្តឃាត</td>
-      <td class="num">{{khmerDigits .Doc.SuicideCases}}</td>
-    </tr>
-    <tr>
-      <td>បទមជ្ឈិម</td>
-      <td class="num">{{khmerDigits .Doc.MisdemeanorCases}}</td>
-    </tr>
-    <tr>
-      <td>ផ្នែកមនុស្ស ស្លាប់</td>
-      <td class="num">{{khmerDigits .Doc.HumanFatalities}}</td>
-    </tr>
-    <tr>
-      <td>ផ្នែកសម្ភារៈ</td>
-      <td>{{.Doc.PropertyDamageDesc}}</td>
-    </tr>
-  </tbody>
-</table>
+<div class="report-content">{{.Content}}</div>
 </body>
 </html>`
 

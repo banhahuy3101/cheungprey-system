@@ -7,51 +7,45 @@ const (
 	FeatureDashboard         Feature = "dashboard"
 	FeatureMembers           Feature = "members"
 	FeatureVoters            Feature = "voters"
-	FeatureFinances          Feature = "finances"
 	FeatureFiles             Feature = "files"
 	FeatureRecords           Feature = "records"
 	FeatureReports           Feature = "reports"
-	FeatureReportTemplates   Feature = "report_templates"
 	FeaturePerformance       Feature = "performance"
 	FeaturePerformanceAdmin  Feature = "performance_admin"
 	FeatureSettings          Feature = "settings"
 	FeatureUsers             Feature = "users"
 	FeatureTechnical         Feature = "technical"
-	FeatureFMS              Feature = "fms"
+	FeatureFinances         Feature = "finances"
 )
 
 var AllFeatures = []Feature{
 	FeatureDashboard,
 	FeatureMembers,
 	FeatureVoters,
-	FeatureFinances,
 	FeatureFiles,
 	FeatureRecords,
 	FeatureReports,
-	FeatureReportTemplates,
 	FeaturePerformance,
 	FeaturePerformanceAdmin,
 	FeatureSettings,
 	FeatureUsers,
 	FeatureTechnical,
-	FeatureFMS,
+	FeatureFinances,
 }
 
 var FeatureLabels = map[Feature]string{
 	FeatureDashboard:        "ទំព័រដើម",
 	FeatureMembers:          "សមាជិក",
 	FeatureVoters:           "អ្នកបោះឆ្នោត",
-	FeatureFinances:         "ហិរញ្ញវត្ថុ",
 	FeatureFiles:            "ឯកសារ",
 	FeatureRecords:          "កំណត់ត្រា",
 	FeatureReports:          "របាយការណ៍",
-	FeatureReportTemplates:  "គំរូរបាយការណ៍",
 	FeaturePerformance:      "លទ្ធផលការងារ",
 	FeaturePerformanceAdmin: "គ្រប់គ្រង Performance",
 	FeatureSettings:         "ការកំណត់",
 	FeatureUsers:            "គ្រប់គ្រងអ្នកប្រើ",
 	FeatureTechnical:        "Technical",
-	FeatureFMS:              "FMS",
+	FeatureFinances:         "ហិរញ្ញវត្ថុ",
 }
 
 type PermissionSet map[Feature]bool
@@ -128,7 +122,6 @@ func DefaultPermissionsForRole(role UserRole) PermissionSet {
 		p[FeatureMembers] = true
 		p[FeatureVoters] = true
 		p[FeatureFinances] = true
-		p[FeatureFMS] = true
 		p[FeatureFiles] = true
 		p[FeatureRecords] = true
 		p[FeatureReports] = true

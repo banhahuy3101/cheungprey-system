@@ -8,6 +8,9 @@ import (
 
 type ReportDocument struct {
 	ID                        uuid.UUID `json:"id"`
+	Title                     string    `json:"title"`
+	Description               string    `json:"description"`
+	Content                   string    `json:"content"`
 	PartyName                 string    `json:"party_name"`
 	ProvinceName              string    `json:"province_name"`
 	DistrictName              string    `json:"district_name"`
@@ -49,3 +52,15 @@ type ReportDocumentPayload struct {
 type CreateReportDocumentRequest = ReportDocumentPayload
 
 type UpdateReportDocumentRequest = ReportDocumentPayload
+
+type CreateSimpleReportDocumentRequest struct {
+	Title       string `json:"title"`
+	Description string `json:"description"`
+	Content     string `json:"content"`
+}
+
+type UpdateSimpleReportDocumentRequest struct {
+	Title       string `json:"title"`
+	Description string `json:"description"`
+	Content     string `json:"content"`
+}

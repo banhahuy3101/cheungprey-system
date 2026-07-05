@@ -80,6 +80,14 @@ func (s *PermissionService) EnrichProfile(profile *models.Profile) error {
 	return nil
 }
 
+// NormalizeFinanceZoneCode rolls village-level codes up to commune (finance has no village scope).
+func NormalizeFinanceZoneCode(code string) string {
+	if len(code) > 6 {
+		return code[:6]
+	}
+	return code
+}
+
 // ResolveProfileZoneCode derives a finance zone from profile fields when zone_code is unset.
 func (s *PermissionService) ResolveProfileZoneCode(profile *models.Profile) string {
 	if profile == nil {

@@ -51,8 +51,8 @@ type FMSBudget struct {
 	AccountNameKh string `json:"account_name_kh,omitempty"`
 	AccountNameEn string `json:"account_name_en,omitempty"`
 	ZoneNameKh    string `json:"zone_name_kh,omitempty"`
-	Remaining     float64 `json:"remaining"`
-	UsedPct       float64 `json:"used_pct"`
+	Remaining     float64 `json:"remaining,omitempty"`
+	UsedPct       float64 `json:"used_pct,omitempty"`
 }
 
 type CreateFMSBudgetRequest struct {
@@ -107,6 +107,10 @@ type CreateFMSTransactionRequest struct {
 	AmountKHR   float64  `json:"amount_khr"`
 	Description string   `json:"description,omitempty"`
 	DocumentRefs []string `json:"document_refs,omitempty"`
+}
+
+type RejectFMSTransactionRequest struct {
+	Reason string `json:"reason" binding:"required"`
 }
 
 type FMSTransactionListParams struct {

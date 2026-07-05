@@ -245,7 +245,7 @@ func (h *FMSHandler) RejectFMSTransaction(c *gin.Context) {
 		utils.BadRequest(c, "Invalid transaction ID")
 		return
 	}
-	var req models.RejectFinanceRequest
+	var req models.RejectFMSTransactionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "Reason is required")
 		return

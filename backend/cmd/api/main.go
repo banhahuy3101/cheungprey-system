@@ -45,7 +45,6 @@ func main() {
 	reportHandler := handlers.NewReportHandler(repo, reportService)
 	partyHandler := handlers.NewPartyHandler(repo, reportService)
 	reportDocumentHandler := handlers.NewReportDocumentHandler(repo, reportService)
-	reportTemplateHandler := handlers.NewReportTemplateHandler(repo)
 	performanceHandler := handlers.NewPerformanceHandler(repo, reportService)
 	fmsHandler := handlers.NewFMSHandler(repo)
 
@@ -133,27 +132,6 @@ func main() {
 					voters.GET("/voters", partyHandler.GetVoters)
 				}
 
-				finances := party.Group("")
-				finances.Use(auth.RequireFeature(models.FeatureFinances))
-				{
-					finances.POST("/finances", partyHandler.CreateFinance)
-					finances.GET("/finances/analytics", partyHandler.GetFinanceAnalytics)
-					finances.GET("/finances/report/pdf", partyHandler.GetFinanceReportPDF)
-					finances.GET("/finances/budgets", partyHandler.ListFinanceBudgets)
-					finances.POST("/finances/budgets", partyHandler.CreateFinanceBudget)
-					finances.PUT("/finances/budgets/:id", partyHandler.UpdateFinanceBudget)
-					finances.DELETE("/finances/budgets/:id", partyHandler.DeleteFinanceBudget)
-					finances.GET("/finances/summary", partyHandler.GetFinanceSummary)
-					finances.GET("/finances", partyHandler.GetFinances)
-					finances.GET("/finances/:id", partyHandler.GetFinanceByID)
-					finances.PUT("/finances/:id", partyHandler.UpdateFinance)
-					finances.DELETE("/finances/:id", partyHandler.DeleteFinance)
-					finances.POST("/finances/:id/submit", partyHandler.SubmitFinance)
-					finances.POST("/finances/:id/approve", partyHandler.ApproveFinance)
-					finances.POST("/finances/:id/reject", partyHandler.RejectFinance)
-					finances.POST("/finances/:id/attachments", partyHandler.AddFinanceAttachment)
-				}
-
 				files := party.Group("")
 				files.Use(auth.RequireFeature(models.FeatureFiles))
 				{
@@ -171,26 +149,12 @@ func main() {
 				reports.GET("/performance/:zone_id/:period_id", performanceHandler.PerformanceReport)
 			}
 
-			reportTemplates := protected.Group("/report-templates")
-			reportTemplates.Use(auth.RequireFeature(models.FeatureReports))
-			{
-				reportTemplates.GET("/keys", reportTemplateHandler.ListKeys)
-				reportTemplates.GET("", reportTemplateHandler.List)
-				reportTemplates.GET("/:id", reportTemplateHandler.GetByID)
-			}
-
-			reportTemplatesAdmin := protected.Group("/report-templates")
-			reportTemplatesAdmin.Use(auth.RequireFeature(models.FeatureReportTemplates))
-			{
-				reportTemplatesAdmin.POST("/upload", reportTemplateHandler.Upload)
-				reportTemplatesAdmin.DELETE("/:id", reportTemplateHandler.Delete)
-			}
-
 			reportDocs := protected.Group("/report-documents")
 			reportDocs.Use(auth.RequireFeature(models.FeatureReports))
 			{
-				reportDocs.GET("/:id/docx", reportDocumentHandler.DownloadDocx)
 				reportDocs.GET("/:id/pdf", reportDocumentHandler.DownloadPDF)
+				reportDocs.POST("/simple", reportDocumentHandler.CreateSimple)
+				reportDocs.PUT("/:id/simple", reportDocumentHandler.UpdateSimple)
 				reportDocs.POST("", reportDocumentHandler.Create)
 				reportDocs.GET("", reportDocumentHandler.List)
 				reportDocs.GET("/:id", reportDocumentHandler.GetByID)
@@ -232,7 +196,7 @@ func main() {
 			}
 
 			fms := protected.Group("/fms")
-			fms.Use(auth.RequireFeature(models.FeatureFMS))
+			fms.Use(auth.RequireFeature(models.FeatureFinances))
 			{
 				// Chart of Accounts
 				fms.GET("/coa", fmsHandler.ListCoA)

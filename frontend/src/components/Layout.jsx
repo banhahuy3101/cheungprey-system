@@ -9,7 +9,6 @@ import {
   LuFolderOpen,
   LuFileText,
   LuScrollText,
-  LuShield,
   LuTrendingUp,
   LuSettings,
   LuMenu,
@@ -18,14 +17,13 @@ import {
   LuChevronDown,
   LuTrendingDown,
   LuBookOpen,
-  LuChartBar,
   LuChartLine,
   LuListOrdered,
 } from "react-icons/lu";
 import { useAuth } from "../hooks/useAuth";
 import { canAccess, FEATURES } from "../utils/permissions";
 
-const navItems = [
+const mainNavItems = [
   { to: "/", icon: LuLayoutDashboard, label: "ទំព័រដើម", end: true, feature: FEATURES.dashboard },
   { to: "/members", icon: LuUsers, label: "សមាជិក", feature: FEATURES.members },
   { to: "/voters", icon: LuUserCheck, label: "អ្នកបោះឆ្នោត", feature: FEATURES.voters },
@@ -33,13 +31,21 @@ const navItems = [
   { to: "/records", icon: LuFileText, label: "កំណត់ត្រា", feature: FEATURES.records },
   { to: "/reports", icon: LuScrollText, label: "របាយការណ៍", feature: FEATURES.reports },
   { to: "/performance", icon: LuTrendingUp, label: "លទ្ធផលការងារ", feature: FEATURES.performance },
-  { to: "/settings", icon: LuSettings, label: "ការកំណត់", feature: FEATURES.settings },
-  { to: "/admin", icon: LuShield, label: "គ្រប់គ្រង", feature: FEATURES.users },
 ];
 
+const settingsNavItem = {
+  to: "/settings",
+  icon: LuSettings,
+  label: "ការកំណត់",
+  feature: FEATURES.settings,
+};
+
 const financeSubItems = [
+  { to: "/finances/dashboard", icon: LuChartLine, label: "ផ្ទាំងគ្រប់គ្រង" },
   { to: "/finances/income", icon: LuTrendingUp, label: "ចំណូល" },
   { to: "/finances/expense", icon: LuTrendingDown, label: "ចំណាយ" },
+  { to: "/finances/coa", icon: LuListOrdered, label: "តារាងគណនី" },
+  { to: "/finances/budgets", icon: LuBookOpen, label: "ថវិកា" },
 ];
 
 export default function Layout() {
@@ -48,14 +54,10 @@ export default function Layout() {
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [financeOpen, setFinanceOpen] = useState(location.pathname.startsWith("/finances"));
-  const [fmsOpen, setFmsOpen] = useState(location.pathname.startsWith("/fms"));
 
   useEffect(() => {
     if (location.pathname.startsWith("/finances")) {
       setFinanceOpen(true);
-    }
-    if (location.pathname.startsWith("/fms")) {
-      setFmsOpen(true);
     }
   }, [location.pathname]);
 
@@ -64,9 +66,9 @@ export default function Layout() {
     navigate("/login");
   };
 
-  const filteredNav = navItems.filter((item) => canAccess(user, item.feature));
+  const filteredMainNav = mainNavItems.filter((item) => canAccess(user, item.feature));
   const showFinance = canAccess(user, FEATURES.finances);
-  const showFMS = canAccess(user, FEATURES.fms);
+  const showSettings = canAccess(user, settingsNavItem.feature);
 
   const roleLabel = user?.roles?.length
     ? user.roles.join(", ")
@@ -75,7 +77,7 @@ export default function Layout() {
   const toggleFinance = () => {
     setFinanceOpen((open) => !open);
     if (!location.pathname.startsWith("/finances")) {
-      navigate("/finances/income");
+      navigate("/finances/dashboard");
     }
   };
 
@@ -92,7 +94,7 @@ export default function Layout() {
         </div>
 
         <nav className="sidebar-nav">
-          {filteredNav.map((item) => (
+          {filteredMainNav.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
@@ -139,38 +141,17 @@ export default function Layout() {
             </div>
           )}
 
-          {showFMS && (
-            <div className="nav-group">
-              <button
-                type="button"
-                className={`nav-link nav-group-toggle ${location.pathname.startsWith("/fms") ? "active" : ""}`}
-                onClick={() => { setFmsOpen((o) => !o); if (!location.pathname.startsWith("/fms")) navigate("/fms/dashboard"); }}
-                aria-expanded={fmsOpen}
-              >
-                <LuChartBar className="nav-icon" />
-                <span className="nav-group-label">FMS</span>
-                <LuChevronDown className={`nav-chevron ${fmsOpen ? "open" : ""}`} />
-              </button>
-              {fmsOpen && (
-                <div className="nav-sub">
-                  <NavLink to="/fms/dashboard" className={({ isActive }) => `nav-link nav-sublink ${isActive ? "active" : ""}`} onClick={() => setSidebarOpen(false)}>
-                    <LuChartLine className="nav-icon" /><span>ផ្ទាំងគ្រប់គ្រង</span>
-                  </NavLink>
-                  <NavLink to="/fms/transactions/income" className={({ isActive }) => `nav-link nav-sublink ${isActive ? "active" : ""}`} onClick={() => setSidebarOpen(false)}>
-                    <LuTrendingUp className="nav-icon" /><span>ចំណូល</span>
-                  </NavLink>
-                  <NavLink to="/fms/transactions/expense" className={({ isActive }) => `nav-link nav-sublink ${isActive ? "active" : ""}`} onClick={() => setSidebarOpen(false)}>
-                    <LuTrendingDown className="nav-icon" /><span>ចំណាយ</span>
-                  </NavLink>
-                  <NavLink to="/fms/coa" className={({ isActive }) => `nav-link nav-sublink ${isActive ? "active" : ""}`} onClick={() => setSidebarOpen(false)}>
-                    <LuListOrdered className="nav-icon" /><span>តារាងគណនី</span>
-                  </NavLink>
-                  <NavLink to="/fms/budgets" className={({ isActive }) => `nav-link nav-sublink ${isActive ? "active" : ""}`} onClick={() => setSidebarOpen(false)}>
-                    <LuBookOpen className="nav-icon" /><span>ថវិកា</span>
-                  </NavLink>
-                </div>
-              )}
-            </div>
+          {showSettings && (
+            <NavLink
+              to={settingsNavItem.to}
+              className={({ isActive }) =>
+                `nav-link ${isActive ? "active" : ""}`
+              }
+              onClick={() => setSidebarOpen(false)}
+            >
+              <settingsNavItem.icon className="nav-icon" />
+              <span>{settingsNavItem.label}</span>
+            </NavLink>
           )}
         </nav>
 

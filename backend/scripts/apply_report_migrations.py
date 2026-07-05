@@ -14,8 +14,6 @@ ROOT = Path(__file__).resolve().parents[1]
 MIGRATIONS = [
     ROOT / "migrations/012_report_documents.sql",
     ROOT / "migrations/013_report_documents_template.sql",
-    ROOT / "migrations/014_report_templates.sql",
-    ROOT / "migrations/015_report_templates_docx.sql",
 ]
 
 
@@ -64,7 +62,7 @@ def main() -> int:
     try:
         with urllib.request.urlopen(req, timeout=120) as resp:
             body = resp.read().decode()
-            print(f"Applied migrations 012–015 ({resp.status})")
+            print(f"Applied migrations 012–013 ({resp.status})")
             if body.strip():
                 print(body)
             return 0
@@ -74,7 +72,7 @@ def main() -> int:
         print(
             "\nFallback: from backend/, run:\n"
             "  supabase db push --linked --yes\n"
-            "(uses backend/supabase/migrations/20260702120000_report_documents_templates.sql)",
+            "(uses backend/supabase/migrations/20260702120000_report_documents.sql)",
             file=sys.stderr,
         )
         return 1
