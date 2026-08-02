@@ -37,6 +37,18 @@ func (r *Repository) ListSubDomains(domainID uuid.UUID) ([]models.PerformanceSub
 	return subDomains, nil
 }
 
+func (r *Repository) ListAllSubDomains() ([]models.PerformanceSubDomain, error) {
+	var subDomains []models.PerformanceSubDomain
+	_, err := r.AdminClient.From("performance_sub_domains").
+		Select("*", "exact", false).
+		Order("sort_order", &postgrest.OrderOpts{Ascending: true}).
+		ExecuteTo(&subDomains)
+	if err != nil {
+		return nil, fmt.Errorf("list all sub-domains: %w", err)
+	}
+	return subDomains, nil
+}
+
 func (r *Repository) ListIndicators(subDomainID uuid.UUID) ([]models.PerformanceIndicator, error) {
 	var indicators []models.PerformanceIndicator
 	_, err := r.AdminClient.From("performance_indicators").
@@ -128,73 +140,64 @@ func (r *Repository) GetPerformanceDataWithIndicators(zoneID string, periodID uu
 		return []models.PerformanceDataWithIndicator{}, nil
 	}
 
-	type indicatorMeta struct {
-		fullCode      string
-		nameKh        string
-		subDomainCode string
-		domainCode    string
-		dataType      string
-		unitKh        *string
+	allIndicators, err := r.ListAllIndicators()
+	if err != nil {
+		return nil, fmt.Errorf("list all indicators: %w", err)
+	}
+	allSubDomains, err := r.ListAllSubDomains()
+	if err != nil {
+		return nil, fmt.Errorf("list all sub-domains: %w", err)
+	}
+	allDomains, err := r.ListDomains()
+	if err != nil {
+		return nil, fmt.Errorf("list all domains: %w", err)
 	}
 
-	cache := make(map[string]indicatorMeta)
+	indByID := make(map[uuid.UUID]models.PerformanceIndicator)
+	for _, ind := range allIndicators {
+		indByID[ind.ID] = ind
+	}
+	subByID := make(map[uuid.UUID]models.PerformanceSubDomain)
+	for _, sub := range allSubDomains {
+		subByID[sub.ID] = sub
+	}
+	domByID := make(map[uuid.UUID]models.PerformanceDomain)
+	for _, dom := range allDomains {
+		domByID[dom.ID] = dom
+	}
+
 	var enriched []models.PerformanceDataWithIndicator
-
 	for _, row := range rows {
-		key := row.IndicatorID.String()
-		meta, ok := cache[key]
+		ind, ok := indByID[row.IndicatorID]
 		if !ok {
-			ind, err := r.GetIndicatorByID(row.IndicatorID)
-			if err != nil {
-				return nil, fmt.Errorf("get indicator %s: %w", key, err)
-			}
-			if ind == nil {
-				return nil, fmt.Errorf("indicator not found: %s", key)
-			}
-			sub, err := r.GetSubDomainByID(ind.SubDomainID)
-			if err != nil {
-				return nil, fmt.Errorf("get sub-domain for indicator %s: %w", key, err)
-			}
-			if sub == nil {
-				return nil, fmt.Errorf("sub-domain not found for indicator %s", key)
-			}
-			dom, err := r.GetDomainByID(sub.DomainID)
-			if err != nil {
-				return nil, fmt.Errorf("get domain for indicator %s: %w", key, err)
-			}
-			if dom == nil {
-				return nil, fmt.Errorf("domain not found for indicator %s", key)
-			}
-			meta = indicatorMeta{
-				fullCode:      fmt.Sprintf("%s.%s.%s", dom.Code, sub.Code, ind.Code),
-				nameKh:        ind.NameKh,
-				subDomainCode: sub.Code,
-				domainCode:    dom.Code,
-				dataType:      ind.DataType,
-				unitKh:        ind.UnitKh,
-			}
-			cache[key] = meta
+			continue
 		}
-
+		sub, ok := subByID[ind.SubDomainID]
+		if !ok {
+			continue
+		}
+		dom, ok := domByID[sub.DomainID]
+		if !ok {
+			continue
+		}
 		enriched = append(enriched, models.PerformanceDataWithIndicator{
-			ID:              row.ID,
-			ZoneID:          row.ZoneID,
-			IndicatorID:     row.IndicatorID,
-			PeriodID:        row.PeriodID,
-			ValueNumber:     row.ValueNumber,
-			ValuePercentage: row.ValuePercentage,
-			ValueBinary:     row.ValueBinary,
-			CreatedBy:       row.CreatedBy,
-			UpdatedAt:       row.UpdatedAt,
-			IndicatorNameKh: meta.nameKh,
-			IndicatorCode:   meta.fullCode,
-			SubDomainCode:   meta.subDomainCode,
-			DomainCode:      meta.domainCode,
-			DataType:        meta.dataType,
-			UnitKh:          meta.unitKh,
+			ID:                row.ID,
+			ZoneID:            row.ZoneID,
+			IndicatorID:       row.IndicatorID,
+			PeriodID:          row.PeriodID,
+			ValueNumber:       row.ValueNumber,
+			ValuePercentage:   row.ValuePercentage,
+			ValueBinary:       row.ValueBinary,
+			CreatedBy:         row.CreatedBy,
+			UpdatedAt:         row.UpdatedAt,
+			IndicatorCode:     fmt.Sprintf("%s.%s.%s", dom.Code, sub.Code, ind.Code),
+			IndicatorNameKh:   ind.NameKh,
+			SubDomainCode:     sub.Code,
+			DomainCode:        dom.Code,
+			DataType:          ind.DataType,
+			UnitKh:            ind.UnitKh,
 		})
 	}
-
 	return enriched, nil
 }
 
