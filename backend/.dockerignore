@@ -1,5 +1,32 @@
-bin/
-app
+# Git
+.git
+.gitignore
+
+# Docs
+docs/
+*.md
+
+# Environment
 .env
 .env.*
-supabase/.temp/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Build artifacts
+/tmp/
+*.exe
+*.log
+
+# Node (if any frontend deps leak)
+node_modules/
+
+# Tests
+*_test.go
+
+# Migrations (not needed at runtime)
+migrations/
+supabase/

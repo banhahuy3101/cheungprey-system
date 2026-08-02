@@ -1,26 +1,33 @@
-FROM golang:1.26-bookworm AS builder
-
-WORKDIR /src
+# Stage 1: Build the Go binary
+FROM golang:1.23-alpine AS builder
+WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 go build -o /app/api ./cmd/api
+RUN CGO_ENABLED=0 GOOS=linux go build -o server ./cmd/api
 
-FROM debian:bookworm-slim
+# Stage 2: Production runtime with Chromium & Khmer fonts
+FROM alpine:latest
 
-RUN apt-get update \
-  && apt-get install -y --no-install-recommends \
+# Install Chromium and Khmer font packages
+RUN apk add --no-cache \
     chromium \
+    nss \
+    freetype \
+    harfbuzz \
     ca-certificates \
-    fonts-liberation \
-  && rm -rf /var/lib/apt/lists/*
+    ttf-freefont \
+    font-noto-khmer
+
+ENV CHROME_BIN=/usr/bin/chromium-browser
 
 WORKDIR /app
-COPY --from=builder /app/api ./app
-COPY fonts ./fonts
 
-ENV CHROME_PATH=/usr/bin/chromium
-ENV PORT=8080
+# Copy binary
+COPY --from=builder /app/server .
+
+# Copy Khmer fonts for PDF rendering
+COPY --from=builder /app/fonts ./fonts
 
 EXPOSE 8080
-CMD ["./app"]
+CMD ["./server"]
