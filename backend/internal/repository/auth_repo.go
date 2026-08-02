@@ -3,6 +3,7 @@ package repository
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 
 	"github.com/google/uuid"
 	gotrue "github.com/supabase-community/gotrue-go/types"
@@ -169,6 +170,8 @@ func (r *Repository) ListAdminUsers() ([]models.AdminUser, error) {
 		for _, u := range authResp.Users {
 			emailByID[u.ID.String()] = u.Email
 		}
+	} else if err != nil {
+		log.Printf("warning: could not list auth users: %v", err)
 	}
 
 	zoneNames := map[string]string{}
