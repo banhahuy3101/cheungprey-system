@@ -30,17 +30,18 @@ func main() {
 		log.Fatalf("failed to initialize repository: %v", err)
 	}
 
-	if err := repo.SeedRolePermissionsIfEmpty(); err != nil {
-		log.Printf("warning: could not seed role permissions: %v", err)
-	}
-
-	if err := repo.EnsureTemplateBucket(); err != nil {
-		log.Printf("warning: could not ensure report templates bucket: %v", err)
-	}
-
-	if err := repo.EnsureReportBucket(); err != nil {
-		log.Printf("warning: could not ensure report documents bucket: %v", err)
-	}
+	// Run startup tasks in background so server starts immediately
+	go func() {
+		if err := repo.SeedRolePermissionsIfEmpty(); err != nil {
+			log.Printf("warning: could not seed role permissions: %v", err)
+		}
+		if err := repo.EnsureTemplateBucket(); err != nil {
+			log.Printf("warning: could not ensure report templates bucket: %v", err)
+		}
+		if err := repo.EnsureReportBucket(); err != nil {
+			log.Printf("warning: could not ensure report documents bucket: %v", err)
+		}
+	}()
 
 	permSvc := service.NewPermissionService(repo)
 
