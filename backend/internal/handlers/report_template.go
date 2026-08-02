@@ -1,0 +1,390 @@
+package handlers
+
+import (
+	"archive/zip"
+	"bytes"
+	"encoding/xml"
+	"fmt"
+	"io"
+	"net/http"
+	"path/filepath"
+	"regexp"
+	"strings"
+	"time"
+
+	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+
+	"github.com/banhahuy/cheungprey-system/backend/internal/auth"
+	"github.com/banhahuy/cheungprey-system/backend/internal/models"
+	"github.com/banhahuy/cheungprey-system/backend/internal/repository"
+	"github.com/banhahuy/cheungprey-system/backend/pkg/utils"
+)
+
+type ReportTemplateHandler struct {
+	repo *repository.Repository
+}
+
+func NewReportTemplateHandler(repo *repository.Repository) *ReportTemplateHandler {
+	return &ReportTemplateHandler{repo: repo}
+}
+
+func (h *ReportTemplateHandler) List(c *gin.Context) {
+	templates, err := h.repo.ListReportTemplates()
+	if err != nil {
+		utils.InternalError(c, "Failed to fetch templates")
+		return
+	}
+	if templates == nil {
+		templates = []models.ReportTemplate{}
+	}
+	utils.JSON(c, http.StatusOK, templates)
+}
+
+func (h *ReportTemplateHandler) Upload(c *gin.Context) {
+	name := c.PostForm("name")
+	if name == "" {
+		utils.BadRequest(c, "Name is required")
+		return
+	}
+	description := c.PostForm("description")
+	format := c.PostForm("format")
+	if format != "docx" && format != "html" {
+		utils.BadRequest(c, "Format must be docx or html")
+		return
+	}
+
+	userID, err := auth.GetUserID(c)
+	if err != nil {
+		utils.Unauthorized(c, "Authentication required")
+		return
+	}
+
+	tmpl := &models.ReportTemplate{
+		ID:          uuid.New(),
+		Name:        name,
+		Description: description,
+		Format:      format,
+		CreatedBy:   userID,
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
+	}
+
+	if format == "docx" {
+		file, err := c.FormFile("file")
+		if err != nil {
+			utils.BadRequest(c, "File is required for docx format")
+			return
+		}
+		tmpl.FileName = file.Filename
+		tmpl.FileSize = file.Size
+		safeName := sanitizeFilename(file.Filename)
+		storagePath := fmt.Sprintf("%s/%s", tmpl.ID.String(), safeName)
+
+		src, err := file.Open()
+		if err != nil {
+			utils.InternalError(c, "Failed to read file")
+			return
+		}
+		data, err := io.ReadAll(src)
+		src.Close()
+		if err != nil {
+			utils.InternalError(c, "Failed to read file")
+			return
+		}
+
+		tmpl.Keys = extractDocxKeys(data)
+
+		contentType := file.Header.Get("Content-Type")
+		if contentType == "" {
+			contentType = "application/octet-stream"
+		}
+		if err := h.repo.UploadTemplateFileData(data, storagePath, contentType); err != nil {
+			utils.InternalError(c, "Failed to upload file: "+err.Error())
+			return
+		}
+		tmpl.StoragePath = storagePath
+	} else {
+		content := c.PostForm("content")
+		if content == "" {
+			utils.BadRequest(c, "Content is required for html format")
+			return
+		}
+		tmpl.Content = content
+		tmpl.FileName = name + ".html"
+		tmpl.Keys = extractKeys(content)
+	}
+
+	if err := h.repo.CreateReportTemplate(tmpl); err != nil {
+		if tmpl.StoragePath != "" {
+			_ = h.repo.DeleteTemplateFile(tmpl.StoragePath)
+		}
+		utils.InternalError(c, "Failed to save template: "+err.Error())
+		return
+	}
+
+	utils.JSON(c, http.StatusCreated, tmpl)
+}
+
+func (h *ReportTemplateHandler) GetByID(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		utils.BadRequest(c, "Invalid template ID")
+		return
+	}
+
+	tmpl, err := h.repo.GetReportTemplateByID(id)
+	if err != nil {
+		utils.InternalError(c, "Failed to fetch template")
+		return
+	}
+	if tmpl == nil {
+		utils.Error(c, http.StatusNotFound, "Template not found")
+		return
+	}
+
+	utils.JSON(c, http.StatusOK, tmpl)
+}
+
+func (h *ReportTemplateHandler) Update(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		utils.BadRequest(c, "Invalid template ID")
+		return
+	}
+
+	tmpl, err := h.repo.GetReportTemplateByID(id)
+	if err != nil || tmpl == nil {
+		utils.Error(c, http.StatusNotFound, "Template not found")
+		return
+	}
+
+	name := c.PostForm("name")
+	if name == "" {
+		utils.BadRequest(c, "Name is required")
+		return
+	}
+	tmpl.Name = name
+	tmpl.Description = c.PostForm("description")
+	tmpl.UpdatedAt = time.Now()
+
+	if tmpl.Format == "docx" {
+		file, err := c.FormFile("file")
+		if err == nil {
+			// New file uploaded — replace old one
+			if tmpl.StoragePath != "" {
+				_ = h.repo.DeleteTemplateFile(tmpl.StoragePath)
+			}
+			tmpl.FileName = file.Filename
+			tmpl.FileSize = file.Size
+			safeName := sanitizeFilename(file.Filename)
+			tmpl.StoragePath = fmt.Sprintf("%s/%s", tmpl.ID.String(), safeName)
+
+			src, err := file.Open()
+			if err != nil {
+				utils.InternalError(c, "Failed to read file")
+				return
+			}
+			data, err := io.ReadAll(src)
+			src.Close()
+			if err != nil {
+				utils.InternalError(c, "Failed to read file")
+				return
+			}
+
+			tmpl.Keys = extractDocxKeys(data)
+
+			contentType := file.Header.Get("Content-Type")
+			if contentType == "" {
+				contentType = "application/octet-stream"
+			}
+			if err := h.repo.UploadTemplateFileData(data, tmpl.StoragePath, contentType); err != nil {
+				utils.InternalError(c, "Failed to upload file: "+err.Error())
+				return
+			}
+		}
+	} else {
+		content := c.PostForm("content")
+		if content != "" {
+			tmpl.Content = content
+			tmpl.Keys = extractKeys(content)
+		}
+	}
+
+	if err := h.repo.UpdateReportTemplate(tmpl); err != nil {
+		utils.InternalError(c, "Failed to update template: "+err.Error())
+		return
+	}
+
+	utils.JSON(c, http.StatusOK, tmpl)
+}
+
+func (h *ReportTemplateHandler) Download(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		utils.BadRequest(c, "Invalid template ID")
+		return
+	}
+
+	tmpl, err := h.repo.GetReportTemplateByID(id)
+	if err != nil {
+		utils.InternalError(c, "Failed to fetch template")
+		return
+	}
+	if tmpl == nil {
+		utils.Error(c, http.StatusNotFound, "Template not found")
+		return
+	}
+
+	if tmpl.Format == "html" {
+		utils.JSON(c, http.StatusOK, gin.H{"content": tmpl.Content})
+		return
+	}
+
+	data, err := h.repo.DownloadTemplateFile(tmpl.StoragePath)
+	if err != nil {
+		utils.InternalError(c, "Failed to download file")
+		return
+	}
+
+	contentType := "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+	if strings.HasSuffix(tmpl.FileName, ".docx") {
+		contentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+	}
+
+	c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, tmpl.FileName))
+	c.Data(http.StatusOK, contentType, data)
+}
+
+func (h *ReportTemplateHandler) Delete(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		utils.BadRequest(c, "Invalid template ID")
+		return
+	}
+
+	tmpl, err := h.repo.GetReportTemplateByID(id)
+	if err != nil {
+		utils.InternalError(c, "Failed to fetch template")
+		return
+	}
+	if tmpl == nil {
+		utils.Error(c, http.StatusNotFound, "Template not found")
+		return
+	}
+
+	if tmpl.StoragePath != "" {
+		_ = h.repo.DeleteTemplateFile(tmpl.StoragePath)
+	}
+
+	if err := h.repo.DeleteReportTemplate(id); err != nil {
+		utils.InternalError(c, "Failed to delete template")
+		return
+	}
+
+	utils.JSON(c, http.StatusOK, gin.H{"message": "deleted"})
+}
+
+func sanitizeFilename(name string) string {
+	ext := filepath.Ext(name)
+	base := strings.TrimSuffix(name, ext)
+	re := regexp.MustCompile(`[^a-zA-Z0-9._-]`)
+	base = re.ReplaceAllString(base, "_")
+	if base == "" {
+		base = "file"
+	}
+	return base + ext
+}
+
+var keyRe = regexp.MustCompile(`\{\{\s*([\w.]+)\s*\}\}`)
+
+func extractKeys(text string) []string {
+	seen := map[string]bool{}
+	var keys []string
+	for _, m := range keyRe.FindAllStringSubmatch(text, -1) {
+		k := m[1]
+		if !seen[k] {
+			seen[k] = true
+			keys = append(keys, k)
+		}
+	}
+	return keys
+}
+
+func extractDocxKeys(data []byte) []string {
+	r, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
+	if err != nil {
+		return nil
+	}
+	for _, f := range r.File {
+		if f.Name == "word/document.xml" {
+			rc, err := f.Open()
+			if err != nil {
+				return nil
+			}
+			defer rc.Close()
+			var doc struct {
+				Body struct {
+					P []struct {
+						R []struct {
+							T string `xml:"t"`
+						} `xml:"r"`
+					} `xml:"p"`
+				} `xml:"body"`
+			}
+			if err := xml.NewDecoder(rc).Decode(&doc); err != nil {
+				return nil
+			}
+			var buf strings.Builder
+			for _, p := range doc.Body.P {
+				for _, r := range p.R {
+					buf.WriteString(r.T)
+				}
+				buf.WriteString("\n")
+			}
+			return extractKeys(buf.String())
+		}
+	}
+	return nil
+}
+
+func (h *ReportTemplateHandler) AddKey(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		utils.BadRequest(c, "Invalid template ID")
+		return
+	}
+
+	var req struct {
+		Key string `json:"key" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, "Key is required")
+		return
+	}
+
+	tmpl, err := h.repo.GetReportTemplateByID(id)
+	if err != nil || tmpl == nil {
+		utils.Error(c, http.StatusNotFound, "Template not found")
+		return
+	}
+
+	for _, k := range tmpl.Keys {
+		if k == req.Key {
+			utils.Error(c, http.StatusConflict, "Key already exists")
+			return
+		}
+	}
+
+	tmpl.Keys = append(tmpl.Keys, req.Key)
+	tmpl.UpdatedAt = time.Now()
+
+	if err := h.repo.UpdateReportTemplate(tmpl); err != nil {
+		utils.InternalError(c, "Failed to update keys")
+		return
+	}
+
+	utils.JSON(c, http.StatusOK, tmpl)
+}
+
+
