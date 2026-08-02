@@ -402,13 +402,15 @@ export default function Admin() {
                 ) : (
                   users.map((u) => (
                     <tr key={u.id}>
-                      <td>
+                       <td>
                         <button
                           className="profile-link-btn"
                           onClick={() => openProfile(u)}
                           title="មើលប្រវត្តិរូប"
+                          style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", lineHeight: 1.3 }}
                         >
-                          {u.full_name || u.name || "-"}
+                          <span>{u.full_name || u.name || "-"}</span>
+                          <span style={{ fontSize: "0.75rem", color: "#6b7280", fontWeight: 400 }}>{u.email || "-"}</span>
                         </button>
                       </td>
                       <td>{u.email || "-"}</td>
