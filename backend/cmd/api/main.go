@@ -34,6 +34,14 @@ func main() {
 		log.Printf("warning: could not seed role permissions: %v", err)
 	}
 
+	if err := repo.EnsureTemplateBucket(); err != nil {
+		log.Printf("warning: could not ensure report templates bucket: %v", err)
+	}
+
+	if err := repo.EnsureReportBucket(); err != nil {
+		log.Printf("warning: could not ensure report documents bucket: %v", err)
+	}
+
 	permSvc := service.NewPermissionService(repo)
 
 	authHandler := handlers.NewAuthHandler(repo, cfg)
@@ -47,6 +55,7 @@ func main() {
 	reportDocumentHandler := handlers.NewReportDocumentHandler(repo, reportService)
 	performanceHandler := handlers.NewPerformanceHandler(repo, reportService)
 	fmsHandler := handlers.NewFMSHandler(repo)
+	reportTemplateHandler := handlers.NewReportTemplateHandler(repo)
 
 	r := gin.Default()
 	r.Use(middleware.CORS())
@@ -155,11 +164,25 @@ func main() {
 				reportDocs.GET("/:id/pdf", reportDocumentHandler.DownloadPDF)
 				reportDocs.POST("/simple", reportDocumentHandler.CreateSimple)
 				reportDocs.PUT("/:id/simple", reportDocumentHandler.UpdateSimple)
+				reportDocs.PUT("/:id/status", reportDocumentHandler.UpdateStatus)
 				reportDocs.POST("", reportDocumentHandler.Create)
 				reportDocs.GET("", reportDocumentHandler.List)
 				reportDocs.GET("/:id", reportDocumentHandler.GetByID)
 				reportDocs.PUT("/:id", reportDocumentHandler.Update)
 				reportDocs.DELETE("/:id", reportDocumentHandler.Delete)
+			}
+
+			reportTemplates := protected.Group("/report-templates")
+			reportTemplates.Use(auth.RequireFeature(models.FeatureReports))
+			{
+				reportTemplates.GET("", reportTemplateHandler.List)
+				reportTemplates.POST("", reportTemplateHandler.Upload)
+				reportTemplates.GET("/:id", reportTemplateHandler.GetByID)
+				reportTemplates.PUT("/:id", reportTemplateHandler.Update)
+				reportTemplates.GET("/:id/download", reportTemplateHandler.Download)
+				reportTemplates.DELETE("/:id", reportTemplateHandler.Delete)
+				reportTemplates.POST("/:id/fill", reportTemplateHandler.Fill)
+				reportTemplates.POST("/:id/keys", reportTemplateHandler.AddKey)
 			}
 
 			performance := protected.Group("/performance")
@@ -191,8 +214,9 @@ func main() {
 				performanceAdmin.POST("/indicators", performanceHandler.CreateIndicator)
 				performanceAdmin.PUT("/indicators/:id", performanceHandler.UpdateIndicator)
 				performanceAdmin.DELETE("/indicators/:id", performanceHandler.DeleteIndicator)
-				performanceAdmin.POST("/periods", performanceHandler.CreatePeriod)
-				performanceAdmin.DELETE("/periods/:id", performanceHandler.DeletePeriod)
+			performanceAdmin.POST("/periods", performanceHandler.CreatePeriod)
+			performanceAdmin.PUT("/periods/:id", performanceHandler.UpdatePeriod)
+			performanceAdmin.DELETE("/periods/:id", performanceHandler.DeletePeriod)
 			}
 
 			fms := protected.Group("/fms")

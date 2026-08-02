@@ -44,20 +44,39 @@ func parseDate(s string) (time.Time, error) {
 
 func FormatKh(start, end time.Time) string {
 	sm, em := int(start.Month()), int(end.Month())
+	_, ed := start.Day(), end.Day()
 	sy, ey := start.Year(), end.Year()
 	syKh, eyKh := ToKhmerDigits(sy), ToKhmerDigits(ey)
 
 	if sm == 1 {
-		label := fmt.Sprintf("គិតចាប់ពីដើមឆ្នាំ%s ដល់ខែ%s", syKh, khmerMonths[em])
-		if ey != sy {
+		endIsYearEnd := em == 12 && ed == 31
+		var endPart string
+		if endIsYearEnd {
+			endPart = "ចុងឆ្នាំ"
+			if ey != sy {
+				endPart += eyKh
+			}
+		} else {
+			endPart = "ខែ" + khmerMonths[em]
+		}
+		label := fmt.Sprintf("គិតចាប់ពីដើមឆ្នាំ%s ដល់%s", syKh, endPart)
+		if ey != sy && !endIsYearEnd {
 			label += fmt.Sprintf(" ឆ្នាំ%s", eyKh)
 		}
 		return label
 	}
 	if sy == ey {
-		return fmt.Sprintf("គិតចាប់ពីខែ%s ដល់ខែ%s ឆ្នាំ%s", khmerMonths[sm], khmerMonths[em], syKh)
+		endPart := "ខែ" + khmerMonths[em]
+		if em == 12 && ed == 31 {
+			endPart = "ចុងឆ្នាំ"
+		}
+		return fmt.Sprintf("គិតចាប់ពីខែ%s ដល់%s ឆ្នាំ%s", khmerMonths[sm], endPart, syKh)
 	}
-	return fmt.Sprintf("គិតចាប់ពីខែ%s ឆ្នាំ%s ដល់ខែ%s ឆ្នាំ%s", khmerMonths[sm], syKh, khmerMonths[em], eyKh)
+	endPart := "ខែ" + khmerMonths[em]
+	if em == 12 && ed == 31 {
+		endPart = "ចុងឆ្នាំ"
+	}
+	return fmt.Sprintf("គិតចាប់ពីខែ%s ឆ្នាំ%s ដល់%s ឆ្នាំ%s", khmerMonths[sm], syKh, endPart, eyKh)
 }
 
 func FormatEn(start, end time.Time) string {

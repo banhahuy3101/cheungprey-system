@@ -2,14 +2,14 @@ import { useState, useEffect } from "react";
 import { adminAPI } from "../api/admin";
 
 const FALLBACK_ROLES = [
-  { value: "recorder", label: "Recorder" },
-  { value: "village_chief", label: "Village Chief" },
-  { value: "commune_clerk", label: "Commune Clerk" },
-  { value: "commune_chief", label: "Commune Chief" },
-  { value: "district_chief", label: "District Chief" },
-  { value: "admin", label: "Admin" },
-  { value: "super_admin", label: "Super Admin" },
-  { value: "regular_user", label: "Regular User" },
+  { value: "super_admin", label: "អ្នកគ្រប់គ្រងជាន់ខ្ពស់" },
+  { value: "admin", label: "អ្នកគ្រប់គ្រង" },
+  { value: "district_chief", label: "ប្រធានស្រុក" },
+  { value: "commune_chief", label: "ប្រធានឃុំ" },
+  { value: "commune_clerk", label: "ស្មៀនឃុំ" },
+  { value: "village_chief", label: "ប្រធានភូមិ" },
+  { value: "recorder", label: "អ្នកកត់ត្រា" },
+  { value: "regular_user", label: "អ្នកប្រើប្រាស់ធម្មតា" },
 ];
 
 export function useRoleOptions() {

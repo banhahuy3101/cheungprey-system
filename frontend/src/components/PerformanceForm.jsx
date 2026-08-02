@@ -243,7 +243,15 @@ export default function PerformanceForm({ mode, zoneCode, periodId }) {
         const dt = m.data_type || "number";
         const entry = { indicator_code: key };
         if (dt === "number" || dt === "text") entry.value_number = parseFloat(value);
-        else if (dt === "percentage") entry.value_percentage = parseFloat(value);
+        else if (dt === "percentage") {
+          const pct = parseFloat(value);
+          if (pct > 100) {
+            setError(`ភាគរយមិនអាចលើសពី 100 (${key})`);
+            setSaving(false);
+            return;
+          }
+          entry.value_percentage = pct;
+        }
         else if (dt === "binary") entry.value_binary = value === "true" || value === true;
         else entry.value_number = parseFloat(value);
         values.push(entry);
@@ -555,8 +563,14 @@ export default function PerformanceForm({ mode, zoneCode, periodId }) {
                                     <input
                                       type="number"
                                       step="any"
+                                      min={dt === "percentage" ? 0 : undefined}
+                                      max={dt === "percentage" ? 100 : undefined}
                                       value={val}
-                                      onChange={(e) => setIndicatorValues((p) => ({ ...p, [key]: e.target.value }))}
+                                      onChange={(e) => {
+                                        const v = e.target.value;
+                                        if (dt === "percentage" && v !== "" && parseFloat(v) > 100) return;
+                                        setIndicatorValues((p) => ({ ...p, [key]: v }));
+                                      }}
                                       placeholder={dt === "percentage" ? "0-100" : unit || "បញ្ចូល..."}
                                       style={{
                                         width: "100%",

@@ -38,6 +38,95 @@ export const FontSize = Extension.create({
   },
 });
 
+/** Line height via textStyle mark. */
+export const LineHeight = Extension.create({
+  name: "lineHeight",
+  addOptions() {
+    return { types: ["textStyle"], defaults: ["1", "1.15", "1.5", "2", "2.5", "3"] };
+  },
+  addGlobalAttributes() {
+    return [
+      {
+        types: this.options.types,
+        attributes: {
+          lineHeight: {
+            default: null,
+            parseHTML: (el) => el.style.lineHeight || null,
+            renderHTML: (attrs) => {
+              if (!attrs.lineHeight) return {};
+              return { style: `line-height: ${attrs.lineHeight}` };
+            },
+          },
+        },
+      },
+    ];
+  },
+  addCommands() {
+    return {
+      setLineHeight:
+        (lineHeight) =>
+        ({ chain }) =>
+          chain().setMark("textStyle", { lineHeight }).run(),
+      unsetLineHeight:
+        () =>
+        ({ chain }) =>
+          chain().setMark("textStyle", { lineHeight: null }).removeEmptyTextStyle().run(),
+    };
+  },
+});
+
+/** Paragraph indent via paragraph node attribute. */
+export const ParagraphIndent = Extension.create({
+  name: "paragraphIndent",
+  addGlobalAttributes() {
+    return [
+      {
+        types: ["paragraph", "heading"],
+        attributes: {
+          indent: {
+            default: 0,
+            parseHTML: (el) => parseInt(el.style.marginLeft || "0", 10) / 40 || 0,
+            renderHTML: (attrs) => {
+              const lvl = attrs.indent || 0;
+              if (lvl <= 0) return {};
+              return { style: `margin-left: ${lvl * 40}px` };
+            },
+          },
+        },
+      },
+    ];
+  },
+  addCommands() {
+    return {
+      indentParagraph:
+        () =>
+        ({ state, commands }) => {
+          const pos = state.selection.$from;
+          const node = pos.node();
+          if (!node || !node.type.isBlock) return false;
+          if (["paragraph", "heading"].includes(node.type.name)) {
+            const current = node.attrs.indent || 0;
+            return commands.updateAttributes(node.type.name, { indent: current + 1 });
+          }
+          return false;
+        },
+      outdentParagraph:
+        () =>
+        ({ state, commands }) => {
+          const pos = state.selection.$from;
+          const node = pos.node();
+          if (!node || !node.type.isBlock) return false;
+          if (["paragraph", "heading"].includes(node.type.name)) {
+            const current = node.attrs.indent || 0;
+            if (current <= 0) return false;
+            return commands.updateAttributes(node.type.name, { indent: current - 1 });
+          }
+          return false;
+        },
+    };
+  },
+});
+
 export const KHMER_FONT_STACK = '"Kantumruy Pro", "Noto Sans Khmer", "Battambang", "Khmer OS", sans-serif';
 
 export const KHMER_FONTS = [
@@ -93,11 +182,22 @@ export const TOOLBAR_LABELS = {
   link: "តំណ",
   unlink: "ដកតំណ",
   image: "រូបភាព",
+  deleteImage: "លុបរូបភាព",
   table: "តារាង",
   addRow: "បន្ថែមជួរ",
   addColumn: "បន្ថែមជួរឈរ",
   deleteRow: "លុបជួរ",
+  deleteColumn: "លុបជួរឈរ",
   deleteTable: "លុបតារាង",
+  mergeCells: "បញ្ចូលក្រឡា",
+  splitCell: "បំបែកក្រឡា",
+  borderStyle: "ស្ទីលស៊ុម",
+  borderWidth: "កម្រាស់ស៊ុម",
+  borderColor: "ពណ៌ស៊ុម",
+  indent: "បន្ថែមចូល",
+  outdent: "ដកចេញ",
+  lineHeight: "គម្លាតបន្ទាត់",
+  wordCount: "ចំនួនពាក្យ",
   textColor: "ពណ៌អក្សរ",
   highlight: "បន្លុះ",
   clearHighlight: "លុបបន្លុះ",
@@ -205,7 +305,16 @@ export function wordCommands(editor) {
     addRowAfter: () => chain().addRowAfter().run(),
     addColumnAfter: () => chain().addColumnAfter().run(),
     deleteRow: () => chain().deleteRow().run(),
+    deleteColumn: () => chain().deleteColumn().run(),
     deleteTable: () => chain().deleteTable().run(),
+    mergeCells: () => chain().mergeCells().run(),
+    canMergeCells: () => editor.can().mergeCells(),
+    splitCell: () => chain().splitCell().run(),
+    canSplitCell: () => editor.can().splitCell(),
+
+    setCellBorderStyle: (style) => editor.chain().focus().setCellBorderStyle(style).run(),
+    setCellBorderWidth: (width) => editor.chain().focus().setCellBorderWidth(width).run(),
+    setCellBorderColor: (color) => editor.chain().focus().setCellBorderColor(color).run(),
 
     setLink: (url) => {
       if (!url) {
@@ -218,11 +327,109 @@ export function wordCommands(editor) {
 
     insertImage: (src) => chain().setImage({ src }).run(),
 
+    setImageAlign: (align) =>
+      editor
+        .chain()
+        .focus()
+        .setTextAlign(align)
+        .run(),
+
     currentFont: () => editor.getAttributes("textStyle").fontFamily || DEFAULT_FONT,
     currentSize: () => editor.getAttributes("textStyle").fontSize || DEFAULT_FONT_SIZE,
     currentColor: () => editor.getAttributes("textStyle").color || "#0f172a",
+    currentLineHeight: () => editor.getAttributes("textStyle").lineHeight || "",
+
+    setLineHeight: (lh) => editor.chain().focus().setLineHeight(lh).run(),
+    unsetLineHeight: () => editor.chain().focus().unsetLineHeight().run(),
+
+    indentParagraph: () => editor.chain().focus().indentParagraph().run(),
+    outdentParagraph: () => editor.chain().focus().outdentParagraph().run(),
+    canIndent: () => editor.can().indentParagraph(),
+    canOutdent: () => editor.can().outdentParagraph(),
+
+    wordCount: () => {
+      const text = editor.state.doc.textContent;
+      const words = text.trim() ? text.trim().split(/\s+/).length : 0;
+      const chars = text.length;
+      return { words, chars };
+    },
   };
 }
+
+/** Table cell border extension — adds border style/color/width attributes. */
+export const TableCellBorder = Extension.create({
+  name: "tableCellBorder",
+  addGlobalAttributes() {
+    return [
+      {
+        types: ["tableCell", "tableHeader"],
+        attributes: {
+          cellBorderStyle: {
+            default: "solid",
+            parseHTML: (el) => el.getAttribute("data-cell-border-style") || "solid",
+            renderHTML: (attrs) => {
+              const v = attrs.cellBorderStyle || "solid";
+              return { "data-cell-border-style": v };
+            },
+          },
+          cellBorderWidth: {
+            default: 1,
+            parseHTML: (el) => parseInt(el.getAttribute("data-cell-border-width") || "1", 10),
+            renderHTML: (attrs) => {
+              const w = attrs.cellBorderWidth ?? 1;
+              if (w === 0) return { "data-cell-border-width": "0", style: "border-width: 0" };
+              return {
+                "data-cell-border-width": String(w),
+                style: `border-width: ${w}px`,
+              };
+            },
+          },
+          cellBorderColor: {
+            default: "#d1d5db",
+            parseHTML: (el) => {
+              const c = el.style.borderColor || el.style.borderBottomColor || "";
+              return c || "#d1d5db";
+            },
+            renderHTML: (attrs) => {
+              const c = attrs.cellBorderColor || "#d1d5db";
+              if (c === "transparent") return { style: "border-color: transparent" };
+              return { style: `border-color: ${c}` };
+            },
+          },
+        },
+      },
+    ];
+  },
+  addCommands() {
+    return {
+      setCellBorderStyle:
+        (style) =>
+        ({ commands }) => {
+          const attrStyle = { cellBorderStyle: style };
+          if (style === "none") attrStyle.cellBorderWidth = 0;
+          commands.updateAttributes("tableCell", attrStyle);
+          commands.updateAttributes("tableHeader", attrStyle);
+          return true;
+        },
+      setCellBorderWidth:
+        (width) =>
+        ({ commands }) => {
+          const attrWidth = { cellBorderWidth: width };
+          if (width === 0) attrWidth.cellBorderStyle = "none";
+          commands.updateAttributes("tableCell", attrWidth);
+          commands.updateAttributes("tableHeader", attrWidth);
+          return true;
+        },
+      setCellBorderColor:
+        (color) =>
+        ({ commands }) => {
+          commands.updateAttributes("tableCell", { cellBorderColor: color });
+          commands.updateAttributes("tableHeader", { cellBorderColor: color });
+          return true;
+        },
+    };
+  },
+});
 
 /** Image with resize handles + click selection border (selectNode on custom node view). */
 export const ResizableImage = Image.extend({
@@ -277,6 +484,7 @@ export const ResizableImage = Image.extend({
       });
 
       const dom = nodeView.dom;
+      dom.setAttribute("data-drag-handle", "");
       dom.style.visibility = "hidden";
       dom.style.pointerEvents = "none";
       el.onload = () => {

@@ -37,14 +37,20 @@ export function formatPerformancePeriodLabel(startDate, endDate) {
   const eyKh = toKhmerDigits(end.year);
 
   if (sm === 1) {
-    let label = `គិតចាប់ពីដើមឆ្នាំ${syKh} ដល់ខែ${KHMER_MONTHS[em]}`;
-    if (end.year !== start.year) {
+    const endIsYearEnd = em === 12 && end.day === 31;
+    const endPart = endIsYearEnd
+      ? `ចុងឆ្នាំ${end.year !== start.year ? eyKh : ""}`
+      : `ខែ${KHMER_MONTHS[em]}`;
+    let label = `គិតចាប់ពីដើមឆ្នាំ${syKh} ដល់${endPart}`;
+    if (end.year !== start.year && !endIsYearEnd) {
       label += ` ឆ្នាំ${eyKh}`;
     }
     return label;
   }
   if (start.year === end.year) {
-    return `គិតចាប់ពីខែ${KHMER_MONTHS[sm]} ដល់ខែ${KHMER_MONTHS[em]} ឆ្នាំ${syKh}`;
+    const endPart = em === 12 && end.day === 31 ? "ចុងឆ្នាំ" : `ខែ${KHMER_MONTHS[em]}`;
+    return `គិតចាប់ពីខែ${KHMER_MONTHS[sm]} ដល់${endPart} ឆ្នាំ${syKh}`;
   }
-  return `គិតចាប់ពីខែ${KHMER_MONTHS[sm]} ឆ្នាំ${syKh} ដល់ខែ${KHMER_MONTHS[em]} ឆ្នាំ${eyKh}`;
+  const endPart = em === 12 && end.day === 31 ? "ចុងឆ្នាំ" : `ខែ${KHMER_MONTHS[em]}`;
+  return `គិតចាប់ពីខែ${KHMER_MONTHS[sm]} ឆ្នាំ${syKh} ដល់${endPart} ឆ្នាំ${eyKh}`;
 }

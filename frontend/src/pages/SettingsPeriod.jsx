@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { LuPlus, LuTrash2, LuArrowLeft } from "react-icons/lu";
+import { LuPlus, LuTrash2, LuPencil, LuArrowLeft } from "react-icons/lu";
 import { performanceAPI } from "../api/performance";
 
 export default function SettingsPeriod() {
@@ -78,6 +78,9 @@ export default function SettingsPeriod() {
                   <td>{p.start_date}</td>
                   <td>{p.end_date}</td>
                   <td>
+                    <button className="btn-icon" onClick={() => navigate(`/settings/performance_period/${p.id}/edit`)} title="កែប្រែ">
+                      <LuPencil />
+                    </button>
                     <button className="btn-icon btn-danger" onClick={() => handleDelete(p.id, p.label_kh)} title="លុប">
                       <LuTrash2 />
                     </button>

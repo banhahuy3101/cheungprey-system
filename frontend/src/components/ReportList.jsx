@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   LuPlus,
   LuEye,
@@ -9,10 +10,13 @@ import {
   LuFileText,
   LuScrollText,
   LuCopy,
+  LuCheck,
 } from "react-icons/lu";
+import { useAuth } from "../hooks/useAuth";
 import { reportDocumentsAPI } from "../api/reportDocuments";
 import { reportSummaryLabel } from "../utils/reportForm";
 import ReportHero from "./reports/ReportHero";
+import Modal from "../pages/settings/Modal";
 
 function formatDate(iso) {
   if (!iso) return "—";
@@ -24,10 +28,13 @@ function formatDate(iso) {
 }
 
 export default function ReportList({ onView, onEdit, onCreate }) {
+  const { user } = useAuth();
+  const navigate = useNavigate();
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [showCreateModal, setShowCreateModal] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [downloadTarget, setDownloadTarget] = useState(null);
   const [duplicateTarget, setDuplicateTarget] = useState(null);
@@ -96,6 +103,18 @@ export default function ReportList({ onView, onEdit, onCreate }) {
     }
   };
 
+  const handleConfirm = async (record) => {
+    setMessage("");
+    try {
+      await reportDocumentsAPI.confirmStatus(record.id);
+      setMessage("បានបញ្ជាក់របាយការណ៍ដោយជោគជ័យ");
+      fetchRecords();
+      setTimeout(() => setMessage(""), 2500);
+    } catch {
+      setMessage("បញ្ជាក់របាយការណ៍មិនបាន");
+    }
+  };
+
   const confirmDelete = async () => {
     if (!deleteTarget) return;
     setDeleting(true);
@@ -120,7 +139,7 @@ export default function ReportList({ onView, onEdit, onCreate }) {
         subtitle="ប្រព័ន្ធគ្រប់គ្រងរបាយការណ៍"
         actions={
           <>
-            <button type="button" className="btn btn-primary" onClick={onCreate}>
+            <button type="button" className="btn btn-primary" onClick={() => setShowCreateModal(true)}>
               <LuPlus /> បង្កើតរបាយការណ៍
             </button>
           </>
@@ -158,7 +177,7 @@ export default function ReportList({ onView, onEdit, onCreate }) {
             <LuScrollText className="report-empty-icon" />
             <h3>គ្មានរបាយការណ៍</h3>
             <p>ចុច «បង្កើតរបាយការណ៍» ដើម្បីចាប់ផ្តើម — បំពេញចំណងជើង ការពិពណ៌នា និងខ្លឹមសារ</p>
-            <button type="button" className="btn btn-primary" onClick={onCreate}>
+            <button type="button" className="btn btn-primary" onClick={() => setShowCreateModal(true)}>
               <LuPlus /> បង្កើតរបាយការណ៍
             </button>
           </div>
@@ -187,41 +206,62 @@ export default function ReportList({ onView, onEdit, onCreate }) {
                     <td>{formatDate(r.updated_at)}</td>
                     <td>
                       <div className="actions">
-                        <button type="button" className="btn-icon" onClick={() => onView(r.id)} title="មើល">
-                          <LuEye />
-                        </button>
-                        <button type="button" className="btn-icon" onClick={() => onEdit(r.id)} title="កែប្រែ">
-                          <LuPencil />
-                        </button>
-                        <button
-                          type="button"
-                          className="btn-icon"
-                          onClick={() => handleDownload(r)}
-                          disabled={downloadTarget?.id === r.id}
-                          title="ទាញយក PDF"
-                        >
-                          <LuDownload />
-                        </button>
-                        <button
-                          type="button"
-                          className="btn-icon"
-                          onClick={() => {
-                            setDuplicateTarget(r);
-                            setDuplicateTitle(r.title + " (ច្បាប់ចម្លង)");
-                            setDuplicateDescription(r.description || "");
-                          }}
-                          title="ចម្លង"
-                        >
-                          <LuCopy />
-                        </button>
-                        <button
-                          type="button"
-                          className="btn-icon btn-danger"
-                          onClick={() => setDeleteTarget(r)}
-                          title="លុប"
-                        >
-                          <LuTrash2 />
-                        </button>
+                        {user?.role === "district_chief" ? (
+                          <>
+                            {r.status !== "published" && (
+                              <button type="button" className="btn-icon btn-success" onClick={() => handleConfirm(r)} title="បញ្ជាក់">
+                                <LuCheck />
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              className="btn-icon"
+                              onClick={() => handleDownload(r)}
+                              disabled={downloadTarget?.id === r.id}
+                              title="ទាញយក PDF"
+                            >
+                              <LuDownload />
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <button type="button" className="btn-icon" onClick={() => onView(r.id)} title="មើល">
+                              <LuEye />
+                            </button>
+                            <button type="button" className="btn-icon" onClick={() => onEdit(r.id)} title="កែប្រែ">
+                              <LuPencil />
+                            </button>
+                            <button
+                              type="button"
+                              className="btn-icon"
+                              onClick={() => handleDownload(r)}
+                              disabled={downloadTarget?.id === r.id}
+                              title="ទាញយក PDF"
+                            >
+                              <LuDownload />
+                            </button>
+                            <button
+                              type="button"
+                              className="btn-icon"
+                              onClick={() => {
+                                setDuplicateTarget(r);
+                                setDuplicateTitle(r.title + " (ច្បាប់ចម្លង)");
+                                setDuplicateDescription(r.description || "");
+                              }}
+                              title="ចម្លង"
+                            >
+                              <LuCopy />
+                            </button>
+                            <button
+                              type="button"
+                              className="btn-icon btn-danger"
+                              onClick={() => setDeleteTarget(r)}
+                              title="លុប"
+                            >
+                              <LuTrash2 />
+                            </button>
+                          </>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -316,6 +356,21 @@ export default function ReportList({ onView, onEdit, onCreate }) {
           </div>
         </div>
       )}
+
+      <Modal open={showCreateModal} onClose={() => setShowCreateModal(false)} title="បង្កើតរបាយការណ៍">
+        <div className="report-create-options report-create-options-row">
+<button type="button" className="report-create-option" onClick={() => { setShowCreateModal(false); navigate("/reports/create-template"); }}>
+            <span className="report-create-option-icon"><LuFileText /></span>
+            <span className="report-create-option-label">បង្កើតជាមួយគំរូ</span>
+            <span className="report-create-option-desc">ជ្រើសរើសគំរូដែលត្រៀតរួចជាស្រេច</span>
+          </button>
+          <button type="button" className="report-create-option" onClick={() => { setShowCreateModal(false); onCreate(); }}>
+            <span className="report-create-option-icon"><LuPlus /></span>
+            <span className="report-create-option-label">បង្កើតរបាយការណ៍</span>
+            <span className="report-create-option-desc">ចាប់ផ្តើមពីទទេ</span>
+          </button>
+        </div>
+      </Modal>
     </div>
   );
 }

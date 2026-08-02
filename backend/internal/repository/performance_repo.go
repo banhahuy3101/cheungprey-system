@@ -434,6 +434,14 @@ func (r *Repository) CreatePeriod(p *models.PerformancePeriod) error {
 	return err
 }
 
+func (r *Repository) UpdatePeriod(id uuid.UUID, data map[string]any) error {
+	_, _, err := r.AdminClient.From("performance_periods").
+		Update(data, "", "").
+		Eq("id", id.String()).
+		Execute()
+	return err
+}
+
 func (r *Repository) UpdateIndicator(id uuid.UUID, data map[string]any) error {
 	_, _, err := r.AdminClient.From("performance_indicators").
 		Update(data, "", "").

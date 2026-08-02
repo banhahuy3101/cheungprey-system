@@ -31,10 +31,18 @@ func NewReportService(fontDir string) *ReportService {
 	return &ReportService{fontDir: absDir}
 }
 
-const (
-	reportFontRegular = "fonts/Battambang-Regular.ttf"
-	reportFontBold    = "fonts/Battambang-Bold.ttf"
+var (
+	reportFontRegular = "fonts/KantumruyPro-Regular.ttf"
+	reportFontBold    = "fonts/KantumruyPro-Bold.ttf"
 )
+
+func init() {
+	// Fallback to Battambang if Kantumruy not present
+	if _, err := os.Stat("fonts/KantumruyPro-Regular.ttf"); os.IsNotExist(err) {
+		reportFontRegular = "fonts/Battambang-Regular.ttf"
+		reportFontBold    = "fonts/Battambang-Bold.ttf"
+	}
+}
 
 func copyReportFonts(destDir, sourceDir string) error {
 	if err := os.MkdirAll(destDir, 0755); err != nil {
@@ -231,7 +239,7 @@ func (s *ReportService) htmlToPDF(renderHTML func() ([]byte, error), opts pdfOpt
 			if opts.showPageNumbers {
 				builder = builder.
 					WithDisplayHeaderFooter(true).
-					WithFooterTemplate(`<div style="width:100%;text-align:center;font-size:9pt;font-family:'Battambang',sans-serif;color:#475569;">ទំព័រ <span class="pageNumber"></span></div>`)
+					WithFooterTemplate(`<div style="width:100%;text-align:center;font-size:9pt;font-family:'Kantumruy','Arial',sans-serif;color:#475569;">ទំព័រ <span class="pageNumber"></span></div>`)
 			}
 			pdfBuf, _, err = builder.Do(ctx)
 			return err
@@ -507,10 +515,9 @@ func renderSimpleReportHTML(doc *models.ReportDocument, regularFont, boldFont st
 	tmpl := htmltemplate.Must(htmltemplate.New("simpleReport").Parse(simpleReportHTML))
 	var htmlBuf bytes.Buffer
 	err := tmpl.Execute(&htmlBuf, map[string]any{
-		"BattambangFontPath":     regularFont,
-		"BattambangBoldFontPath": boldFont,
-		"Doc":                    doc,
-		"Content":                htmltemplate.HTML(doc.Content),
+		"KhmerFontPath": regularFont,
+		"Doc":           doc,
+		"Content":       htmltemplate.HTML(doc.Content),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("render report template: %w", err)
@@ -524,18 +531,18 @@ const simpleReportHTML = `<!DOCTYPE html>
 <meta charset="utf-8">
 <style>
 @font-face {
-  font-family: 'Battambang';
-  src: url('{{.BattambangFontPath}}') format('truetype');
+  font-family: 'Kantumruy';
+  src: url('{{.KhmerFontPath}}') format('truetype');
   font-weight: normal;
 }
 @font-face {
-  font-family: 'Battambang';
-  src: url('{{.BattambangBoldFontPath}}') format('truetype');
+  font-family: 'Kantumruy';
+  src: url('{{.KhmerFontPath}}') format('truetype');
   font-weight: bold;
 }
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body {
-  font-family: 'Battambang', sans-serif;
+  font-family: 'Kantumruy', 'Battambang', 'Arial', sans-serif;
   color: #0f172a;
   font-size: 11pt;
   line-height: 1.75;

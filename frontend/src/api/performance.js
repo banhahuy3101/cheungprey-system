@@ -25,6 +25,7 @@ export const performanceAPI = {
   // Periods
   getPeriods: () => client.get("/performance/periods"),
   createPeriod: (data) => client.post("/performance/periods", data),
+  updatePeriod: (id, data) => client.put(`/performance/periods/${id}`, data),
   deletePeriod: (id) => client.delete(`/performance/periods/${id}`),
 
   // Data CRUD

@@ -9,14 +9,14 @@ CREATE TABLE IF NOT EXISTS public.roles (
 );
 
 INSERT INTO public.roles (role, label, is_system) VALUES
-  ('super_admin', 'Super Admin', true),
-  ('admin', 'Admin', true),
-  ('district_chief', 'District Chief', true),
-  ('commune_chief', 'Commune Chief', true),
-  ('commune_clerk', 'Commune Clerk', true),
-  ('village_chief', 'Village Chief', true),
-  ('recorder', 'Recorder', true),
-  ('regular_user', 'Regular User', true)
+  ('super_admin', 'អ្នកគ្រប់គ្រងជាន់ខ្ពស់', true),
+  ('admin', 'អ្នកគ្រប់គ្រង', true),
+  ('district_chief', 'ប្រធានស្រុក', true),
+  ('commune_chief', 'ប្រធានឃុំ', true),
+  ('commune_clerk', 'ស្មៀនឃុំ', true),
+  ('village_chief', 'ប្រធានភូមិ', true),
+  ('recorder', 'អ្នកកត់ត្រា', true),
+  ('regular_user', 'អ្នកប្រើប្រាស់ធម្មតា', true)
 ON CONFLICT (role) DO NOTHING;
 
 ALTER TABLE public.role_permissions

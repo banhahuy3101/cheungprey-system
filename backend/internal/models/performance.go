@@ -126,6 +126,17 @@ type UpdateIndicatorRequest struct {
 type CreatePerformancePeriodRequest struct {
 	StartDate string `json:"start_date" binding:"required"`
 	EndDate   string `json:"end_date" binding:"required"`
+	LabelKh   string `json:"label_kh,omitempty"`
+	LabelEn   string `json:"label_en,omitempty"`
+	SortOrder *int   `json:"sort_order,omitempty"`
+}
+
+type UpdatePerformancePeriodRequest struct {
+	StartDate string `json:"start_date" binding:"required"`
+	EndDate   string `json:"end_date" binding:"required"`
+	LabelKh   string `json:"label_kh,omitempty"`
+	LabelEn   string `json:"label_en,omitempty"`
+	SortOrder *int   `json:"sort_order,omitempty"`
 }
 
 type BulkPerformanceDataValue struct {

@@ -29,6 +29,7 @@ export const reportDocumentsAPI = {
   getById: (id) => client.get(`/report-documents/${id}`),
   update: (id, data) => client.put(`/report-documents/${id}`, data),
   updateSimple: (id, data) => client.put(`/report-documents/${id}/simple`, data),
+  confirmStatus: (id) => client.put(`/report-documents/${id}/status`, { status: "published" }),
   delete: (id) => client.delete(`/report-documents/${id}`),
   downloadPDF: async (id, title) => {
     try {

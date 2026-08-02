@@ -50,9 +50,17 @@ import {
   LuColumns3,
   LuPilcrow,
   LuBookmark,
+  LuTableCellsMerge,
+  LuTableCellsSplit,
+  LuIndentIncrease,
+  LuIndentDecrease,
+  LuType,
 } from "react-icons/lu";
 import {
   FontSize,
+  LineHeight,
+  ParagraphIndent,
+  TableCellBorder,
   ResizableImage,
   KHMER_FONTS,
   DEFAULT_FONT,
@@ -113,11 +121,11 @@ function WordSelect({ label, value, onChange, options, className = "" }) {
     <label className={`text-editor-word-select ${className}`}>
       <span className="sr-only">{label}</span>
       <select value={value} onChange={(e) => onChange(e.target.value)} title={label} aria-label={label}>
-        {options.map((opt) => {
+        {options.map((opt, idx) => {
           const val = opt.value ?? opt;
           const lbl = opt.label ?? opt;
           return (
-            <option key={val} value={val} disabled={opt.disabled}>
+            <option key={val || `_sep${idx}`} value={val} disabled={opt.disabled}>
               {lbl}
             </option>
           );
@@ -146,6 +154,9 @@ function EditorToolbar({ editor }) {
 
   const cmd = wordCommands(editor);
   const inTable = editor.isActive("table");
+  const hasImageSelection =
+    editor.state.selection instanceof NodeSelection &&
+    editor.state.selection.node?.type.name === "image";
   const isNormal =
     !editor.isActive("heading") &&
     !editor.isActive("blockquote") &&
@@ -193,6 +204,13 @@ function EditorToolbar({ editor }) {
             onChange={cmd.setFontSize}
             options={WORD_FONT_SIZES.map((s) => ({ value: s, label: s }))}
             className="text-editor-font-size"
+          />
+          <WordSelect
+            label={L.lineHeight}
+            value={cmd.currentLineHeight()}
+            onChange={(v) => v ? cmd.setLineHeight(v) : cmd.unsetLineHeight()}
+            options={[{ value: "", label: "—" }, ...["1", "1.15", "1.5", "2", "2.5", "3"].map((s) => ({ value: s, label: s }))]}
+            className="text-editor-line-height"
           />
           <ToolbarButton active={editor.isActive("bold")} onClick={cmd.toggleBold} title={L.bold}>
             <LuBold />
@@ -300,6 +318,17 @@ function EditorToolbar({ editor }) {
 
         <ToolbarDivider />
 
+        <div className="text-editor-toolbar-group">
+          <ToolbarButton onClick={cmd.indentParagraph} disabled={!cmd.canIndent()} title={L.indent}>
+            <LuIndentIncrease />
+          </ToolbarButton>
+          <ToolbarButton onClick={cmd.outdentParagraph} disabled={!cmd.canOutdent()} title={L.outdent}>
+            <LuIndentDecrease />
+          </ToolbarButton>
+        </div>
+
+        <ToolbarDivider />
+
         {/* Insert — Word: link, image, table */}
         <div className="text-editor-toolbar-group">
           <ToolbarButton active={editor.isActive("link")} onClick={setLink} title={L.link}>
@@ -329,11 +358,67 @@ function EditorToolbar({ editor }) {
               <ToolbarButton onClick={cmd.deleteRow} title={L.deleteRow}>
                 <LuTrash2 />
               </ToolbarButton>
+              <ToolbarButton onClick={cmd.deleteColumn} title={L.deleteColumn}>
+                <LuTrash2 />
+              </ToolbarButton>
               <ToolbarButton onClick={cmd.deleteTable} title={L.deleteTable}>
                 <LuTable />
               </ToolbarButton>
             </div>
+            <ToolbarDivider />
+            <div className="text-editor-toolbar-group">
+              <ToolbarButton
+                onClick={cmd.mergeCells}
+                disabled={!cmd.canMergeCells()}
+                title={L.mergeCells}
+              >
+                <LuTableCellsMerge />
+              </ToolbarButton>
+              <ToolbarButton
+                onClick={cmd.splitCell}
+                disabled={!cmd.canSplitCell()}
+                title={L.splitCell}
+              >
+                <LuTableCellsSplit />
+              </ToolbarButton>
+            </div>
           </>
+        )}
+
+        {inTable && (
+          <div className="text-editor-toolbar-row" style={{ marginTop: "0.25rem" }}>
+            <div className="text-editor-toolbar-group">
+              <WordSelect
+                label={L.borderStyle}
+                value="solid"
+                onChange={(v) => cmd.setCellBorderStyle(v)}
+                options={[
+                  { value: "solid", label: "━━" },
+                  { value: "dotted", label: "┅┅" },
+                  { value: "dashed", label: "╌╌" },
+                  { value: "double", label: "══" },
+                  { value: "none", label: "✕" },
+                ]}
+                className="text-editor-border-style"
+              />
+              <WordSelect
+                label={L.borderWidth}
+                value="1"
+                onChange={(v) => cmd.setCellBorderWidth(parseInt(v, 10))}
+                options={[
+                  { value: "0", label: "0" },
+                  { value: "1", label: "1px" },
+                  { value: "2", label: "2px" },
+                  { value: "3", label: "3px" },
+                ]}
+                className="text-editor-border-width"
+              />
+              <label className="text-editor-color-label" title={L.borderColor}>
+                <span style={{ fontSize: "0.7rem" }}>◧</span>
+                <input type="color" value="#d1d5db" onChange={(e) => cmd.setCellBorderColor(e.target.value)} />
+              </label>
+            </div>
+          </div>
         )}
 
         <ToolbarDivider />
@@ -346,10 +431,36 @@ function EditorToolbar({ editor }) {
 
         <ToolbarDivider />
 
+        {hasImageSelection && (
+          <>
+            <div className="text-editor-toolbar-group">
+              <ToolbarButton onClick={() => cmd.setImageAlign("left")} title={L.alignLeft}>
+                <LuAlignLeft />
+              </ToolbarButton>
+              <ToolbarButton onClick={() => cmd.setImageAlign("center")} title={L.alignCenter}>
+                <LuAlignCenter />
+              </ToolbarButton>
+              <ToolbarButton onClick={() => cmd.setImageAlign("right")} title={L.alignRight}>
+                <LuAlignRight />
+              </ToolbarButton>
+              <ToolbarButton onClick={() => editor.chain().focus().deleteSelection().run()} title={L.deleteImage}>
+                <LuTrash2 />
+              </ToolbarButton>
+            </div>
+            <ToolbarDivider />
+          </>
+        )}
+
         <div className="text-editor-toolbar-group">
           <ToolbarButton onClick={cmd.clearFormatting} title={L.clearFormatting}>
             <LuEraser />
           </ToolbarButton>
+        </div>
+
+        <div className="text-editor-toolbar-spacer" />
+
+        <div className="text-editor-word-count">
+          <LuType size={13} /> {cmd.wordCount().words}
         </div>
       </div>
     </div>
@@ -384,6 +495,9 @@ export default function TextEditor({
       Color,
       FontFamily.configure({ types: ["textStyle"] }),
       FontSize,
+      LineHeight,
+      ParagraphIndent,
+      TableCellBorder,
       Highlight.configure({ multicolor: true }),
       TextAlign.configure({ types: ["heading", "paragraph"] }),
       Link.configure({

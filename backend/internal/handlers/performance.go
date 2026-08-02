@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"fmt"
 	"log"
 	"net/http"
 	"time"
@@ -13,6 +12,7 @@ import (
 	"github.com/banhahuy/cheungprey-system/backend/internal/models"
 	"github.com/banhahuy/cheungprey-system/backend/internal/repository"
 	"github.com/banhahuy/cheungprey-system/backend/internal/services"
+	"github.com/banhahuy/cheungprey-system/backend/pkg/periodlabel"
 	"github.com/banhahuy/cheungprey-system/backend/pkg/utils"
 )
 
@@ -435,27 +435,26 @@ func (h *PerformanceHandler) CreatePeriod(c *gin.Context) {
 		return
 	}
 
-	khmerMonths := []string{"", "មករា", "កុម្ភៈ", "មីនា", "មេសា", "ឧសភា", "មិថុនា", "កក្កដា", "សីហា", "កញ្ញា", "តុលា", "វិច្ឆិកា", "ធ្នូ"}
-	engMonths := []string{"", "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"}
-
-	sm, em := int(start.Month()), int(end.Month())
-	year := start.Year()
-	khYear := fmt.Sprintf("២០២%c", '០'+year%10)
-	if year >= 2026 {
-		khYear = "២០" + string(rune('២'+year%100/10)) + string(rune('០'+year%10))
+	labelKh := req.LabelKh
+	if labelKh == "" {
+		labelKh = periodlabel.FormatKh(start, end)
+	}
+	labelEn := req.LabelEn
+	if labelEn == "" {
+		labelEn = periodlabel.FormatEn(start, end)
 	}
 
-	var labelKh, labelEn string
-	if sm == 1 {
-		labelKh = fmt.Sprintf("គិតចាប់ពីដើមឆ្នាំ%s ដល់ខែ%s", khYear, khmerMonths[em])
-		labelEn = fmt.Sprintf("From early %d to %s", year, engMonths[em])
+	sortOrder := 1
+	if req.SortOrder != nil {
+		sortOrder = *req.SortOrder
 	} else {
-		labelKh = fmt.Sprintf("គិតចាប់ពីខែ%s ដល់ខែ%s ឆ្នាំ%s", khmerMonths[sm], khmerMonths[em], khYear)
-		labelEn = fmt.Sprintf("%s to %s %d", engMonths[sm], engMonths[em], year)
+		periods, _ := h.repo.ListPeriods()
+		for _, p := range periods {
+			if p.SortOrder >= sortOrder {
+				sortOrder = p.SortOrder + 1
+			}
+		}
 	}
-
-	periods, _ := h.repo.ListPeriods()
-	sortOrder := len(periods) + 1
 
 	period := &models.PerformancePeriod{
 		ID:        uuid.New(),
@@ -493,6 +492,69 @@ func (h *PerformanceHandler) DeletePeriod(c *gin.Context) {
 	utils.JSON(c, http.StatusOK, gin.H{"message": "Period deleted successfully"})
 }
 
+func (h *PerformanceHandler) UpdatePeriod(c *gin.Context) {
+	if !h.requireAdmin(c) {
+		return
+	}
+	idStr := c.Param("id")
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		utils.BadRequest(c, "Invalid period ID")
+		return
+	}
+
+	existing, err := h.repo.GetPeriodByID(id)
+	if err != nil || existing == nil {
+		utils.Error(c, http.StatusNotFound, "Period not found")
+		return
+	}
+
+	var req models.UpdatePerformancePeriodRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, err.Error())
+		return
+	}
+
+	start, err := time.Parse("2006-01-02", req.StartDate)
+	if err != nil {
+		utils.BadRequest(c, "Invalid start_date format, use YYYY-MM-DD")
+		return
+	}
+	end, err := time.Parse("2006-01-02", req.EndDate)
+	if err != nil {
+		utils.BadRequest(c, "Invalid end_date format, use YYYY-MM-DD")
+		return
+	}
+
+	labelKh := req.LabelKh
+	if labelKh == "" {
+		labelKh = periodlabel.FormatKh(start, end)
+	}
+	labelEn := req.LabelEn
+	if labelEn == "" {
+		labelEn = periodlabel.FormatEn(start, end)
+	}
+
+	data := map[string]any{
+		"label_kh":   labelKh,
+		"label_en":   labelEn,
+		"start_date": req.StartDate,
+		"end_date":   req.EndDate,
+	}
+
+	if req.SortOrder != nil {
+		data["sort_order"] = *req.SortOrder
+	}
+
+	if err := h.repo.UpdatePeriod(id, data); err != nil {
+		log.Printf("ERROR updating period: %v", err)
+		utils.InternalError(c, "Failed to update period")
+		return
+	}
+
+	utils.JSON(c, http.StatusOK, gin.H{"message": "Period updated successfully"})
+}
+
 func (h *PerformanceHandler) ListPeriods(c *gin.Context) {
 	periods, err := h.repo.ListPeriods()
 	if err != nil {
@@ -524,6 +586,10 @@ func (h *PerformanceHandler) CreatePerformanceData(c *gin.Context) {
 	}
 
 	userID, _ := auth.GetUserID(c)
+	if req.ValuePercentage != nil && *req.ValuePercentage > 100 {
+		utils.BadRequest(c, "តម្លៃភាគរយមិនអាចលើសពី 100")
+		return
+	}
 	data := &models.PerformanceData{
 		ID:              uuid.New(),
 		ZoneID:          req.ZoneID,
@@ -548,6 +614,11 @@ func (h *PerformanceHandler) BulkCreatePerformanceData(c *gin.Context) {
 	var req models.BulkCreatePerformanceDataRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, err.Error())
+		return
+	}
+
+	if len(req.Values) == 0 {
+		utils.BadRequest(c, "សូមបំពេញទិន្នន័យសូចនាករយ៉ាងហោចណាស់មួយ")
 		return
 	}
 
@@ -596,6 +667,10 @@ func (h *PerformanceHandler) BulkCreatePerformanceData(c *gin.Context) {
 			row["value_number"] = *v.ValueNumber
 		}
 		if v.ValuePercentage != nil {
+			if *v.ValuePercentage > 100 {
+				utils.BadRequest(c, "តម្លៃភាគរយមិនអាចលើសពី 100: "+v.IndicatorCode)
+				return
+			}
 			row["value_percentage"] = *v.ValuePercentage
 		}
 		if v.ValueBinary != nil {

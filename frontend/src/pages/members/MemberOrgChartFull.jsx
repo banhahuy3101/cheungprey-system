@@ -66,7 +66,7 @@ export default function MemberOrgChartFull({ members = [] }) {
       setError(null);
       try {
         const res = await partyAPI.getZoneTree();
-        const data = res.data || res;
+        const data = res.data?.data || res.data;
         const zones = Array.isArray(data) ? data : [];
         const flat = flattenTree(zones);
         countMembers(flat, members);
@@ -83,22 +83,26 @@ export default function MemberOrgChartFull({ members = [] }) {
 
   const renderGraph = (node, level = 0) => {
     if (!node) return null;
-    const hasChildren = Object.keys(node.children || {}).length > 0;
+    const children = Object.values(node.children || {});
+    const hasChildren = children.length > 0;
     const count = node.memberCount || 0;
+    const color = level === 0 ? "#1e40af" : level === 1 ? "#3b82f6" : level === 2 ? "#60a5fa" : "#93c5fd";
 
     return (
-      <div key={node.code} style={{ display: "flex", flexDirection: "column", alignItems: "center", margin: "0 12px" }}>
+      <div key={node.code} style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
         <div
           style={{
             minWidth: 160,
             padding: "10px 14px",
-            background: level === 0 ? "#1e40af" : level === 1 ? "#3b82f6" : level === 2 ? "#60a5fa" : "#93c5fd",
+            background: color,
             color: "#fff",
             borderRadius: 10,
             textAlign: "center",
             boxShadow: "0 2px 6px rgba(0,0,0,0.1)",
             fontSize: level === 0 ? 15 : 13,
             fontWeight: 600,
+            maxWidth: 220,
+            wordBreak: "break-word",
           }}
         >
           {node.name}
@@ -110,14 +114,28 @@ export default function MemberOrgChartFull({ members = [] }) {
         </div>
 
         {hasChildren && (
-          <div style={{ display: "flex", justifyContent: "center", marginTop: 20, position: "relative" }}>
-            <div style={{ position: "absolute", top: 0, width: 2, height: 20, background: "#94a3b8" }} />
-            {Object.values(node.children).map((child, idx, arr) => (
-              <div key={child.code} style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-                <div style={{ height: 2, width: idx === 0 || idx === arr.length - 1 ? 30 : 60, background: "#94a3b8", marginTop: 18 }} />
-                {renderGraph(child, level + 1)}
-              </div>
-            ))}
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+            <div style={{ width: 2, height: 16, background: "#94a3b8" }} />
+            <div style={{ display: "flex", position: "relative" }}>
+              {children.length > 1 && (
+                <div
+                  style={{
+                    position: "absolute",
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    height: 2,
+                    background: "#94a3b8",
+                  }}
+                />
+              )}
+              {children.map((child) => (
+                <div key={child.code} style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "0 4px" }}>
+                  <div style={{ width: 2, height: 16, background: "#94a3b8" }} />
+                  {renderGraph(child, level + 1)}
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>

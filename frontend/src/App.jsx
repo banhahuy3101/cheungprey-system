@@ -22,6 +22,8 @@ import SettingsPerformance from "./pages/SettingsPerformance";
 import SettingsRolePermissions from "./pages/SettingsRolePermissions";
 import SettingsTechnical from "./pages/settings/SettingsTechnical";
 import SettingsSystem from "./pages/settings/SettingsSystem";
+import SettingsReportTemplates from "./pages/settings/SettingsReportTemplates";
+import ReportCreateFromTemplate from "./pages/reports/ReportCreateFromTemplate";
 import Admin from "./pages/admin/Admin";
 import Profile from "./pages/profile/Profile";
 import { FEATURES } from "./utils/permissions";
@@ -72,6 +74,7 @@ function App() {
             <Route path="records" element={<FeatureRoute feature={FEATURES.records}><Records /></FeatureRoute>} />
             <Route path="reports" element={<FeatureRoute feature={FEATURES.reports}><Reports /></FeatureRoute>} />
             <Route path="reports/create" element={<FeatureRoute feature={FEATURES.reports}><Reports /></FeatureRoute>} />
+            <Route path="reports/create-template" element={<FeatureRoute feature={FEATURES.reports}><ReportCreateFromTemplate /></FeatureRoute>} />
             <Route path="reports/:id/edit" element={<FeatureRoute feature={FEATURES.reports}><Reports /></FeatureRoute>} />
             <Route path="reports/:id" element={<FeatureRoute feature={FEATURES.reports}><Reports /></FeatureRoute>} />
             <Route path="performance" element={<FeatureRoute feature={FEATURES.performance}><Performance /></FeatureRoute>} />
@@ -86,7 +89,9 @@ function App() {
             <Route path="settings/technical/system" element={<ProtectedRoute feature={FEATURES.technical}><SettingsSystem /></ProtectedRoute>} />
             <Route path="settings/performance_period" element={<ProtectedRoute feature={FEATURES.performance_admin}><SettingsPeriod /></ProtectedRoute>} />
             <Route path="settings/performance_period/create" element={<ProtectedRoute feature={FEATURES.performance_admin}><SettingsPeriodForm /></ProtectedRoute>} />
+            <Route path="settings/performance_period/:id/edit" element={<ProtectedRoute feature={FEATURES.performance_admin}><SettingsPeriodForm /></ProtectedRoute>} />
             <Route path="settings/performance" element={<ProtectedRoute feature={FEATURES.performance_admin}><SettingsPerformance /></ProtectedRoute>} />
+            <Route path="settings/report-templates" element={<ProtectedRoute feature={FEATURES.reports}><SettingsReportTemplates /></ProtectedRoute>} />
             <Route path="admin" element={<ProtectedRoute adminOnly><Admin /></ProtectedRoute>} />
           </Route>
 

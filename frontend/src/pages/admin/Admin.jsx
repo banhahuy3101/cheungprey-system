@@ -11,14 +11,26 @@ import {
 } from "../../config/userSettings";
 
 const ROLE_OPTIONS_FALLBACK = [
-  { value: "recorder", label: "Recorder" },
-  { value: "village_chief", label: "Village Chief" },
-  { value: "commune_clerk", label: "Commune Clerk" },
-  { value: "commune_chief", label: "Commune Chief" },
-  { value: "district_chief", label: "District Chief" },
-  { value: "admin", label: "Admin" },
-  { value: "super_admin", label: "Super Admin" },
+  { value: "super_admin", label: "អ្នកគ្រប់គ្រងជាន់ខ្ពស់" },
+  { value: "admin", label: "អ្នកគ្រប់គ្រង" },
+  { value: "district_chief", label: "ប្រធានស្រុក" },
+  { value: "commune_chief", label: "ប្រធានឃុំ" },
+  { value: "commune_clerk", label: "ស្មៀនឃុំ" },
+  { value: "village_chief", label: "ប្រធានភូមិ" },
+  { value: "recorder", label: "អ្នកកត់ត្រា" },
+  { value: "regular_user", label: "អ្នកប្រើប្រាស់ធម្មតា" },
 ];
+
+const ROLE_BADGE_STYLES = {
+  super_admin: { background: "#fce4ec", color: "#c62828", padding: "0.15rem 0.5rem", borderRadius: "20px", fontSize: "0.75rem", fontWeight: 500 },
+  admin: { background: "#e8eaf6", color: "#283593", padding: "0.15rem 0.5rem", borderRadius: "20px", fontSize: "0.75rem", fontWeight: 500 },
+  district_chief: { background: "#e0f2f1", color: "#00695c", padding: "0.15rem 0.5rem", borderRadius: "20px", fontSize: "0.75rem", fontWeight: 500 },
+  commune_chief: { background: "#e8f5e9", color: "#2e7d32", padding: "0.15rem 0.5rem", borderRadius: "20px", fontSize: "0.75rem", fontWeight: 500 },
+  commune_clerk: { background: "#ede7f6", color: "#4527a0", padding: "0.15rem 0.5rem", borderRadius: "20px", fontSize: "0.75rem", fontWeight: 500 },
+  village_chief: { background: "#fff3e0", color: "#e65100", padding: "0.15rem 0.5rem", borderRadius: "20px", fontSize: "0.75rem", fontWeight: 500 },
+  recorder: { background: "#f1f8e9", color: "#558b2f", padding: "0.15rem 0.5rem", borderRadius: "20px", fontSize: "0.75rem", fontWeight: 500 },
+  regular_user: { background: "#f5f5f5", color: "#616161", padding: "0.15rem 0.5rem", borderRadius: "20px", fontSize: "0.75rem", fontWeight: 500 },
+};
 
 function formatDate(value) {
   if (!value || value.startsWith("0001-01-01")) return "-";
@@ -268,31 +280,46 @@ export default function Admin() {
 
   const RoleCheckboxes = ({ roles, onToggle }) => (
     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem" }}>
-      {(roleOptions.length ? roleOptions : ROLE_OPTIONS_FALLBACK).map((r) => (
-        <label 
-          key={r.value} 
-          style={{ 
-            display: "flex", 
-            alignItems: "center", 
-            gap: "0.6rem", 
-            padding: "0.6rem 0.65rem", 
-            borderRadius: "12px", 
-            cursor: "pointer",
-            border: "1px solid transparent",
-            transition: "all 0.15s ease"
-          }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = "#f9fafb"; e.currentTarget.style.borderColor = "#e5e7eb"; }}
-          onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.borderColor = "transparent"; }}
-        >
-          <input
-            type="checkbox"
-            checked={(roles || []).includes(r.value)}
-            onChange={() => onToggle(r.value)}
-            style={{ width: "18px", height: "18px", accentColor: "#2563eb", cursor: "pointer", borderRadius: "4px", flexShrink: 0 }}
-          />
-          <span style={{ fontSize: "14px", color: "#374151", fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.label}</span>
-        </label>
-      ))}
+      {(roleOptions.length ? roleOptions : ROLE_OPTIONS_FALLBACK).map((r) => {
+        const checked = (roles || []).includes(r.value);
+        return (
+          <label
+            key={r.value}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "0.65rem",
+              padding: "0.55rem 0.65rem",
+              borderRadius: "10px",
+              cursor: "pointer",
+              border: checked ? "2px solid #2563eb" : "1px solid #d1d5db",
+              background: checked ? "#eff6ff" : "#fff",
+              transition: "all 0.15s ease",
+              userSelect: "none",
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={checked}
+              onChange={() => onToggle(r.value)}
+              style={{ width: "17px", height: "17px", accentColor: "#2563eb", cursor: "pointer", flexShrink: 0 }}
+            />
+            <span style={{
+              fontSize: "13.5px",
+              color: checked ? "#1e40af" : "#374151",
+              fontWeight: checked ? 600 : 400,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}>
+              {r.label}
+            </span>
+            {checked && (
+              <span style={{ marginLeft: "auto", fontSize: "10px", color: "#2563eb", fontWeight: 700 }}>✓</span>
+            )}
+          </label>
+        );
+      })}
     </div>
   );
 
@@ -388,9 +415,9 @@ export default function Admin() {
                       <td>{u.phone_number || "-"}</td>
                       <td>{u.zone_name || u.zone_code || "-"}</td>
                       <td>
-                        <div style={{ display: "flex", flexWrap: "wrap", gap: "0.25rem" }}>
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: "0.3rem" }}>
                           {(u.roles?.length ? u.roles : [u.role]).map((r) => (
-                            <span key={r} className="badge">{roleLabelMap[r] || r}</span>
+                            <span key={r} style={ROLE_BADGE_STYLES[r] || { background: "#f3f4f6", color: "#374151", padding: "0.15rem 0.5rem", borderRadius: "20px", fontSize: "0.75rem", fontWeight: 500 }}>{roleLabelMap[r] || r}</span>
                           ))}
                         </div>
                       </td>
@@ -563,9 +590,9 @@ export default function Admin() {
                     </div>
                     <div className="profile-detail-item">
                       <span className="profile-detail-label"><LuShield size={14} /> តួនាទី</span>
-                      <span className="profile-detail-value">
+                      <span className="profile-detail-value" style={{ display: "flex", flexWrap: "wrap", gap: "0.3rem" }}>
                         {(profileForm.roles || [profileForm.role]).map((r) => (
-                          <span key={r} className="badge" style={{ marginRight: "0.25rem" }}>
+                          <span key={r} style={ROLE_BADGE_STYLES[r] || { background: "#f3f4f6", color: "#374151", padding: "0.15rem 0.5rem", borderRadius: "20px", fontSize: "0.75rem", fontWeight: 500 }}>
                             {roleLabelMap[r] || r}
                           </span>
                         ))}

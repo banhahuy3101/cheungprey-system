@@ -251,6 +251,31 @@ func (h *ReportDocumentHandler) UpdateSimple(c *gin.Context) {
 	utils.JSON(c, http.StatusOK, gin.H{"message": "Report updated"})
 }
 
+func (h *ReportDocumentHandler) UpdateStatus(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		utils.BadRequest(c, "Invalid report ID")
+		return
+	}
+
+	var req struct {
+		Status string `json:"status" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, err.Error())
+		return
+	}
+
+	if err := h.repo.UpdateReportDocument(id, map[string]any{
+		"status": req.Status,
+	}); err != nil {
+		utils.InternalError(c, "Failed to update status")
+		return
+	}
+
+	utils.JSON(c, http.StatusOK, gin.H{"message": "Status updated"})
+}
+
 func (h *ReportDocumentHandler) Delete(c *gin.Context) {
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {

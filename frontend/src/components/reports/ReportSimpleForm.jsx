@@ -9,6 +9,7 @@ import {
   buildSimpleReportPayload,
   docToSimpleForm,
 } from "../../utils/reportForm";
+import { openBlobFile, base64ToBlob } from "../../utils/file";
 
 function formatDate(iso) {
   if (!iso) return "—";
@@ -175,7 +176,11 @@ export default function ReportSimpleForm({ mode = "create", reportId, initialDoc
           </header>
 
           <div className="report-view-body">
-            <TextEditor variant="full" value={form.content} readOnly />
+            {form.content?.startsWith("UEs") ? (
+              <PdfViewer reportId={reportId} />
+            ) : (
+              <TextEditor variant="full" value={form.content} readOnly />
+            )}
           </div>
         </div>
       </div>
@@ -231,5 +236,35 @@ export default function ReportSimpleForm({ mode = "create", reportId, initialDoc
         />
       </div>
     </form>
+  );
+}
+
+function PdfViewer({ reportId }) {
+  const [blobUrl, setBlobUrl] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const token = localStorage.getItem("access_token");
+    fetch(`/api/report-documents/${reportId}/pdf`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((res) => res.blob())
+      .then((blob) => {
+        if (!cancelled) setBlobUrl(URL.createObjectURL(blob));
+      });
+    return () => {
+      cancelled = true;
+      if (blobUrl) URL.revokeObjectURL(blobUrl);
+    };
+  }, [reportId]);
+
+  if (!blobUrl) return <div style={{ padding: "2rem" }}>កំពុងទាញយក PDF...</div>;
+
+  return (
+    <iframe
+      title="report-pdf"
+      src={blobUrl}
+      style={{ width: "100%", height: "70vh", border: "none" }}
+    />
   );
 }
