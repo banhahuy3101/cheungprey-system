@@ -1,7 +1,7 @@
 import { useNavigate, useParams, useLocation } from "react-router-dom";
 import ReportList from "../../components/ReportList";
-import ReportCreateForm from "../../components/reports/ReportCreateForm";
-import ReportDetail from "../../components/reports/ReportDetail";
+import ReportForm from "../../components/reports/ReportForm";
+
 export default function Reports() {
   const navigate = useNavigate();
   const { id } = useParams();
@@ -16,10 +16,6 @@ export default function Reports() {
     mode = "view";
   }
 
-  if (mode === "create") {
-    return <ReportCreateForm />;
-  }
-
   if (mode === "list") {
     return (
       <ReportList
@@ -30,5 +26,5 @@ export default function Reports() {
     );
   }
 
-  return <ReportDetail mode={mode} reportId={id} />;
+  return <ReportForm mode={mode} reportId={id} />;
 }

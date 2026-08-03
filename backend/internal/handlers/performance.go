@@ -315,26 +315,37 @@ func (h *PerformanceHandler) CreateIndicator(c *gin.Context) {
 		utils.BadRequest(c, "Invalid sub_domain_id")
 		return
 	}
+
+	if req.TargetDirection != nil && *req.TargetDirection != "higher_is_better" && *req.TargetDirection != "lower_is_better" {
+		utils.BadRequest(c, "target_direction must be higher_is_better or lower_is_better")
+		return
+	}
+	if req.MinValue != nil && req.MaxValue != nil && *req.MinValue >= *req.MaxValue {
+		utils.BadRequest(c, "តម្លៃអប្បបរមាត្រូវតែតូចជាងតម្លៃអតិបរមា")
+		return
+	}
+
 	var nameEn string
 	if req.NameEn != "" {
 		nameEn = req.NameEn
 	}
 	ind := &models.PerformanceIndicator{
-		ID:          uuid.New(),
-		SubDomainID: subDomainID,
-		Code:        req.Code,
-		NameKh:      req.NameKh,
-		NameEn:      &nameEn,
-		DataType:    req.DataType,
-		UnitKh:      &req.UnitKh,
-		UnitEn:      &req.UnitEn,
-		SortOrder:   req.SortOrder,
+		ID:              uuid.New(),
+		SubDomainID:     subDomainID,
+		Code:            req.Code,
+		NameKh:          req.NameKh,
+		NameEn:          &nameEn,
+		DataType:        req.DataType,
+		UnitKh:          &req.UnitKh,
+		UnitEn:          &req.UnitEn,
+		TargetValue:     req.TargetValue,
+		TargetDirection: req.TargetDirection,
+		MinValue:        req.MinValue,
+		MaxValue:        req.MaxValue,
+		SortOrder:       req.SortOrder,
 	}
 	if req.UnitKh == "" {
 		ind.UnitKh = &req.NameKh
-	}
-	if req.UnitEn == "" {
-		ind.UnitEn = ind.UnitEn
 	}
 	if err := h.repo.CreateIndicator(ind); err != nil {
 		utils.InternalError(c, "Failed to create indicator")
@@ -386,6 +397,22 @@ func (h *PerformanceHandler) UpdateIndicator(c *gin.Context) {
 	}
 	if req.SortOrder != nil {
 		data["sort_order"] = *req.SortOrder
+	}
+	if req.TargetValue != nil {
+		data["target_value"] = *req.TargetValue
+	}
+	if req.TargetDirection != nil {
+		if *req.TargetDirection != "higher_is_better" && *req.TargetDirection != "lower_is_better" {
+			utils.BadRequest(c, "target_direction must be higher_is_better or lower_is_better")
+			return
+		}
+		data["target_direction"] = *req.TargetDirection
+	}
+	if req.MinValue != nil {
+		data["min_value"] = *req.MinValue
+	}
+	if req.MaxValue != nil {
+		data["max_value"] = *req.MaxValue
 	}
 	if len(data) == 0 {
 		utils.BadRequest(c, "No fields to update")
@@ -791,4 +818,136 @@ func (h *PerformanceHandler) PerformanceReport(c *gin.Context) {
 	c.Header("Content-Type", "application/pdf")
 	c.Header("Content-Disposition", "attachment; filename=performance_report_"+zoneID+".pdf")
 	c.Data(http.StatusOK, "application/pdf", pdfBytes)
+}
+
+func (h *PerformanceHandler) CreateSubmission(c *gin.Context) {
+	var req struct {
+		ZoneID   string `json:"zone_id" binding:"required"`
+		PeriodID string `json:"period_id" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, err.Error())
+		return
+	}
+	periodID, err := uuid.Parse(req.PeriodID)
+	if err != nil {
+		utils.BadRequest(c, "Invalid period ID")
+		return
+	}
+
+	sub, err := h.repo.UpsertPerformanceSubmission(req.ZoneID, periodID, "draft")
+	if err != nil {
+		utils.InternalError(c, "Failed to create submission")
+		return
+	}
+	utils.JSON(c, http.StatusCreated, sub)
+}
+
+func (h *PerformanceHandler) SubmitSubmission(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		utils.BadRequest(c, "Invalid submission ID")
+		return
+	}
+	userID, _ := auth.GetUserID(c)
+
+	sub, err := h.repo.GetPerformanceSubmission(id)
+	if err != nil || sub == nil {
+		utils.Error(c, http.StatusNotFound, "Submission not found")
+		return
+	}
+	if sub.Status != "draft" {
+		utils.BadRequest(c, "មានតែសេចក្តីព្រាងប៉ុណ្ណោះដែលអាចដាក់ស្នើបាន")
+		return
+	}
+
+	if err := h.repo.UpdatePerformanceSubmissionStatus(id, "submitted", &userID); err != nil {
+		utils.InternalError(c, "Failed to submit")
+		return
+	}
+	utils.JSON(c, http.StatusOK, gin.H{"message": "បានដាក់ស្នើ"})
+}
+
+func (h *PerformanceHandler) ApproveSubmission(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		utils.BadRequest(c, "Invalid submission ID")
+		return
+	}
+	userID, _ := auth.GetUserID(c)
+
+	sub, err := h.repo.GetPerformanceSubmission(id)
+	if err != nil || sub == nil {
+		utils.Error(c, http.StatusNotFound, "Submission not found")
+		return
+	}
+	if sub.Status != "submitted" {
+		utils.BadRequest(c, "មានតែសេចក្តីដាក់ស្នើប៉ុណ្ណោះដែលអាចអនុម័តបាន")
+		return
+	}
+
+	if err := h.repo.ApprovePerformanceSubmission(id, userID); err != nil {
+		utils.InternalError(c, "Failed to approve")
+		return
+	}
+	utils.JSON(c, http.StatusOK, gin.H{"message": "បានអនុម័ត"})
+}
+
+func (h *PerformanceHandler) RejectSubmission(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		utils.BadRequest(c, "Invalid submission ID")
+		return
+	}
+
+	var req struct {
+		Reason string `json:"reason" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, "មូលហេតុនៃការបដិសេធត្រូវបានទាមទារ")
+		return
+	}
+
+	sub, err := h.repo.GetPerformanceSubmission(id)
+	if err != nil || sub == nil {
+		utils.Error(c, http.StatusNotFound, "Submission not found")
+		return
+	}
+	if sub.Status != "submitted" {
+		utils.BadRequest(c, "មានតែសេចក្តីដាក់ស្នើប៉ុណ្ណោះដែលអាចបដិសេធបាន")
+		return
+	}
+
+	if err := h.repo.RejectPerformanceSubmission(id, req.Reason); err != nil {
+		utils.InternalError(c, "Failed to reject")
+		return
+	}
+	utils.JSON(c, http.StatusOK, gin.H{"message": "បានបដិសេធ"})
+}
+
+func (h *PerformanceHandler) ComparePerformance(c *gin.Context) {
+	zoneID := c.Query("zone_id")
+	periodA := c.Query("period_a")
+	periodB := c.Query("period_b")
+	if zoneID == "" || periodA == "" || periodB == "" {
+		utils.BadRequest(c, "zone_id, period_a, and period_b are required")
+		return
+	}
+	paID, err := uuid.Parse(periodA)
+	if err != nil {
+		utils.BadRequest(c, "Invalid period_a ID")
+		return
+	}
+	pbID, err := uuid.Parse(periodB)
+	if err != nil {
+		utils.BadRequest(c, "Invalid period_b ID")
+		return
+	}
+
+	result, err := h.repo.ComparePerformanceData(zoneID, paID, pbID)
+	if err != nil {
+		utils.InternalError(c, "Failed to compare performance data")
+		return
+	}
+	utils.JSON(c, http.StatusOK, result)
 }

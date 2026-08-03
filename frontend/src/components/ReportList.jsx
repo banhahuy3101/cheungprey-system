@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, Fragment } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   LuPlus,
@@ -11,12 +11,16 @@ import {
   LuScrollText,
   LuCopy,
   LuCheck,
+  LuRefreshCw,
+  LuSearch,
 } from "react-icons/lu";
 import { useAuth } from "../hooks/useAuth";
 import { reportDocumentsAPI } from "../api/reportDocuments";
 import { reportSummaryLabel } from "../utils/reportForm";
 import ReportHero from "./reports/ReportHero";
 import Modal from "../pages/settings/Modal";
+import { useZoneCascade } from "../hooks/useZoneCascade";
+import ZoneCascadeSelect from "./ZoneCascadeSelect";
 
 function formatDate(iso) {
   if (!iso) return "—";
@@ -26,6 +30,25 @@ function formatDate(iso) {
     day: "numeric",
   });
 }
+
+const REPORT_CATEGORIES = [
+  { value: "", label: "ទាំងអស់" },
+  { value: "សន្តិសុខ", label: "សន្តិសុខ" },
+  { value: "សេដ្ឋកិច្ច", label: "សេដ្ឋកិច្ច" },
+  { value: "សង្គមកិច្ច", label: "សង្គមកិច្ច" },
+  { value: "ហិរញ្ញវត្ថុ", label: "ហិរញ្ញវត្ថុ" },
+  { value: "រដ្ឋបាល", label: "រដ្ឋបាល" },
+  { value: "ផ្សេងៗ", label: "ផ្សេងៗ" },
+];
+
+const CATEGORY_COLORS = {
+  "សន្តិសុខ": "#dc2626",
+  "សេដ្ឋកិច្ច": "#2563eb",
+  "សង្គមកិច្ច": "#7c3aed",
+  "ហិរញ្ញវត្ថុ": "#059669",
+  "រដ្ឋបាល": "#d97706",
+  "ផ្សេងៗ": "#6b7280",
+};
 
 export default function ReportList({ onView, onEdit, onCreate }) {
   const { user } = useAuth();
@@ -41,11 +64,29 @@ export default function ReportList({ onView, onEdit, onCreate }) {
   const [duplicateTitle, setDuplicateTitle] = useState("");
   const [duplicateDescription, setDuplicateDescription] = useState("");
   const [duplicating, setDuplicating] = useState(false);
+  const [categoryFilter, setCategoryFilter] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [showTrash, setShowTrash] = useState(false);
+
+  const zoneHook = useZoneCascade({
+    userZone: user?.zone_code || "",
+    isAdmin: user?.role === "admin" || user?.role === "super_admin",
+    initialZoneCode: user?.zone_code || "",
+    showVillage: false,
+  });
 
   const fetchRecords = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await reportDocumentsAPI.getAll();
+      const params = {};
+      if (categoryFilter) params.category = categoryFilter;
+      if (searchTerm) params.search = searchTerm;
+      if (showTrash) params.trash = "true";
+      const selectedZoneCode = zoneHook.resolvedZone?.zone_code;
+      if (selectedZoneCode) {
+        params.zone_code = selectedZoneCode;
+      }
+      const res = await reportDocumentsAPI.getAll(params);
       const data = res.data?.data ?? res.data ?? [];
       setRecords(Array.isArray(data) ? data : []);
     } catch {
@@ -53,7 +94,7 @@ export default function ReportList({ onView, onEdit, onCreate }) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [categoryFilter, searchTerm, showTrash, zoneHook.resolvedZone?.zone_code]);
 
   useEffect(() => {
     fetchRecords();
@@ -63,7 +104,12 @@ export default function ReportList({ onView, onEdit, onCreate }) {
     const total = records.length;
     const published = records.filter((r) => r.status === "published").length;
     const draft = total - published;
-    return { total, published, draft };
+    const categoryCounts = {};
+    records.forEach((r) => {
+      const cat = r.category || "ផ្សេងៗ";
+      categoryCounts[cat] = (categoryCounts[cat] || 0) + 1;
+    });
+    return { total, published, draft, categoryCounts };
   }, [records]);
 
   const handleDownload = async (record) => {
@@ -120,7 +166,7 @@ export default function ReportList({ onView, onEdit, onCreate }) {
     setDeleting(true);
     try {
       await reportDocumentsAPI.delete(deleteTarget.id);
-      setMessage("លុបដោយជោគជ័យ");
+      setMessage(showTrash ? "លុបដោយជោគជ័យ" : "បានផ្លាស់ទីទៅធុងសំរាម");
       setDeleteTarget(null);
       fetchRecords();
       setTimeout(() => setMessage(""), 2500);
@@ -128,6 +174,18 @@ export default function ReportList({ onView, onEdit, onCreate }) {
       setMessage("លុបមិនបាន");
     } finally {
       setDeleting(false);
+    }
+  };
+
+  const handleRestore = async (record) => {
+    setMessage("");
+    try {
+      await reportDocumentsAPI.restore(record.id);
+      setMessage("បានស្តារឡើងវិញ");
+      fetchRecords();
+      setTimeout(() => setMessage(""), 2500);
+    } catch {
+      setMessage("ស្តារឡើងវិញមិនបាន");
     }
   };
 
@@ -152,64 +210,233 @@ export default function ReportList({ onView, onEdit, onCreate }) {
         </div>
       )}
 
-      {!loading && (
-        <div className="report-kpi-grid">
-          <div className="card report-kpi-card">
-            <span className="report-kpi-label">សរុប</span>
-            <span className="report-kpi-value">{stats.total}</span>
+      <div className="card" style={{ padding: "1.25rem", marginBottom: "1.25rem" }}>
+        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "1.5rem" }}>
+          <div style={{ display: "flex", flexDirection: "column" }}>
+            <span style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginBottom: "0.25rem" }}>សរុប</span>
+            <span style={{ fontSize: "1.5rem", fontWeight: "700" }}>{stats.total}</span>
           </div>
-          <div className="card report-kpi-card report-kpi-published">
-            <span className="report-kpi-label">បានចេញ</span>
-            <span className="report-kpi-value">{stats.published}</span>
+
+          <div style={{ width: "1px", height: "24px", background: "var(--border)" }} />
+
+          <div style={{ display: "flex", flexDirection: "column" }}>
+            <span style={{ fontSize: "0.85rem", color: "#166534", marginBottom: "0.25rem" }}>បានចេញ</span>
+            <span style={{ fontSize: "1.5rem", fontWeight: "700", color: "#166534" }}>{stats.published}</span>
           </div>
-          <div className="card report-kpi-card report-kpi-draft">
-            <span className="report-kpi-label">ព្រាង</span>
-            <span className="report-kpi-value">{stats.draft}</span>
+
+          <div style={{ width: "1px", height: "24px", background: "var(--border)" }} />
+
+          <div style={{ display: "flex", flexDirection: "column" }}>
+            <span style={{ fontSize: "0.85rem", color: "#92400e", marginBottom: "0.25rem" }}>ព្រាង</span>
+            <span style={{ fontSize: "1.5rem", fontWeight: "700", color: "#92400e" }}>{stats.draft}</span>
           </div>
+
+          {Object.entries(stats.categoryCounts || {}).map(([cat, count]) => (
+            <Fragment key={cat}>
+              <div style={{ width: "1px", height: "24px", background: "var(--border)" }} />
+              <div style={{ display: "flex", flexDirection: "column" }}>
+                <span style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginBottom: "0.25rem" }}>{cat}</span>
+                <span style={{ fontSize: "1.5rem", fontWeight: "700" }}>{count}</span>
+              </div>
+            </Fragment>
+          ))}
         </div>
-      )}
+      </div>
+
+      <div className="report-filter-bar" style={{ display: "flex", flexDirection: "column", gap: "1rem", marginBottom: "1rem" }}>
+        <div style={{ display: "flex", width: "100%", borderBottom: "1px solid var(--border)", paddingBottom: "1rem" }}>
+          <ZoneCascadeSelect hook={zoneHook} showVillage={false} />
+        </div>
+        <div style={{ display: "flex", gap: "0.75rem", alignItems: "center", width: "100%", flexWrap: "wrap" }}>
+          <div style={{ position: "relative", flex: 1, minWidth: "200px" }}>
+            {loading ? (
+              <div className="modal-loading-spinner" style={{
+                position: "absolute",
+                left: "0.875rem",
+                top: "50%",
+                transform: "translateY(-50%)",
+                width: "16px",
+                height: "16px",
+                borderWidth: "2px",
+                pointerEvents: "none"
+              }} />
+            ) : (
+              <LuSearch
+                style={{
+                  position: "absolute",
+                  left: "0.875rem",
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  color: "#94a3b8",
+                  fontSize: "1.1rem",
+                  pointerEvents: "none"
+                }}
+              />
+            )}
+            <input
+              type="text"
+              placeholder="ស្វែងរក..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              style={{
+                width: "100%",
+                minHeight: "2.5rem",
+                padding: "0.625rem 0.875rem 0.625rem 2.25rem",
+                border: "1px solid var(--border)",
+                borderRadius: "10px",
+                fontSize: "0.9rem",
+                color: "var(--text)",
+                backgroundColor: "var(--surface)",
+                boxShadow: "0 1px 2px rgba(15, 23, 42, 0.04)",
+                outline: "none",
+                transition: "border-color var(--transition), box-shadow var(--transition)"
+              }}
+            />
+          </div>
+
+          <div style={{ position: "relative", minWidth: "160px" }}>
+            <select
+              value={categoryFilter}
+              onChange={(e) => setCategoryFilter(e.target.value)}
+              className="form-select"
+              style={{
+                width: "100%",
+                paddingRight: "2.5rem",
+                borderRadius: "10px",
+                border: "1px solid var(--border)",
+                backgroundColor: "var(--surface)",
+                minHeight: "2.5rem",
+                fontSize: "0.9rem",
+                color: "var(--text)",
+                cursor: "pointer",
+                boxShadow: "0 1px 2px rgba(15, 23, 42, 0.04)"
+              }}
+            >
+              {REPORT_CATEGORIES.map((c) => (
+                <option key={c.value} value={c.value}>{c.label}</option>
+              ))}
+            </select>
+          </div>
+
+          <button
+            type="button"
+            className={`btn ${showTrash ? "btn-secondary" : "btn-outline"}`}
+            onClick={() => setShowTrash((prev) => !prev)}
+            style={{
+              minHeight: "2.5rem",
+              display: "flex",
+              alignItems: "center",
+              gap: "0.35rem",
+              borderRadius: "10px",
+              padding: "0.625rem 1.25rem",
+              fontSize: "0.9rem",
+              fontWeight: "500",
+              boxShadow: "0 1px 2px rgba(15, 23, 42, 0.04)"
+            }}
+          >
+            <LuTrash2 size={16} />
+            {showTrash ? "របាយការណ៍" : "ធុងសំរាម"}
+          </button>
+        </div>
+      </div>
 
       <div className="card report-list-card">
-        {loading ? (
-          <div className="loading">កំពុងផ្ទុក...</div>
-        ) : records.length === 0 ? (
-          <div className="report-empty">
-            <LuScrollText className="report-empty-icon" />
-            <h3>គ្មានរបាយការណ៍</h3>
-            <p>ចុច «បង្កើតរបាយការណ៍» ដើម្បីចាប់ផ្តើម — បំពេញចំណងជើង ការពិពណ៌នា និងខ្លឹមសារ</p>
-            <button type="button" className="btn btn-primary" onClick={() => setShowCreateModal(true)}>
-              <LuPlus /> បង្កើតរបាយការណ៍
-            </button>
-          </div>
-        ) : (
-          <div className="table-responsive">
-            <table className="table report-table">
-              <thead>
+        <div className="table-responsive">
+          <table className="table report-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>របាយការណ៍</th>
+                <th>ប្រភេទ</th>
+                <th>តំបន់</th>
+                <th>ស្ថានភាព</th>
+                <th>កែប្រែចុងក្រោយ</th>
+                <th>សកម្មភាព</th>
+              </tr>
+            </thead>
+            <tbody style={{ opacity: loading ? 0.6 : 1, transition: "opacity 0.2s" }}>
+              {records.length === 0 && loading ? (
+                Array.from({ length: 5 }).map((_, i) => (
+                  <tr key={`skeleton-${i}`}>
+                    <td><div className="skeleton-item" style={{ width: "24px" }} /></td>
+                    <td><div className="skeleton-item" style={{ width: "100%", maxWidth: "320px" }} /></td>
+                    <td><div className="skeleton-item" style={{ width: "64px" }} /></td>
+                    <td><div className="skeleton-item" style={{ width: "80px" }} /></td>
+                    <td><div className="skeleton-item" style={{ width: "70px" }} /></td>
+                    <td><div className="skeleton-item" style={{ width: "90px" }} /></td>
+                    <td>
+                      <div style={{ display: "flex", gap: "0.5rem" }}>
+                        <div className="skeleton-item" style={{ width: "24px", height: "24px", borderRadius: "4px" }} />
+                        <div className="skeleton-item" style={{ width: "24px", height: "24px", borderRadius: "4px" }} />
+                        <div className="skeleton-item" style={{ width: "24px", height: "24px", borderRadius: "4px" }} />
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              ) : records.length === 0 ? (
                 <tr>
-                  <th>#</th>
-                  <th>របាយការណ៍</th>
-                  <th>ស្ថានភាព</th>
-                  <th>កែប្រែចុងក្រោយ</th>
-                  <th>សកម្មភាព</th>
+                  <td colSpan={7} style={{ textAlign: "center", padding: "3rem" }}>
+                    <div className="report-empty" style={{ margin: 0, padding: 0, border: "none", background: "none", boxShadow: "none" }}>
+                      <LuScrollText className="report-empty-icon" />
+                      <h3>{showTrash ? "គ្មានរបាយការណ៍ក្នុងធុងសំរាម" : "គ្មានរបាយការណ៍"}</h3>
+                      <p>{showTrash ? "" : "ចុច «បង្កើតរបាយការណ៍» ដើម្បីចាប់ផ្តើម — បំពេញចំណងជើង ការពិពណ៌នា និងខ្លឹមសារ"}</p>
+                      {!showTrash && (
+                        <button type="button" className="btn btn-primary" style={{ marginTop: "0.75rem", marginInline: "auto" }} onClick={() => setShowCreateModal(true)}>
+                          <LuPlus /> បង្កើតរបាយការណ៍
+                        </button>
+                      )}
+                    </div>
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {records.map((r, idx) => (
-                  <tr key={r.id}>
+              ) : (
+                records.map((r, idx) => (
+                  <tr key={r.id} style={r.deleted_at ? { opacity: 0.6 } : undefined}>
                     <td>{idx + 1}</td>
-                    <td className="report-table-title">{reportSummaryLabel(r)}</td>
+                    <td
+                      className="report-table-title"
+                      style={{ cursor: "pointer", color: "var(--primary)", fontWeight: "500" }}
+                      onClick={() => onView(r.id)}
+                    >
+                      {reportSummaryLabel(r)}
+                    </td>
+                    <td>
+                      {r.category && (
+                        <span
+                          style={{ color: CATEGORY_COLORS[r.category] || "#6b7280", fontWeight: "600", fontSize: "0.85rem" }}
+                        >
+                          {r.category}
+                        </span>
+                      )}
+                    </td>
+                    <td>{r.zone_name || "—"}</td>
                     <td>
                       <span className="report-status-badge report-status-badge-sm" data-status={r.status}>
-                        {r.status === "published" ? "បានចេញ" : "ព្រាង"}
+                        {r.status === "published" ? "បានចេញ"
+                          : r.status === "pending_review" ? "កំពុងពិនិត្យ"
+                            : r.status === "rejected" ? "បានបដិសេធ"
+                              : r.deleted_at ? "បានលុប"
+                                : "ព្រាង"}
                       </span>
                     </td>
                     <td>{formatDate(r.updated_at)}</td>
                     <td>
                       <div className="actions">
-                        {user?.role === "district_chief" ? (
+                        {showTrash ? (
+                          <button type="button" className="btn-icon btn-success" onClick={() => handleRestore(r)} title="ស្តារឡើងវិញ">
+                            <LuRefreshCw />
+                          </button>
+                        ) : (
                           <>
-                            {r.status !== "published" && (
-                              <button type="button" className="btn-icon btn-success" onClick={() => handleConfirm(r)} title="បញ្ជាក់">
+                            <button type="button" className="btn-icon" onClick={() => onView(r.id)} title="មើល">
+                              <LuEye />
+                            </button>
+                            {(r.status === "draft" || r.status === "rejected") && (
+                              <button type="button" className="btn-icon" onClick={() => onEdit(r.id)} title="កែប្រែ">
+                                <LuPencil />
+                              </button>
+                            )}
+                            {r.status === "pending_review" && (user?.role === "district_chief" || user?.role === "commune_chief" || user?.role === "admin" || user?.role === "super_admin") && (
+                              <button type="button" className="btn-icon" onClick={() => handleConfirm(r)} title="អនុម័ត">
                                 <LuCheck />
                               </button>
                             )}
@@ -222,54 +449,40 @@ export default function ReportList({ onView, onEdit, onCreate }) {
                             >
                               <LuDownload />
                             </button>
-                          </>
-                        ) : (
-                          <>
-                            <button type="button" className="btn-icon" onClick={() => onView(r.id)} title="មើល">
-                              <LuEye />
-                            </button>
-                            <button type="button" className="btn-icon" onClick={() => onEdit(r.id)} title="កែប្រែ">
-                              <LuPencil />
-                            </button>
-                            <button
-                              type="button"
-                              className="btn-icon"
-                              onClick={() => handleDownload(r)}
-                              disabled={downloadTarget?.id === r.id}
-                              title="ទាញយក PDF"
-                            >
-                              <LuDownload />
-                            </button>
-                            <button
-                              type="button"
-                              className="btn-icon"
-                              onClick={() => {
-                                setDuplicateTarget(r);
-                                setDuplicateTitle(r.title + " (ច្បាប់ចម្លង)");
-                                setDuplicateDescription(r.description || "");
-                              }}
-                              title="ចម្លង"
-                            >
-                              <LuCopy />
-                            </button>
-                            <button
-                              type="button"
-                              className="btn-icon btn-danger"
-                              onClick={() => setDeleteTarget(r)}
-                              title="លុប"
-                            >
-                              <LuTrash2 />
-                            </button>
+                            {(r.status === "draft" || r.status === "rejected") && (
+                              <>
+                                <button
+                                  type="button"
+                                  className="btn-icon"
+                                  onClick={() => {
+                                    setDuplicateTarget(r);
+                                    setDuplicateTitle(r.title + " (ច្បាប់ចម្លង)");
+                                    setDuplicateDescription(r.description || "");
+                                  }}
+                                  title="ចម្លង"
+                                >
+                                  <LuCopy />
+                                </button>
+                                <button
+                                  type="button"
+                                  className="btn-icon btn-danger"
+                                  onClick={() => setDeleteTarget(r)}
+                                  title="លុប"
+                                >
+                                  <LuTrash2 />
+                                </button>
+                              </>
+                            )}
                           </>
                         )}
                       </div>
                     </td>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {downloadTarget && (
@@ -359,7 +572,7 @@ export default function ReportList({ onView, onEdit, onCreate }) {
 
       <Modal open={showCreateModal} onClose={() => setShowCreateModal(false)} title="បង្កើតរបាយការណ៍">
         <div className="report-create-options report-create-options-row">
-<button type="button" className="report-create-option" onClick={() => { setShowCreateModal(false); navigate("/reports/create-template"); }}>
+          <button type="button" className="report-create-option" onClick={() => { setShowCreateModal(false); navigate("/reports/create-template"); }}>
             <span className="report-create-option-icon"><LuFileText /></span>
             <span className="report-create-option-label">បង្កើតជាមួយគំរូ</span>
             <span className="report-create-option-desc">ជ្រើសរើសគំរូដែលត្រៀតរួចជាស្រេច</span>

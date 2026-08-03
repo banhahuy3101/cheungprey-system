@@ -1,0 +1,299 @@
+/* ===== Forms ===== */
+.form-group {
+  margin-bottom: 1rem;
+}
+
+.form-group label {
+  display: block;
+  font-weight: 500;
+  margin-bottom: 0.35rem;
+  font-size: 0.85rem;
+  color: var(--text);
+}
+
+.form-group input,
+.form-group select,
+.form-group textarea,
+select,
+input[list].select-input,
+.form-group input[list] {
+  width: 100%;
+  min-height: 2.5rem;
+  padding: 0.625rem 2.5rem 0.625rem 0.875rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 0.9rem;
+  font-family: inherit;
+  color: var(--text);
+  background-color: var(--surface);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.875rem center;
+  background-size: 1rem;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  transition:
+    border-color var(--transition),
+    box-shadow var(--transition),
+    background-color var(--transition);
+}
+
+.form-group input:not([list]),
+.form-group textarea,
+.perf-indicator-value input:not([type="number"]) {
+  background-image: none;
+  padding-right: 0.875rem;
+}
+
+.form-group input[type="number"],
+.perf-indicator-value input[type="number"] {
+  background-image: none;
+  padding-right: 0.875rem;
+}
+
+select,
+.form-group select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  cursor: pointer;
+}
+
+input[list].select-input,
+.form-group input[list] {
+  cursor: pointer;
+}
+
+select:hover:not(:disabled),
+.form-group select:hover:not(:disabled),
+input[list].select-input:hover:not(:disabled),
+.form-group input[list]:hover:not(:disabled) {
+  border-color: #cbd5e1;
+  background-color: #fafbfd;
+}
+
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus,
+select:focus,
+input[list].select-input:focus,
+.form-group input[list]:focus {
+  outline: none;
+  border-color: var(--primary-light);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.14);
+  background-color: #fff;
+}
+
+select:disabled,
+.form-group select:disabled,
+input[list].select-input:disabled,
+.form-group input[list]:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+  background-color: #f8fafc;
+  color: var(--text-muted);
+}
+
+select option {
+  color: var(--text);
+  background: var(--surface);
+  padding: 0.5rem;
+}
+
+/* ===== Custom Select (styled dropdown panel) ===== */
+.custom-select {
+  position: relative;
+  width: 100%;
+}
+
+.custom-select-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  width: 100%;
+  min-height: 2.5rem;
+  padding: 0.625rem 0.875rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 0.9rem;
+  font-family: inherit;
+  color: var(--text);
+  background: var(--surface);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  cursor: pointer;
+  text-align: left;
+  transition:
+    border-color var(--transition),
+    box-shadow var(--transition),
+    background-color var(--transition);
+}
+
+.custom-select-value {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.custom-select-value.is-placeholder {
+  color: var(--text-muted);
+}
+
+.custom-select-chevron {
+  flex-shrink: 0;
+  width: 1rem;
+  height: 1rem;
+  color: var(--text-muted);
+  transition: transform var(--transition);
+}
+
+.custom-select.is-open .custom-select-trigger {
+  border-color: var(--primary-light);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.14);
+}
+
+.custom-select.is-open .custom-select-chevron {
+  transform: rotate(180deg);
+  color: var(--primary);
+}
+
+.custom-select-trigger:hover:not(:disabled) {
+  border-color: #cbd5e1;
+  background: #fafbfd;
+}
+
+.custom-select-trigger:focus-visible {
+  outline: none;
+  border-color: var(--primary-light);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.14);
+}
+
+.custom-select.is-disabled .custom-select-trigger {
+  opacity: 0.65;
+  cursor: not-allowed;
+  background: #f8fafc;
+  color: var(--text-muted);
+}
+
+.custom-select-menu {
+  margin: 0;
+  padding: 0.35rem;
+  list-style: none;
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow:
+    0 4px 6px -1px rgba(15, 23, 42, 0.08),
+    0 12px 28px -4px rgba(15, 23, 42, 0.14);
+  animation: custom-select-in 0.15s ease;
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}
+
+.custom-select-menu::-webkit-scrollbar {
+  width: 6px;
+}
+
+.custom-select-menu::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 999px;
+}
+
+@keyframes custom-select-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.custom-select-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.55rem 0.75rem;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  color: var(--text);
+  cursor: pointer;
+  transition: background-color var(--transition), color var(--transition);
+}
+
+.custom-select-option-label {
+  flex: 1;
+  min-width: 0;
+  line-height: 1.4;
+}
+
+.custom-select-option-check {
+  flex-shrink: 0;
+  width: 1rem;
+  height: 1rem;
+  color: var(--primary);
+}
+
+.custom-select-option.is-highlighted {
+  background: #f1f5f9;
+}
+
+.custom-select-option.is-selected {
+  background: #eff6ff;
+  color: var(--primary-dark);
+  font-weight: 500;
+}
+
+.custom-select-option.is-selected.is-highlighted {
+  background: #dbeafe;
+}
+
+.custom-select-option.is-disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* Compact variant (table inline selects) */
+.custom-select.role-select {
+  width: auto;
+  min-width: 7.5rem;
+  max-width: 100%;
+}
+
+.custom-select.role-select .custom-select-trigger {
+  min-height: 2rem;
+  padding: 0.35rem 0.65rem;
+  border-radius: 8px;
+  font-size: 0.8rem;
+}
+
+.custom-select.role-select .custom-select-option {
+  font-size: 0.8rem;
+  padding: 0.45rem 0.65rem;
+}
+
+.filter-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.filter-toolbar .form-group {
+  flex: 1;
+  min-width: 220px;
+  margin-bottom: 0;
+}
+
+.form-row {
+  display: flex;
+  gap: 1rem;
+}
+
+.form-row .form-group {
+  flex: 1;
+}
+

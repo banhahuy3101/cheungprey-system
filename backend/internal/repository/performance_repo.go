@@ -646,3 +646,211 @@ func (r *Repository) GetFullReportData(zoneID string, periodID uuid.UUID) (*mode
 		Domains: reportDomains,
 	}, nil
 }
+
+func (r *Repository) UpsertPerformanceSubmission(zoneID string, periodID uuid.UUID, status string) (*models.PerformanceSubmission, error) {
+	var existing []models.PerformanceSubmission
+	_, err := r.AdminClient.From("performance_submissions").
+		Select("*", "exact", false).
+		Eq("zone_id", zoneID).
+		Eq("period_id", periodID.String()).
+		ExecuteTo(&existing)
+	if err != nil {
+		return nil, fmt.Errorf("get submission: %w", err)
+	}
+
+	now := time.Now()
+	if len(existing) > 0 {
+		sub := existing[0]
+		data := map[string]any{"status": status}
+		if _, _, err := r.AdminClient.From("performance_submissions").
+			Update(data, "", "").
+			Eq("id", sub.ID.String()).
+			Execute(); err != nil {
+			return nil, fmt.Errorf("update submission: %w", err)
+		}
+		sub.Status = status
+		return &sub, nil
+	}
+
+	sub := models.PerformanceSubmission{
+		ID:        uuid.New(),
+		ZoneID:    zoneID,
+		PeriodID:  periodID,
+		Status:    status,
+		CreatedAt: now,
+	}
+	_, _, err = r.AdminClient.From("performance_submissions").
+		Insert(sub, false, "", "", "").
+		Execute()
+	if err != nil {
+		return nil, fmt.Errorf("create submission: %w", err)
+	}
+	return &sub, nil
+}
+
+func (r *Repository) GetPerformanceSubmission(id uuid.UUID) (*models.PerformanceSubmission, error) {
+	var subs []models.PerformanceSubmission
+	_, err := r.AdminClient.From("performance_submissions").
+		Select("*", "exact", false).
+		Eq("id", id.String()).
+		ExecuteTo(&subs)
+	if err != nil {
+		return nil, fmt.Errorf("get submission: %w", err)
+	}
+	if len(subs) == 0 {
+		return nil, nil
+	}
+	return &subs[0], nil
+}
+
+func (r *Repository) UpdatePerformanceSubmissionStatus(id uuid.UUID, status string, userID *uuid.UUID) error {
+	now := time.Now()
+	data := map[string]any{
+		"status": status,
+	}
+	if userID != nil {
+		if status == "submitted" {
+			data["submitted_by"] = userID.String()
+			data["submitted_at"] = now
+		}
+	}
+	_, _, err := r.AdminClient.From("performance_submissions").
+		Update(data, "", "").
+		Eq("id", id.String()).
+		Execute()
+	return err
+}
+
+func (r *Repository) ApprovePerformanceSubmission(id uuid.UUID, userID uuid.UUID) error {
+	now := time.Now()
+	_, _, err := r.AdminClient.From("performance_submissions").
+		Update(map[string]any{
+			"status":      "approved",
+			"approved_by": userID.String(),
+			"approved_at": now,
+		}, "", "").
+		Eq("id", id.String()).
+		Execute()
+	return err
+}
+
+func (r *Repository) RejectPerformanceSubmission(id uuid.UUID, reason string) error {
+	now := time.Now()
+	_, _, err := r.AdminClient.From("performance_submissions").
+		Update(map[string]any{
+			"status":           "rejected",
+			"rejection_reason": reason,
+			"approved_at":      now,
+		}, "", "").
+		Eq("id", id.String()).
+		Execute()
+	return err
+}
+
+func (r *Repository) ComparePerformanceData(zoneID string, periodA, periodB uuid.UUID) (*models.PerformanceCompareResponse, error) {
+	zone, err := r.GetZoneByCode(zoneID)
+	if err != nil {
+		return nil, fmt.Errorf("get zone: %w", err)
+	}
+	if zone == nil {
+		return nil, fmt.Errorf("zone not found: %s", zoneID)
+	}
+
+	pa, err := r.GetPeriodByID(periodA)
+	if err != nil || pa == nil {
+		return nil, fmt.Errorf("period A not found")
+	}
+	pb, err := r.GetPeriodByID(periodB)
+	if err != nil || pb == nil {
+		return nil, fmt.Errorf("period B not found")
+	}
+
+	dataA, _ := r.GetPerformanceData(zoneID, periodA)
+	dataB, _ := r.GetPerformanceData(zoneID, periodB)
+
+	dataAMap := make(map[string]*models.PerformanceData)
+	for _, d := range dataA {
+		entry := d
+		dataAMap[entry.IndicatorID.String()] = &entry
+	}
+	dataBMap := make(map[string]*models.PerformanceData)
+	for _, d := range dataB {
+		entry := d
+		dataBMap[entry.IndicatorID.String()] = &entry
+	}
+
+	domains, err := r.ListDomains()
+	if err != nil {
+		return nil, err
+	}
+
+	var result []models.PerformanceCompareIndicator
+
+	for _, domain := range domains {
+		subDomains, _ := r.ListSubDomains(domain.ID)
+		for _, sd := range subDomains {
+			indicators, _ := r.ListIndicators(sd.ID)
+			for _, ind := range indicators {
+				item := models.PerformanceCompareIndicator{
+					Indicator:      ind,
+					DomainNameKh:   domain.NameKh,
+					SubDomainNameKh: sd.NameKh,
+					Trend:           "→",
+				}
+
+				var valA, valB *float64
+				if dataAMap[ind.ID.String()] != nil {
+					d := dataAMap[ind.ID.String()]
+					if ind.DataType == "number" && d.ValueNumber != nil {
+						v := *d.ValueNumber
+						valA = &v
+					}
+					if ind.DataType == "percentage" && d.ValuePercentage != nil {
+						v := *d.ValuePercentage
+						valA = &v
+					}
+				}
+				if dataBMap[ind.ID.String()] != nil {
+					d := dataBMap[ind.ID.String()]
+					if ind.DataType == "number" && d.ValueNumber != nil {
+						v := *d.ValueNumber
+						valB = &v
+					}
+					if ind.DataType == "percentage" && d.ValuePercentage != nil {
+						v := *d.ValuePercentage
+						valB = &v
+					}
+				}
+
+				item.ValueA = valA
+				item.ValueB = valB
+
+				if valA != nil && valB != nil {
+					delta := *valB - *valA
+					item.Delta = &delta
+
+					if ind.TargetDirection != nil && *ind.TargetDirection == "lower_is_better" {
+						delta = -delta
+					}
+					if delta > 0 {
+						item.Trend = "↑"
+					} else if delta < 0 {
+						item.Trend = "↓"
+					}
+				}
+
+				result = append(result, item)
+			}
+		}
+	}
+
+	return &models.PerformanceCompareResponse{
+		Zone: models.PerformanceCompareZone{
+			ZoneCode: zone.ZoneCode,
+			NameKh:   zone.NameKh,
+		},
+		PeriodA:    *pa,
+		PeriodB:    *pb,
+		Indicators: result,
+	}, nil
+}

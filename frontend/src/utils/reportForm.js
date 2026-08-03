@@ -2,13 +2,15 @@ export const emptySimpleReportForm = () => ({
   title: "",
   description: "",
   content: "",
+  category: "ផ្សេងៗ",
 });
 
-export function buildSimpleReportPayload({ title, description, content }) {
+export function buildSimpleReportPayload({ title, description, content, category }) {
   return {
     title: title.trim(),
     description: description.trim(),
     content: content || "",
+    category: category || "ផ្សេងៗ",
   };
 }
 
@@ -18,6 +20,7 @@ export function docToSimpleForm(doc) {
     title: doc.title || "",
     description: doc.description || "",
     content: doc.content || "",
+    category: doc.category || "ផ្សេងៗ",
   };
 }
 

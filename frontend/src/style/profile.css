@@ -1,0 +1,87 @@
+/* ===== Profile Modal ===== */
+.profile-link-btn {
+  background: none;
+  border: none;
+  color: var(--primary-light);
+  font-weight: 500;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: inherit;
+  padding: 0;
+  text-align: left;
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  transition: all var(--transition);
+}
+.profile-link-btn:hover {
+  color: var(--primary-dark);
+  text-decoration-color: var(--primary-light);
+}
+
+.modal-profile {
+  max-width: 600px;
+}
+
+.profile-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--primary);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.profile-detail-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.profile-detail-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.profile-detail-label {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  text-transform: uppercase;
+}
+
+.profile-detail-value {
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.profile-detail-item.full-width {
+  grid-column: 1 / -1;
+}
+
+.profile-actions {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-top: 0.5rem;
+}
+
+/* Sidebar user info clickable */
+.sidebar-footer .user-info {
+  cursor: pointer;
+  border-radius: var(--radius);
+  padding: 0.5rem;
+  margin-bottom: 0.5rem;
+  transition: background var(--transition);
+}
+.sidebar-footer .user-info:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+

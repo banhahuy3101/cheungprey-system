@@ -11,6 +11,7 @@ type ReportTemplate struct {
 	ID          uuid.UUID `json:"id"`
 	Name        string    `json:"name"`
 	Description string    `json:"description"`
+	Category    string    `json:"category"`
 	Format      string    `json:"format"`
 	FileName    string    `json:"file_name"`
 	FileSize    int64     `json:"file_size"`
@@ -25,6 +26,7 @@ type ReportTemplate struct {
 type CreateReportTemplateRequest struct {
 	Name        string                `form:"name" binding:"required"`
 	Description string                `form:"description"`
+	Category    string                `form:"category"`
 	Format      string                `form:"format" binding:"required,oneof=docx html"`
 	File        *multipart.FileHeader `form:"file"`
 	Content     string                `form:"content"`

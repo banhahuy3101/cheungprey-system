@@ -1,0 +1,142 @@
+/* ===== Performance Form (docx-style) ===== */
+.perf-form-wrap {
+  position: relative;
+  overflow-x: auto;
+}
+.perf-form-loading {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 0.75rem;
+  font-size: 0.95rem;
+  color: var(--text-muted, #666);
+  background: rgba(255, 255, 255, 0.88);
+}
+.perf-form-table {
+  table-layout: fixed;
+  width: 100%;
+  border-collapse: collapse;
+}
+.perf-form-table col.perf-col-label {
+  width: 75%;
+}
+.perf-form-table col.perf-col-value {
+  width: 25%;
+}
+.perf-form-table td {
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  vertical-align: middle;
+}
+.perf-form-table th.perf-column-header {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  font-weight: 700;
+  font-size: 0.9rem;
+  background: #1a5276;
+  color: #fff;
+  text-align: center;
+  vertical-align: middle;
+  line-height: 1.45;
+}
+.perf-form-table th.perf-column-header.perf-indicator-value {
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+.perf-domain-header {
+  font-weight: 700;
+  font-size: 1rem;
+  background: #e8f0fe;
+}
+.perf-subdomain-header {
+  font-weight: 600;
+  font-size: 0.9rem;
+  background: #f5f7fa;
+}
+.perf-indicator-label {
+  width: 75%;
+  font-size: 0.85rem;
+}
+.perf-indicator-value {
+  width: 25%;
+}
+.perf-indicator-code {
+  font-size: 0.75rem;
+  color: #888;
+  margin-right: 0.5rem;
+}
+.perf-indicator-unit {
+  font-style: italic;
+  color: #888;
+  font-size: 0.75rem;
+  margin-left: 0.4rem;
+}
+.perf-indicator-value select {
+  width: 100%;
+  min-height: 2.25rem;
+  padding: 0.45rem 2rem 0.45rem 0.65rem;
+  border-radius: 8px;
+  font-size: 0.85rem;
+}
+
+.perf-indicator-value input[type="number"] {
+  width: 100%;
+  min-height: 2.25rem;
+  padding: 0.45rem 0.65rem;
+  border-radius: 8px;
+  font-size: 0.85rem;
+}
+.perf-input-group {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+.perf-input-group input {
+  flex: 1;
+}
+.perf-input-suffix {
+  font-size: 0.85rem;
+  color: #666;
+  white-space: nowrap;
+}
+.btn-danger {
+  background: var(--danger);
+  color: white;
+}
+.btn-danger:hover {
+  opacity: 0.9;
+}
+.btn-sm {
+  padding: 0.3rem 0.6rem;
+  font-size: 0.8rem;
+}
+
+/* ===== Performance form ===== */
+.perf-form-card {
+  overflow-x: auto;
+}
+
+.perf-table td:first-child {
+  width: 5%;
+  white-space: nowrap;
+  text-align: center;
+}
+
+.perf-table td:nth-child(2) {
+  white-space: normal;       /* allow indicator name to wrap */
+  word-break: break-word;
+}
+
+.perf-table td:nth-child(3),
+.perf-table td:nth-child(4) {
+  white-space: nowrap;
+}
+
+.perf-table input,
+.perf-table select {
+  min-width: 100px;
+}
+

@@ -90,12 +90,18 @@ func reportDocumentFromRequest(req models.ReportDocumentPayload, userID uuid.UUI
 	}
 }
 
-func simpleReportDocumentFromRequest(req models.CreateSimpleReportDocumentRequest, userID uuid.UUID, now time.Time) *models.ReportDocument {
+func simpleReportDocumentFromRequest(req models.CreateSimpleReportDocumentRequest, userID uuid.UUID, zoneCode string, now time.Time) *models.ReportDocument {
+	category := req.Category
+	if category == "" {
+		category = "ផ្សេងៗ"
+	}
 	return &models.ReportDocument{
 		ID:          uuid.New(),
 		Title:       req.Title,
 		Description: req.Description,
 		Content:     req.Content,
+		Category:    category,
+		ZoneCode:    zoneCode,
 		Status:      "draft",
 		CreatedBy:   userID,
 		CreatedAt:   now,
@@ -104,12 +110,16 @@ func simpleReportDocumentFromRequest(req models.CreateSimpleReportDocumentReques
 }
 
 func simpleReportDocumentUpdateMap(req models.UpdateSimpleReportDocumentRequest) map[string]any {
-	return map[string]any{
+	data := map[string]any{
 		"title":       req.Title,
 		"description": req.Description,
 		"content":     req.Content,
 		"updated_at":  time.Now(),
 	}
+	if req.Category != "" {
+		data["category"] = req.Category
+	}
+	return data
 }
 
 func reportDocumentUpdateMap(req models.ReportDocumentPayload) map[string]any {
@@ -166,7 +176,13 @@ func (h *ReportDocumentHandler) CreateSimple(c *gin.Context) {
 		return
 	}
 
-	doc := simpleReportDocumentFromRequest(req, userID, time.Now())
+	zoneCode := ""
+	profile, err := auth.GetProfile(c)
+	if err == nil && profile != nil && profile.ZoneCode != nil {
+		zoneCode = *profile.ZoneCode
+	}
+
+	doc := simpleReportDocumentFromRequest(req, userID, zoneCode, time.Now())
 	if err := h.repo.CreateReportDocument(doc); err != nil {
 		log.Printf("ERROR create simple report document: %v", err)
 		utils.InternalError(c, "Failed to create report")
@@ -177,7 +193,12 @@ func (h *ReportDocumentHandler) CreateSimple(c *gin.Context) {
 }
 
 func (h *ReportDocumentHandler) List(c *gin.Context) {
-	docs, err := h.repo.ListReportDocuments()
+	category := c.Query("category")
+	zoneCode := c.Query("zone_code")
+	search := c.Query("search")
+	trash := c.Query("trash") == "true"
+
+	docs, err := h.repo.ListReportDocuments(category, zoneCode, search, trash)
 	if err != nil {
 		log.Printf("ERROR list report documents: %v", err)
 		utils.InternalError(c, "Failed to fetch reports")
@@ -283,12 +304,130 @@ func (h *ReportDocumentHandler) Delete(c *gin.Context) {
 		return
 	}
 
-	if err := h.repo.DeleteReportDocument(id); err != nil {
+	if err := h.repo.SoftDeleteReportDocument(id); err != nil {
 		utils.InternalError(c, "Failed to delete report")
 		return
 	}
 
 	utils.JSON(c, http.StatusOK, gin.H{"message": "Report deleted"})
+}
+
+func (h *ReportDocumentHandler) Restore(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		utils.BadRequest(c, "Invalid report ID")
+		return
+	}
+
+	if err := h.repo.RestoreReportDocument(id); err != nil {
+		utils.InternalError(c, "Failed to restore report")
+		return
+	}
+
+	utils.JSON(c, http.StatusOK, gin.H{"message": "Report restored"})
+}
+
+func (h *ReportDocumentHandler) Submit(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		utils.BadRequest(c, "Invalid report ID")
+		return
+	}
+	userID, _ := auth.GetUserID(c)
+
+	doc, err := h.repo.GetReportDocumentByID(id)
+	if err != nil || doc == nil {
+		utils.Error(c, http.StatusNotFound, "Report not found")
+		return
+	}
+	if doc.Status != "draft" && doc.Status != "rejected" {
+		utils.BadRequest(c, "មានតែសេចក្តីព្រាង ឬបានបដិសេធប៉ុណ្ណោះដែលអាចដាក់ស្នើបាន")
+		return
+	}
+
+	if err := h.repo.UpdateReportDocument(id, map[string]any{
+		"status":     "pending_review",
+		"updated_at": time.Now(),
+	}); err != nil {
+		utils.InternalError(c, "Failed to submit report")
+		return
+	}
+
+	review := &models.ReportReview{
+		ID:         uuid.New(),
+		ReportID:   id,
+		Action:     "submit",
+		ReviewerID: userID,
+		CreatedAt:  time.Now(),
+	}
+	_ = h.repo.CreateReportReview(review)
+
+	utils.JSON(c, http.StatusOK, gin.H{"message": "បានដាក់ស្នើ"})
+}
+
+func (h *ReportDocumentHandler) Reject(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		utils.BadRequest(c, "Invalid report ID")
+		return
+	}
+	userID, _ := auth.GetUserID(c)
+
+	var req struct {
+		Reason string `json:"reason" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, "មូលហេតុត្រូវបានទាមទារ")
+		return
+	}
+
+	doc, err := h.repo.GetReportDocumentByID(id)
+	if err != nil || doc == nil {
+		utils.Error(c, http.StatusNotFound, "Report not found")
+		return
+	}
+	if doc.Status != "pending_review" {
+		utils.BadRequest(c, "មានតែរបាយការណ៍ដែលកំពុងរង់ចាំពិនិត្យប៉ុណ្ណោះដែលអាចបដិសេធបាន")
+		return
+	}
+
+	if err := h.repo.UpdateReportDocument(id, map[string]any{
+		"status":     "draft",
+		"updated_at": time.Now(),
+	}); err != nil {
+		utils.InternalError(c, "Failed to reject report")
+		return
+	}
+
+	review := &models.ReportReview{
+		ID:         uuid.New(),
+		ReportID:   id,
+		Action:     "reject",
+		Comment:    req.Reason,
+		ReviewerID: userID,
+		CreatedAt:  time.Now(),
+	}
+	_ = h.repo.CreateReportReview(review)
+
+	utils.JSON(c, http.StatusOK, gin.H{"message": "បានបដិសេធ"})
+}
+
+func (h *ReportDocumentHandler) ListReviews(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		utils.BadRequest(c, "Invalid report ID")
+		return
+	}
+
+	reviews, err := h.repo.ListReportReviews(id)
+	if err != nil {
+		utils.InternalError(c, "Failed to fetch reviews")
+		return
+	}
+	if reviews == nil {
+		reviews = []models.ReportReview{}
+	}
+	utils.JSON(c, http.StatusOK, reviews)
 }
 
 func (h *ReportDocumentHandler) DownloadPDF(c *gin.Context) {

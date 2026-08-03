@@ -79,12 +79,15 @@ func (r *Repository) UploadReportFile(data []byte, storagePath string, contentTy
 	return err
 }
 
-func (r *Repository) ListReportTemplates() ([]models.ReportTemplate, error) {
-	var tmpls []models.ReportTemplate
-	_, err := r.AdminClient.From("report_templates").
+func (r *Repository) ListReportTemplates(category string) ([]models.ReportTemplate, error) {
+	q := r.AdminClient.From("report_templates").
 		Select("*", "exact", false).
-		Order("created_at", &postgrest.OrderOpts{Ascending: false}).
-		ExecuteTo(&tmpls)
+		Order("created_at", &postgrest.OrderOpts{Ascending: false})
+	if category != "" {
+		q = q.Eq("category", category)
+	}
+	var tmpls []models.ReportTemplate
+	_, err := q.ExecuteTo(&tmpls)
 	if err != nil {
 		return nil, fmt.Errorf("list report templates: %w", err)
 	}
@@ -111,6 +114,7 @@ func (r *Repository) CreateReportTemplate(tmpl *models.ReportTemplate) error {
 		"id":           tmpl.ID.String(),
 		"name":         tmpl.Name,
 		"description":  tmpl.Description,
+		"category":     tmpl.Category,
 		"format":       tmpl.Format,
 		"file_name":    tmpl.FileName,
 		"file_size":    tmpl.FileSize,
@@ -131,6 +135,7 @@ func (r *Repository) UpdateReportTemplate(tmpl *models.ReportTemplate) error {
 	row := map[string]any{
 		"name":         tmpl.Name,
 		"description":  tmpl.Description,
+		"category":     tmpl.Category,
 		"format":       tmpl.Format,
 		"file_name":    tmpl.FileName,
 		"file_size":    tmpl.FileSize,
@@ -151,6 +156,50 @@ func (r *Repository) DeleteReportTemplate(id uuid.UUID) error {
 		Delete("", "").
 		Eq("id", id.String()).
 		Execute()
+	return err
+}
+
+func (r *Repository) DuplicateReportTemplate(tmpl *models.ReportTemplate) error {
+	row := map[string]any{
+		"id":           tmpl.ID.String(),
+		"name":         tmpl.Name,
+		"description":  tmpl.Description,
+		"category":     tmpl.Category,
+		"format":       tmpl.Format,
+		"file_name":    tmpl.FileName,
+		"file_size":    tmpl.FileSize,
+		"storage_path": tmpl.StoragePath,
+		"content":      tmpl.Content,
+		"keys":         tmpl.Keys,
+		"created_by":   tmpl.CreatedBy.String(),
+		"created_at":   tmpl.CreatedAt,
+		"updated_at":   tmpl.UpdatedAt,
+	}
+	_, _, err := r.AdminClient.From("report_templates").
+		Insert(row, false, "", "", "").
+		Execute()
+	return err
+}
+
+func (r *Repository) CopyTemplateFile(srcPath, dstPath string) error {
+	storageURL := r.cfg.SupabaseURL + "/storage/v1"
+	client := storage_go.NewClient(storageURL, r.cfg.SupabaseServiceKey, nil)
+
+	data, err := client.DownloadFile(templateBucket, srcPath)
+	if err != nil {
+		return fmt.Errorf("download source file: %w", err)
+	}
+
+	contentType := "application/octet-stream"
+	if len(data) > 0 {
+		contentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+	}
+
+	_, err = client.UploadFile(templateBucket, dstPath, bytes.NewReader(data),
+		storage_go.FileOptions{
+			ContentType: &contentType,
+		},
+	)
 	return err
 }
 

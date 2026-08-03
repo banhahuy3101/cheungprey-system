@@ -24,15 +24,19 @@ type PerformanceSubDomain struct {
 }
 
 type PerformanceIndicator struct {
-	ID          uuid.UUID `json:"id"`
-	SubDomainID uuid.UUID `json:"sub_domain_id"`
-	Code        string    `json:"code"`
-	NameKh      string    `json:"name_kh"`
-	NameEn      *string   `json:"name_en,omitempty"`
-	DataType    string    `json:"data_type"`
-	UnitKh      *string   `json:"unit_kh,omitempty"`
-	UnitEn      *string   `json:"unit_en,omitempty"`
-	SortOrder   int       `json:"sort_order"`
+	ID              uuid.UUID `json:"id"`
+	SubDomainID     uuid.UUID `json:"sub_domain_id"`
+	Code            string    `json:"code"`
+	NameKh          string    `json:"name_kh"`
+	NameEn          *string   `json:"name_en,omitempty"`
+	DataType        string    `json:"data_type"`
+	UnitKh          *string   `json:"unit_kh,omitempty"`
+	UnitEn          *string   `json:"unit_en,omitempty"`
+	TargetValue     *float64  `json:"target_value,omitempty"`
+	TargetDirection *string   `json:"target_direction,omitempty"`
+	MinValue        *float64  `json:"min_value,omitempty"`
+	MaxValue        *float64  `json:"max_value,omitempty"`
+	SortOrder       int       `json:"sort_order"`
 }
 
 type PerformancePeriod struct {
@@ -102,25 +106,33 @@ type UpdateSubDomainRequest struct {
 }
 
 type CreateIndicatorRequest struct {
-	SubDomainID string `json:"sub_domain_id" binding:"required"`
-	Code        string `json:"code" binding:"required"`
-	NameKh      string `json:"name_kh" binding:"required"`
-	NameEn      string `json:"name_en"`
-	DataType    string `json:"data_type" binding:"required"`
-	UnitKh      string `json:"unit_kh"`
-	UnitEn      string `json:"unit_en"`
-	SortOrder   int    `json:"sort_order"`
+	SubDomainID     string   `json:"sub_domain_id" binding:"required"`
+	Code            string   `json:"code" binding:"required"`
+	NameKh          string   `json:"name_kh" binding:"required"`
+	NameEn          string   `json:"name_en"`
+	DataType        string   `json:"data_type" binding:"required"`
+	UnitKh          string   `json:"unit_kh"`
+	UnitEn          string   `json:"unit_en"`
+	TargetValue     *float64 `json:"target_value,omitempty"`
+	TargetDirection *string  `json:"target_direction,omitempty"`
+	MinValue        *float64 `json:"min_value,omitempty"`
+	MaxValue        *float64 `json:"max_value,omitempty"`
+	SortOrder       int      `json:"sort_order"`
 }
 
 type UpdateIndicatorRequest struct {
-	SubDomainID string `json:"sub_domain_id"`
-	Code        string `json:"code"`
-	NameKh      string `json:"name_kh"`
-	NameEn      string `json:"name_en"`
-	DataType    string `json:"data_type"`
-	UnitKh      string `json:"unit_kh"`
-	UnitEn      string `json:"unit_en"`
-	SortOrder   *int   `json:"sort_order"`
+	SubDomainID     string   `json:"sub_domain_id"`
+	Code            string   `json:"code"`
+	NameKh          string   `json:"name_kh"`
+	NameEn          string   `json:"name_en"`
+	DataType        string   `json:"data_type"`
+	UnitKh          string   `json:"unit_kh"`
+	UnitEn          string   `json:"unit_en"`
+	TargetValue     *float64 `json:"target_value,omitempty"`
+	TargetDirection *string  `json:"target_direction,omitempty"`
+	MinValue        *float64 `json:"min_value,omitempty"`
+	MaxValue        *float64 `json:"max_value,omitempty"`
+	SortOrder       *int     `json:"sort_order"`
 }
 
 type CreatePerformancePeriodRequest struct {
@@ -171,6 +183,55 @@ type PerformanceSubmissionSummary struct {
 	IndicatorCount int       `json:"indicator_count"`
 	ZoneName       string    `json:"zone_name,omitempty"`
 	PeriodLabel    string    `json:"period_label,omitempty"`
+	Status         string    `json:"status,omitempty"`
+}
+
+type PerformanceSubmission struct {
+	ID              uuid.UUID  `json:"id"`
+	ZoneID          string     `json:"zone_id"`
+	PeriodID        uuid.UUID  `json:"period_id"`
+	Status          string     `json:"status"`
+	RejectionReason string     `json:"rejection_reason,omitempty"`
+	SubmittedBy     *uuid.UUID `json:"submitted_by,omitempty"`
+	SubmittedAt     *time.Time `json:"submitted_at,omitempty"`
+	ApprovedBy      *uuid.UUID `json:"approved_by,omitempty"`
+	ApprovedAt      *time.Time `json:"approved_at,omitempty"`
+	CreatedAt       time.Time  `json:"created_at"`
+}
+
+type PerformanceCompareResponse struct {
+	Zone       PerformanceCompareZone       `json:"zone"`
+	PeriodA    PerformancePeriod            `json:"period_a"`
+	PeriodB    PerformancePeriod            `json:"period_b"`
+	Indicators []PerformanceCompareIndicator `json:"indicators"`
+}
+
+type PerformanceCompareZone struct {
+	ZoneCode string `json:"zone_code"`
+	NameKh   string `json:"name_kh"`
+}
+
+type PerformanceCompareIndicator struct {
+	Indicator      PerformanceIndicator `json:"indicator"`
+	DomainNameKh   string               `json:"domain_name_kh"`
+	SubDomainNameKh string              `json:"sub_domain_name_kh"`
+	ValueA         *float64             `json:"value_a,omitempty"`
+	ValueB         *float64             `json:"value_b,omitempty"`
+	Delta          *float64             `json:"delta,omitempty"`
+	Trend          string               `json:"trend"`
+}
+
+type PdfJob struct {
+	ID           uuid.UUID  `json:"id"`
+	Type         string     `json:"type"`
+	ReferenceID  string     `json:"reference_id"`
+	Status       string     `json:"status"`
+	ResultPath   string     `json:"result_path,omitempty"`
+	ErrorMessage string     `json:"error_message,omitempty"`
+	CreatedBy    uuid.UUID  `json:"created_by"`
+	CreatedAt    time.Time  `json:"created_at"`
+	StartedAt    *time.Time `json:"started_at,omitempty"`
+	CompletedAt  *time.Time `json:"completed_at,omitempty"`
 }
 
 type PerformanceReportData struct {

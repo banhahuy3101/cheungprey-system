@@ -47,6 +47,21 @@ export const performanceAPI = {
   // Submissions
   getSubmissions: () =>
     client.get("/performance/data/submissions", { timeout: TWO_MINUTE_TIMEOUT }),
+  createSubmission: (zoneId, periodId) =>
+    client.post("/performance/submissions", { zone_id: zoneId, period_id: periodId }),
+  submitSubmission: (id) =>
+    client.put(`/performance/submissions/${id}/submit`),
+  approveSubmission: (id) =>
+    client.put(`/performance/submissions/${id}/approve`),
+  rejectSubmission: (id, reason) =>
+    client.put(`/performance/submissions/${id}/reject`, { reason }),
+
+  // Compare
+  compareData: (zoneId, periodA, periodB) =>
+    client.get("/performance/data/compare", {
+      params: { zone_id: zoneId, period_a: periodA, period_b: periodB },
+      timeout: TWO_MINUTE_TIMEOUT,
+    }),
 
   // PDF Report
   getReportUrl: (zoneId, periodId) =>

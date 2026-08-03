@@ -35,6 +35,7 @@ export default function PerformanceForm({ mode, zoneCode, periodId }) {
   const [loading, setLoading] = useState(true);
   const [dataLoading, setDataLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [copying, setCopying] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [error, setError] = useState("");
 
@@ -290,6 +291,47 @@ export default function PerformanceForm({ mode, zoneCode, periodId }) {
     }
   };
 
+  const handleCopyFromPrevious = async () => {
+    if (!selectedCommune || !selectedPeriod) {
+      setError("ជ្រើសរើសឃុំ/សង្កាត់ និងរយៈពេលមុនចម្លង");
+      return;
+    }
+    const currentIdx = periods.findIndex((p) => normalizeId(p.id) === normalizeId(selectedPeriod));
+    if (currentIdx <= 0) {
+      setError("មិនមានទិន្នន័យពីរយៈពេលមុន");
+      return;
+    }
+    const prevPeriod = periods[currentIdx - 1];
+    setCopying(true);
+    setError("");
+    try {
+      const { data } = await performanceAPI.getData(selectedCommune, prevPeriod.id);
+      const rawList = data?.data ?? data ?? [];
+      if (!Array.isArray(rawList) || rawList.length === 0) {
+        setError("មិនមានទិន្នន័យពីរយៈពេលមុន");
+        setCopying(false);
+        return;
+      }
+      const newValues = {};
+      rawList.forEach((d) => {
+        const key = d.indicator_code;
+        if (d.data_type === "binary") {
+          newValues[key] = d.value_binary === true ? "true" : d.value_binary === false ? "false" : "";
+        } else if (d.data_type === "percentage" && d.value_percentage != null) {
+          newValues[key] = String(d.value_percentage);
+        } else if (d.value_number != null) {
+          newValues[key] = String(d.value_number);
+        }
+      });
+      setIndicatorValues((prev) => ({ ...prev, ...newValues }));
+      setError("");
+    } catch {
+      setError("មិនអាចចម្លងទិន្នន័យពីរយៈពេលមុន");
+    } finally {
+      setCopying(false);
+    }
+  };
+
   if (loading) return <div className="loading">កំពុងផ្ទុក...</div>;
 
   const selectedPeriodObj = periods.find(
@@ -324,9 +366,20 @@ export default function PerformanceForm({ mode, zoneCode, periodId }) {
             </button>
           )}
           {!isView && (
-            <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
-              <LuSave /> {saving ? "កំពុងរក្សាទុក..." : "រក្សាទុកទិន្នន័យ"}
-            </button>
+            <>
+              {selectedCommune && selectedPeriod && (
+                <button
+                  className="btn btn-secondary"
+                  onClick={handleCopyFromPrevious}
+                  disabled={copying || saving}
+                >
+                  {copying ? "កំពុងចម្លង..." : "ចម្លងពីរយៈពេលមុន"}
+                </button>
+              )}
+              <button className="btn btn-primary" onClick={handleSave} disabled={saving || copying}>
+                <LuSave /> {saving ? "កំពុងរក្សាទុក..." : "រក្សាទុកទិន្នន័យ"}
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -510,62 +563,77 @@ export default function PerformanceForm({ mode, zoneCode, periodId }) {
                             return val || "—";
                           };
                           return (
-                            <tr key={key}>
-                              <td className="perf-indicator-label">
-                                <span className="perf-indicator-code">{sd.code}.{idx + 1}</span>
-                                {ind.name_kh}
-                                {unit && <span className="perf-indicator-unit">({unit})</span>}
-                              </td>
-                              <td className="perf-indicator-value">
-                                {isView ? (
-                                  <strong>{formatViewValue()}</strong>
-                                ) : dt === "binary" ? (
-                                  <div style={{ display: "flex", gap: "0.35rem" }}>
-                                    <button
-                                      type="button"
-                                      onClick={() => setIndicatorValues((p) => ({ ...p, [key]: "true" }))}
-                                      style={{
-                                        flex: 1,
-                                        padding: "0.4rem 0.5rem",
-                                        border: isSelected ? "2px solid var(--primary)" : "1px solid var(--border)",
-                                        borderRadius: "4px",
-                                        background: isSelected ? "var(--primary)" : "var(--surface)",
-                                        color: isSelected ? "#fff" : "var(--text)",
-                                        cursor: "pointer",
-                                        fontSize: "0.8rem",
-                                        fontWeight: isSelected ? 600 : 400,
-                                        transition: "all 0.15s ease",
-                                      }}
-                                    >
-                                      បាន/មាន
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => setIndicatorValues((p) => ({ ...p, [key]: "false" }))}
-                                      style={{
-                                        flex: 1,
-                                        padding: "0.4rem 0.5rem",
-                                        border: isNotSelected ? "2px solid var(--primary)" : "1px solid var(--border)",
-                                        borderRadius: "4px",
-                                        background: isNotSelected ? "var(--primary)" : "var(--surface)",
-                                        color: isNotSelected ? "#fff" : "var(--text)",
-                                        cursor: "pointer",
-                                        fontSize: "0.8rem",
-                                        fontWeight: isNotSelected ? 600 : 400,
-                                        transition: "all 0.15s ease",
-                                      }}
-                                    >
-                                      មិនបាន/គ្មាន
-                                    </button>
-                                  </div>
-                                ) : (
-                                  <div className="perf-input-group">
-                                    <input
-                                      type="number"
-                                      step="any"
-                                      min={dt === "percentage" ? 0 : undefined}
-                                      max={dt === "percentage" ? 100 : undefined}
-                                      value={val}
+                             <tr key={key}>
+                               <td className="perf-indicator-label">
+                                 <span className="perf-indicator-code">{sd.code}.{idx + 1}</span>
+                                 {ind.name_kh}
+                                 {unit && <span className="perf-indicator-unit">({unit})</span>}
+                                 {ind.target_value != null && (dt === "number" || dt === "percentage") && (
+                                   <span style={{
+                                     fontSize: "0.75rem",
+                                     color: "#666",
+                                     marginLeft: "0.5rem",
+                                   }}>
+                                     (គោលដៅ: {ind.target_value}{dt === "percentage" ? "%" : ""}
+                                     {ind.target_direction === "higher_is_better" ? " ↑" : ind.target_direction === "lower_is_better" ? " ↓" : ""})
+                                   </span>
+                                 )}
+                               </td>
+                               <td className="perf-indicator-value">
+                                 {isView ? (
+                                   <strong style={
+                                     ind.target_value != null && val !== "" && val != null && (dt === "number" || dt === "percentage")
+                                       ? ((ind.target_direction === "lower_is_better" ? parseFloat(val) <= ind.target_value : parseFloat(val) >= ind.target_value)
+                                         ? { color: "#059669" } : { color: "#dc2626" })
+                                       : undefined
+                                   }>{formatViewValue()}</strong>
+                                 ) : dt === "binary" ? (
+                                   <div style={{ display: "flex", gap: "0.35rem" }}>
+                                     <button
+                                       type="button"
+                                       onClick={() => setIndicatorValues((p) => ({ ...p, [key]: "true" }))}
+                                       style={{
+                                         flex: 1,
+                                         padding: "0.4rem 0.5rem",
+                                         border: isSelected ? "2px solid var(--primary)" : "1px solid var(--border)",
+                                         borderRadius: "4px",
+                                         background: isSelected ? "var(--primary)" : "var(--surface)",
+                                         color: isSelected ? "#fff" : "var(--text)",
+                                         cursor: "pointer",
+                                         fontSize: "0.8rem",
+                                         fontWeight: isSelected ? 600 : 400,
+                                         transition: "all 0.15s ease",
+                                       }}
+                                     >
+                                       បាន/មាន
+                                     </button>
+                                     <button
+                                       type="button"
+                                       onClick={() => setIndicatorValues((p) => ({ ...p, [key]: "false" }))}
+                                       style={{
+                                         flex: 1,
+                                         padding: "0.4rem 0.5rem",
+                                         border: isNotSelected ? "2px solid var(--primary)" : "1px solid var(--border)",
+                                         borderRadius: "4px",
+                                         background: isNotSelected ? "var(--primary)" : "var(--surface)",
+                                         color: isNotSelected ? "#fff" : "var(--text)",
+                                         cursor: "pointer",
+                                         fontSize: "0.8rem",
+                                         fontWeight: isNotSelected ? 600 : 400,
+                                         transition: "all 0.15s ease",
+                                       }}
+                                     >
+                                       មិនបាន/គ្មាន
+                                     </button>
+                                   </div>
+                                 ) : (
+                                   <div className="perf-input-group">
+                                     <input
+                                       type="number"
+                                       step="any"
+                                       min={dt === "percentage" ? 0 : (ind.min_value != null ? ind.min_value : undefined)}
+                                       max={dt === "percentage" ? 100 : (ind.max_value != null ? ind.max_value : undefined)}
+                                       value={val}
                                       onChange={(e) => {
                                         const v = e.target.value;
                                         if (dt === "percentage" && v !== "" && parseFloat(v) > 100) return;

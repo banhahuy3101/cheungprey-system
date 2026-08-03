@@ -14,10 +14,6 @@ export default function ProtectedRoute({
     return <Navigate to="/login" replace />;
   }
 
-  if (loading && !keepLayout) {
-    return <div className="loading">កំពុងផ្ទុក...</div>;
-  }
-
   if (!loading) {
     if (adminOnly && !isAdmin(user)) {
       return <Navigate to="/" replace />;

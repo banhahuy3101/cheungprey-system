@@ -13,7 +13,12 @@ export default function IndicatorManager() {
   const [loading, setLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
-  const [form, setForm] = useState({ code: "", name_kh: "", name_en: "", data_type: "number", unit_kh: "", unit_en: "", sort_order: 0 });
+  const [form, setForm] = useState({
+    code: "", name_kh: "", name_en: "", data_type: "number",
+    unit_kh: "", unit_en: "", sort_order: 0,
+    target_value: "", target_direction: "",
+    min_value: "", max_value: "",
+  });
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
 
@@ -39,7 +44,12 @@ export default function IndicatorManager() {
 
   const openCreate = () => {
     setEditing(null);
-    setForm({ code: "", name_kh: "", name_en: "", data_type: "number", unit_kh: "", unit_en: "", sort_order: 0 });
+    setForm({
+      code: "", name_kh: "", name_en: "", data_type: "number",
+      unit_kh: "", unit_en: "", sort_order: 0,
+      target_value: "", target_direction: "",
+      min_value: "", max_value: "",
+    });
     setModalOpen(true);
   };
 
@@ -53,6 +63,10 @@ export default function IndicatorManager() {
       unit_kh: ind.unit_kh || "",
       unit_en: ind.unit_en || "",
       sort_order: ind.sort_order,
+      target_value: ind.target_value != null ? String(ind.target_value) : "",
+      target_direction: ind.target_direction || "",
+      min_value: ind.min_value != null ? String(ind.min_value) : "",
+      max_value: ind.max_value != null ? String(ind.max_value) : "",
     });
     setModalOpen(true);
   };
@@ -66,11 +80,24 @@ export default function IndicatorManager() {
     e.preventDefault();
     if (!selectedSub) return;
     setSaving(true); setMessage("");
+    const payload = { ...form, sub_domain_id: selectedSub };
+    if (form.target_value !== "") payload.target_value = parseFloat(form.target_value);
+    else payload.target_value = null;
+    if (form.min_value !== "") payload.min_value = parseFloat(form.min_value);
+    else payload.min_value = null;
+    if (form.max_value !== "") payload.max_value = parseFloat(form.max_value);
+    else payload.max_value = null;
+    if (form.target_direction === "") payload.target_direction = null;
+    if (payload.min_value != null && payload.max_value != null && payload.min_value >= payload.max_value) {
+      setMessage("តម្លៃអប្បបរមាត្រូវតែតូចជាងតម្លៃអតិបរមា");
+      setSaving(false);
+      return;
+    }
     try {
       if (editing) {
-        await performanceAPI.updateIndicator(editing.id, { ...form, sub_domain_id: selectedSub });
+        await performanceAPI.updateIndicator(editing.id, payload);
       } else {
-        await performanceAPI.createIndicator({ ...form, sub_domain_id: selectedSub });
+        await performanceAPI.createIndicator(payload);
       }
       setMessage(editing ? "Updated." : "Created.");
       closeModal();
@@ -112,13 +139,14 @@ export default function IndicatorManager() {
           {loading ? <div className="loading">កំពុងផ្ទុក...</div> : (
             <div className="table-responsive">
               <table className="table">
-                <thead><tr><th>Code</th><th>ឈ្មោះខ្មែរ</th><th>Type</th><th>Sort</th><th></th></tr></thead>
+                <thead><tr><th>Code</th><th>ឈ្មោះខ្មែរ</th><th>Type</th><th>Target</th><th>Sort</th><th></th></tr></thead>
                 <tbody>
                   {indicators.map((ind) => (
                     <tr key={ind.id}>
                       <td>{ind.code}</td>
                       <td>{ind.name_kh}</td>
                       <td>{ind.data_type}</td>
+                      <td>{ind.target_value != null ? `${ind.target_value}${ind.target_direction === "lower_is_better" ? "↓" : "↑"}` : "—"}</td>
                       <td>{ind.sort_order}</td>
                       <td>
                         <div className="actions">
@@ -171,6 +199,52 @@ export default function IndicatorManager() {
               <input value={form.unit_en} onChange={(e) => setForm({ ...form, unit_en: e.target.value })} />
             </div>
           </div>
+          {(form.data_type === "number" || form.data_type === "percentage") && (
+            <div className="form-row">
+              <div className="form-group">
+                <label>តម្លៃគោលដៅ (Target)</label>
+                <input
+                  type="number"
+                  step="any"
+                  value={form.target_value}
+                  onChange={(e) => setForm({ ...form, target_value: e.target.value })}
+                  placeholder="e.g. 100"
+                />
+              </div>
+              <div className="form-group">
+                <label>ទិសដៅគោលដៅ</label>
+                <Select value={form.target_direction} onChange={(e) => setForm({ ...form, target_direction: e.target.value })}>
+                  <option value="">— គ្មាន —</option>
+                  <option value="higher_is_better">ខ្ពស់ជាង = ល្អ (↑)</option>
+                  <option value="lower_is_better">ទាបជាង = ល្អ (↓)</option>
+                </Select>
+              </div>
+            </div>
+          )}
+          {form.data_type === "number" && (
+            <div className="form-row">
+              <div className="form-group">
+                <label>តម្លៃអប្បបរមា (Min)</label>
+                <input
+                  type="number"
+                  step="any"
+                  value={form.min_value}
+                  onChange={(e) => setForm({ ...form, min_value: e.target.value })}
+                  placeholder="e.g. 0"
+                />
+              </div>
+              <div className="form-group">
+                <label>តម្លៃអតិបរមា (Max)</label>
+                <input
+                  type="number"
+                  step="any"
+                  value={form.max_value}
+                  onChange={(e) => setForm({ ...form, max_value: e.target.value })}
+                  placeholder="e.g. 1000"
+                />
+              </div>
+            </div>
+          )}
           <div style={{ display: "flex", gap: "0.5rem", marginTop: "1rem" }}>
             <button type="submit" className="btn btn-primary" disabled={saving}>
               <LuSave /> {saving ? "..." : editing ? "ធ្វើបច្ចុប្បន្នភាព" : "រក្សាទុក"}

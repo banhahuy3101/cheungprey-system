@@ -6,6 +6,8 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io"
+	"log"
+	"mime/multipart"
 	"net/http"
 	"path/filepath"
 	"regexp"
@@ -30,7 +32,8 @@ func NewReportTemplateHandler(repo *repository.Repository) *ReportTemplateHandle
 }
 
 func (h *ReportTemplateHandler) List(c *gin.Context) {
-	templates, err := h.repo.ListReportTemplates()
+	category := c.Query("category")
+	templates, err := h.repo.ListReportTemplates(category)
 	if err != nil {
 		utils.InternalError(c, "Failed to fetch templates")
 		return
@@ -41,6 +44,59 @@ func (h *ReportTemplateHandler) List(c *gin.Context) {
 	utils.JSON(c, http.StatusOK, templates)
 }
 
+func validateDocxUpload(file *multipart.FileHeader) error {
+	if file.Size > 10*1024*1024 {
+		return fmt.Errorf("ឯកសារធំពេក (លើស 10 MB)")
+	}
+
+	src, err := file.Open()
+	if err != nil {
+		return fmt.Errorf("មិនអាចអានឯកសារ")
+	}
+	defer src.Close()
+
+	buf := make([]byte, 2)
+	if _, err := io.ReadFull(src, buf); err != nil {
+		return fmt.Errorf("ឯកសារ DOCX មិនត្រឹមត្រូវ")
+	}
+	if string(buf) != "PK" {
+		return fmt.Errorf("ឯកសារ DOCX មិនត្រឹមត្រូវ — មិនមែនជាឯកសារ ZIP")
+	}
+
+	data, err := io.ReadAll(io.MultiReader(bytes.NewReader(buf), src))
+	if err != nil {
+		return fmt.Errorf("មិនអាចអានឯកសារ")
+	}
+
+	r, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
+	if err != nil {
+		return fmt.Errorf("ឯកសារ DOCX ខូច — មិនអាចបើក ZIP")
+	}
+
+	hasDocXML := false
+	for _, f := range r.File {
+		if f.Name == "word/document.xml" {
+			rc, err := f.Open()
+			if err != nil {
+				return fmt.Errorf("ឯកសារ DOCX ខូច — មិនអាចអាន document.xml")
+			}
+			decoder := xml.NewDecoder(rc)
+			if _, err := decoder.Token(); err != nil {
+				rc.Close()
+				return fmt.Errorf("ឯកសារ DOCX ខូច — XML មិនត្រឹមត្រូវ")
+			}
+			rc.Close()
+			hasDocXML = true
+			break
+		}
+	}
+	if !hasDocXML {
+		return fmt.Errorf("ឯកសារ DOCX មិនមាន document.xml")
+	}
+
+	return nil
+}
+
 func (h *ReportTemplateHandler) Upload(c *gin.Context) {
 	name := c.PostForm("name")
 	if name == "" {
@@ -48,6 +104,7 @@ func (h *ReportTemplateHandler) Upload(c *gin.Context) {
 		return
 	}
 	description := c.PostForm("description")
+	category := c.PostForm("category")
 	format := c.PostForm("format")
 	if format != "docx" && format != "html" {
 		utils.BadRequest(c, "Format must be docx or html")
@@ -64,6 +121,7 @@ func (h *ReportTemplateHandler) Upload(c *gin.Context) {
 		ID:          uuid.New(),
 		Name:        name,
 		Description: description,
+		Category:    category,
 		Format:      format,
 		CreatedBy:   userID,
 		CreatedAt:   time.Now(),
@@ -76,6 +134,12 @@ func (h *ReportTemplateHandler) Upload(c *gin.Context) {
 			utils.BadRequest(c, "File is required for docx format")
 			return
 		}
+
+		if err := validateDocxUpload(file); err != nil {
+			utils.BadRequest(c, err.Error())
+			return
+		}
+
 		tmpl.FileName = file.Filename
 		tmpl.FileSize = file.Size
 		safeName := sanitizeFilename(file.Filename)
@@ -166,12 +230,19 @@ func (h *ReportTemplateHandler) Update(c *gin.Context) {
 	}
 	tmpl.Name = name
 	tmpl.Description = c.PostForm("description")
+	if cat := c.PostForm("category"); cat != "" {
+		tmpl.Category = cat
+	}
 	tmpl.UpdatedAt = time.Now()
 
 	if tmpl.Format == "docx" {
 		file, err := c.FormFile("file")
 		if err == nil {
-			// New file uploaded — replace old one
+			if err := validateDocxUpload(file); err != nil {
+				utils.BadRequest(c, err.Error())
+				return
+			}
+
 			if tmpl.StoragePath != "" {
 				_ = h.repo.DeleteTemplateFile(tmpl.StoragePath)
 			}
@@ -285,6 +356,64 @@ func (h *ReportTemplateHandler) Delete(c *gin.Context) {
 	utils.JSON(c, http.StatusOK, gin.H{"message": "deleted"})
 }
 
+func (h *ReportTemplateHandler) Duplicate(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		utils.BadRequest(c, "Invalid template ID")
+		return
+	}
+
+	userID, err := auth.GetUserID(c)
+	if err != nil {
+		utils.Unauthorized(c, "Authentication required")
+		return
+	}
+
+	orig, err := h.repo.GetReportTemplateByID(id)
+	if err != nil || orig == nil {
+		utils.Error(c, http.StatusNotFound, "Template not found")
+		return
+	}
+
+	newID := uuid.New()
+	newName := "ច្បាប់ចម្លងនៃ " + orig.Name
+	now := time.Now()
+
+	dup := &models.ReportTemplate{
+		ID:          newID,
+		Name:        newName,
+		Description: orig.Description,
+		Category:    orig.Category,
+		Format:      orig.Format,
+		FileName:    orig.FileName,
+		FileSize:    orig.FileSize,
+		Content:     orig.Content,
+		Keys:        append([]string{}, orig.Keys...),
+		CreatedBy:   userID,
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	}
+
+	if orig.StoragePath != "" {
+		newStoragePath := fmt.Sprintf("%s/%s", newID.String(), sanitizeFilename(orig.FileName))
+		if err := h.repo.CopyTemplateFile(orig.StoragePath, newStoragePath); err != nil {
+			utils.InternalError(c, "Failed to copy template file")
+			return
+		}
+		dup.StoragePath = newStoragePath
+	}
+
+	if err := h.repo.DuplicateReportTemplate(dup); err != nil {
+		if dup.StoragePath != "" {
+			_ = h.repo.DeleteTemplateFile(dup.StoragePath)
+		}
+		utils.InternalError(c, "Failed to duplicate template: "+err.Error())
+		return
+	}
+
+	utils.JSON(c, http.StatusCreated, dup)
+}
+
 func sanitizeFilename(name string) string {
 	ext := filepath.Ext(name)
 	base := strings.TrimSuffix(name, ext)
@@ -387,4 +516,35 @@ func (h *ReportTemplateHandler) AddKey(c *gin.Context) {
 	utils.JSON(c, http.StatusOK, tmpl)
 }
 
+func (h *ReportTemplateHandler) DownloadFilled(c *gin.Context) {
+	path := c.Query("path")
+	if path == "" {
+		utils.BadRequest(c, "Path is required")
+		return
+	}
 
+	// For security, ensure the path starts with "filled/"
+	if !strings.HasPrefix(path, "filled/") {
+		utils.BadRequest(c, "Invalid path")
+		return
+	}
+
+	data, err := h.repo.DownloadTemplateFile(path)
+	if err != nil {
+		log.Printf("ERROR download filled template file: %v", err)
+		utils.InternalError(c, "Failed to download filled file")
+		return
+	}
+
+	filename := filepath.Base(path)
+	contentType := "application/octet-stream"
+	if strings.HasSuffix(filename, ".docx") {
+		contentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+	} else if strings.HasSuffix(filename, ".html") {
+		contentType = "text/html"
+	}
+
+	c.Header("Content-Description", "File Transfer")
+	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filename))
+	c.Data(http.StatusOK, contentType, data)
+}

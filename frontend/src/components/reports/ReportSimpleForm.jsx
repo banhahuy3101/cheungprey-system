@@ -9,7 +9,6 @@ import {
   buildSimpleReportPayload,
   docToSimpleForm,
 } from "../../utils/reportForm";
-import { openBlobFile, base64ToBlob } from "../../utils/file";
 
 function formatDate(iso) {
   if (!iso) return "—";
@@ -106,52 +105,36 @@ export default function ReportSimpleForm({ mode = "create", reportId, initialDoc
     return <div className="loading">កំពុងផ្ទុក...</div>;
   }
 
-  const viewActions = (
-    <>
-      <button type="button" className="btn btn-secondary" onClick={() => navigate("/reports")}>
-        ត្រឡប់
-      </button>
-      <button type="button" className="btn btn-secondary" onClick={handleDownload} disabled={downloading}>
-        <LuDownload /> {downloading ? "កំពុងទាញយក..." : "ទាញយក PDF"}
-      </button>
-      <button type="button" className="btn btn-primary" onClick={() => navigate(`/reports/${reportId}/edit`)}>
-        <LuPencil /> កែប្រែ
-      </button>
-    </>
-  );
-
-  const editActions = (
-    <>
-      <button
-        type="button"
-        className="btn btn-secondary"
-        onClick={() => navigate(isEdit ? `/reports/${reportId}` : "/reports")}
-      >
-        បោះបង់
-      </button>
-      <button type="submit" form="report-simple-form" className="btn btn-primary" disabled={saving}>
-        <LuSave /> {saving ? "កំពុងរក្សាទុក..." : "រក្សាទុក"}
-      </button>
-    </>
+  const backBtn = (
+    <button
+      type="button"
+      className="btn-icon report-back-btn"
+      onClick={() => navigate("/reports")}
+      title="ត្រឡប់"
+    >
+      <LuArrowLeft size={20} />
+    </button>
   );
 
   if (isView) {
     return (
-      <div className="page report-page report-view-page" lang="km">
+      <>
         <div className="report-form-topbar">
-          <button
-            type="button"
-            className="btn-icon report-back-btn"
-            onClick={() => navigate("/reports")}
-            title="ត្រឡប់"
-          >
-            <LuArrowLeft size={20} />
-          </button>
+          {backBtn}
           <ReportHero
             variant="view"
             title="មើលរបាយការណ៍"
             subtitle={form.title || "—"}
-            actions={viewActions}
+            actions={
+              <>
+                <button type="button" className="btn btn-secondary" onClick={handleDownload} disabled={downloading}>
+                  <LuDownload size={14} /> {downloading ? "..." : "ទាញយក PDF"}
+                </button>
+                <button type="button" className="btn btn-primary" onClick={() => navigate(`/reports/${reportId}/edit`)}>
+                  <LuPencil size={14} /> កែប្រែ
+                </button>
+              </>
+            }
           />
         </div>
 
@@ -160,10 +143,13 @@ export default function ReportSimpleForm({ mode = "create", reportId, initialDoc
         <div className="card report-view-card">
           <div className="report-view-meta">
             <span className="report-status-badge" data-status={meta?.status || "draft"}>
-              {meta?.status === "published" ? "បានចេញ" : "ព្រាង"}
+              {meta?.status === "pending_review" ? "កំពុងពិនិត្យ"
+                : meta?.status === "rejected" ? "បានបដិសេធ"
+                : meta?.status === "published" ? "បានចេញ"
+                : "ព្រាង"}
             </span>
             <span className="report-view-date">
-              <LuCalendar aria-hidden />
+              <LuCalendar size={14} aria-hidden />
               កែប្រែចុងក្រោយ: {formatDate(meta?.updated_at)}
             </span>
           </div>
@@ -183,28 +169,32 @@ export default function ReportSimpleForm({ mode = "create", reportId, initialDoc
             )}
           </div>
         </div>
-      </div>
+      </>
     );
   }
 
   return (
     <form
       id="report-simple-form"
-      className="page report-page report-create-page"
+      className="report-create-page"
       lang="km"
       onSubmit={handleSubmit}
       noValidate
     >
       <div className="report-create-toolbar">
-        <button
-          type="button"
-          className="btn-icon report-back-btn"
-          onClick={() => navigate(isEdit ? `/reports/${reportId}` : "/reports")}
-          title="ត្រឡប់"
-        >
-          <LuArrowLeft size={20} />
-        </button>
-        <div className="report-create-toolbar-actions">{editActions}</div>
+        {backBtn}
+        <div className="report-create-toolbar-actions">
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => navigate(isEdit ? `/reports/${reportId}` : "/reports")}
+          >
+            បោះបង់
+          </button>
+          <button type="submit" className="btn btn-primary" disabled={saving}>
+            <LuSave size={14} /> {saving ? "កំពុងរក្សាទុក..." : "រក្សាទុក"}
+          </button>
+        </div>
       </div>
 
       {error && <div className="alert alert-error report-flash">{error}</div>}

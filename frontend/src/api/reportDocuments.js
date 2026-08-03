@@ -25,12 +25,16 @@ async function saveBlobResponse(res, title, mimeType, ext) {
 export const reportDocumentsAPI = {
   create: (data) => client.post("/report-documents", data),
   createSimple: (data) => client.post("/report-documents/simple", data),
-  getAll: () => client.get("/report-documents"),
+  getAll: (params = {}) => client.get("/report-documents", { params }),
   getById: (id) => client.get(`/report-documents/${id}`),
   update: (id, data) => client.put(`/report-documents/${id}`, data),
   updateSimple: (id, data) => client.put(`/report-documents/${id}/simple`, data),
   confirmStatus: (id) => client.put(`/report-documents/${id}/status`, { status: "published" }),
+  submit: (id) => client.put(`/report-documents/${id}/submit`),
+  reject: (id, reason) => client.put(`/report-documents/${id}/reject`, { reason }),
+  getReviews: (id) => client.get(`/report-documents/${id}/reviews`),
   delete: (id) => client.delete(`/report-documents/${id}`),
+  restore: (id) => client.put(`/report-documents/${id}/restore`),
   downloadPDF: async (id, title) => {
     try {
       const res = await client.get(`/report-documents/${id}/pdf`, {

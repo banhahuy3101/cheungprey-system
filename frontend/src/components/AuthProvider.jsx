@@ -1,37 +1,49 @@
 import { useState, useEffect, useCallback } from "react";
-import { useLocation } from "react-router-dom";
 import AuthContext from "../context/AuthContext";
 import { authAPI } from "../api/auth";
 
-function isPublicAuthPage(pathname) {
-  return pathname === "/login" || pathname === "/register";
-}
-
 export default function AuthProvider({ children }) {
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState(() => {
+    try {
+      const cached = localStorage.getItem("cached_user_profile");
+      return cached ? JSON.parse(cached) : null;
+    } catch {
+      return null;
+    }
+  });
   const [loading, setLoading] = useState(true);
-  const location = useLocation();
 
   const loadProfile = useCallback(async () => {
     const token = localStorage.getItem("access_token");
     if (!token) {
+      localStorage.removeItem("cached_user_profile");
       return null;
     }
     try {
       const { data } = await authAPI.getProfile();
       const inner = data.data || data;
-      return inner.profile || inner;
+      const profile = inner.profile || inner;
+      localStorage.setItem("cached_user_profile", JSON.stringify(profile));
+      return profile;
     } catch {
       localStorage.removeItem("access_token");
       localStorage.removeItem("refresh_token");
+      localStorage.removeItem("cached_user_profile");
       return null;
     }
   }, []);
 
   useEffect(() => {
-    if (isPublicAuthPage(location.pathname)) {
+    const token = localStorage.getItem("access_token");
+    if (!token) {
+      setUser(null);
       setLoading(false);
-      return undefined;
+      return;
+    }
+
+    if (user) {
+      setLoading(false);
+      return;
     }
 
     let cancelled = false;
@@ -42,14 +54,16 @@ export default function AuthProvider({ children }) {
         setLoading(false);
       }
     });
+
     return () => {
       cancelled = true;
     };
-  }, [loadProfile, location.pathname]);
+  }, [loadProfile, user]);
 
   const login = async (credentials) => {
     localStorage.removeItem("access_token");
     localStorage.removeItem("refresh_token");
+    localStorage.removeItem("cached_user_profile");
 
     const { data } = await authAPI.login({
       email: credentials?.email?.trim() ?? "",
@@ -64,7 +78,11 @@ export default function AuthProvider({ children }) {
     if (inner.refresh_token) {
       localStorage.setItem("refresh_token", inner.refresh_token);
     }
-    setUser(inner.user || null);
+    const loggedUser = inner.user || null;
+    if (loggedUser) {
+      localStorage.setItem("cached_user_profile", JSON.stringify(loggedUser));
+    }
+    setUser(loggedUser);
     return inner;
   };
 
@@ -76,13 +94,19 @@ export default function AuthProvider({ children }) {
   const logout = () => {
     localStorage.removeItem("access_token");
     localStorage.removeItem("refresh_token");
+    localStorage.removeItem("cached_user_profile");
     setUser(null);
   };
 
   const updateProfile = async (profileData) => {
     const { data } = await authAPI.updateProfile(profileData);
     const inner = data.data || data;
-    setUser((prev) => ({ ...prev, ...(inner.profile || inner) }));
+    const updated = inner.profile || inner;
+    setUser((prev) => {
+      const next = { ...prev, ...updated };
+      localStorage.setItem("cached_user_profile", JSON.stringify(next));
+      return next;
+    });
     return inner;
   };
 

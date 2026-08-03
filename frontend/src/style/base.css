@@ -1,0 +1,60 @@
+/* ===== CSS Variables & Reset ===== */
+:root {
+  --sidebar-width: 260px;
+  --topbar-height: 60px;
+  --primary: #1e40af;
+  --primary-light: #3b82f6;
+  --primary-dark: #1e3a8a;
+  --danger: #dc2626;
+  --danger-light: #fca5a5;
+  --success: #059669;
+  --success-light: #6ee7b7;
+  --warning: #d97706;
+  --warning-light: #fcd34d;
+  --bg: #f1f5f9;
+  --surface: #ffffff;
+  --text: #1e293b;
+  --text-muted: #64748b;
+  --border: #e2e8f0;
+  --radius: 8px;
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 10px 25px rgba(0, 0, 0, 0.1);
+  --transition: 0.2s ease;
+  --font-family: "Kantumruy Pro", "Noto Sans Khmer", "Khmer OS", "Leelawadee UI", system-ui, sans-serif;
+  --font-khmer: "Kantumruy Pro", "Noto Sans Khmer", "Khmer OS", "Leelawadee UI", system-ui, sans-serif;
+  --font-mono: ui-monospace, "Cascadia Code", "Segoe UI Mono", monospace;
+}
+
+*,
+*::before,
+*::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html {
+  font-size: 14px;
+}
+
+html,
+body,
+button,
+input,
+select,
+textarea {
+  font-family: var(--font-family) !important;
+}
+
+body {
+  color: var(--text);
+  background: var(--bg);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: var(--primary-light);
+  text-decoration: none;
+}
+

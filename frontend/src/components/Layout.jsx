@@ -186,11 +186,7 @@ export default function Layout() {
         </header>
         <div className="content-area">
           <ErrorBoundary>
-            {loading ? (
-              <div className="loading">កំពុងផ្ទុក...</div>
-            ) : (
-              <Outlet />
-            )}
+            <Outlet />
           </ErrorBoundary>
         </div>
       </main>
