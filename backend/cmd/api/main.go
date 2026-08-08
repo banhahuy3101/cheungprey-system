@@ -9,6 +9,7 @@ import (
 	"github.com/joho/godotenv"
 
 	"github.com/banhahuy/cheungprey-system/backend/internal/auth"
+	"github.com/banhahuy/cheungprey-system/backend/internal/cron"
 	"github.com/banhahuy/cheungprey-system/backend/internal/handlers"
 	"github.com/banhahuy/cheungprey-system/backend/internal/models"
 	"github.com/banhahuy/cheungprey-system/backend/internal/repository"
@@ -43,6 +44,10 @@ func main() {
 		}
 	}()
 
+	// Start nightly cron scheduler (runs at 00:00 Cambodia time)
+	cronScheduler := cron.New(repo)
+	cronScheduler.Start()
+
 	permSvc := service.NewPermissionService(repo)
 
 	authHandler := handlers.NewAuthHandler(repo, cfg)
@@ -50,6 +55,7 @@ func main() {
 	adminHandler := handlers.NewAdminHandler(repo, cfg)
 	permissionHandler := handlers.NewPermissionHandler(repo)
 	hierarchyHandler := handlers.NewHierarchyHandler(repo)
+	cronHandler := handlers.NewCronHandler(cronScheduler)
 	reportService := services.NewReportService("fonts")
 	reportHandler := handlers.NewReportHandler(repo, reportService)
 	partyHandler := handlers.NewPartyHandler(repo, reportService)
@@ -60,6 +66,7 @@ func main() {
 
 	r := gin.Default()
 	r.Use(middleware.CORS())
+	r.Use(middleware.Telegram(repo))
 
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{"status": "ok", "message": "server is running"})
@@ -107,6 +114,8 @@ func main() {
 				admin.POST("/roles", permissionHandler.CreateRole)
 				admin.PUT("/roles/:role", permissionHandler.UpdateRole)
 				admin.DELETE("/roles/:role", permissionHandler.DeleteRole)
+				admin.GET("/cron/status", cronHandler.Status)
+				admin.POST("/cron/run", cronHandler.RunNow)
 			}
 
 			records := protected.Group("/records")

@@ -84,7 +84,11 @@ export default function PeriodManager() {
 
   return (
     <div>
-      {message && <div className="alert alert-success">{message}</div>}
+      {message && (
+        <div className={`alert ${message.includes("failed") || message.includes("សូម") ? "alert-error" : "alert-success"}`} style={{ marginBottom: "1rem" }}>
+          {message}
+        </div>
+      )}
       <div style={{ marginBottom: "1rem" }}>
         <button className="btn btn-primary" onClick={openCreate}><LuPlus /> បន្ថែមរយៈពេលថ្មី</button>
       </div>
@@ -116,11 +120,11 @@ export default function PeriodManager() {
           <div className="form-row">
             <div className="form-group">
               <label>ចាប់ពីថ្ងៃ *</label>
-              <input type="date" value={form.start_date} onChange={(e) => setForm({ ...form, start_date: e.target.value })} required />
+              <input type="date" value={form.start_date} onChange={(e) => setForm({ ...form, start_date: e.target.value, label_kh: "", label_en: "" })} required />
             </div>
             <div className="form-group">
               <label>ដល់ថ្ងៃ *</label>
-              <input type="date" value={form.end_date} onChange={(e) => setForm({ ...form, end_date: e.target.value })} required />
+              <input type="date" value={form.end_date} onChange={(e) => setForm({ ...form, end_date: e.target.value, label_kh: "", label_en: "" })} required />
             </div>
           </div>
           <div className="form-row" style={{ marginTop: "0.5rem" }}>

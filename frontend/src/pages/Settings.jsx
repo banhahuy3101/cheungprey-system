@@ -8,12 +8,11 @@ export default function Settings() {
   const { user } = useAuth();
 
   const items = [
-    { key: FEATURES.performance_admin, icon: LuCalendarRange, title: "គ្រប់គ្រងរយៈពេល", desc: "បន្ថែម ឬលុបរយៈពេលសម្រាប់របាយការណ៍", path: "/settings/performance_period" },
-    { key: FEATURES.performance_admin, icon: LuTarget, title: "គ្រប់គ្រង Performance", desc: "គ្រប់គ្រងដែន ចំណុចរង សូចនាករ និងរយៈពេល", path: "/settings/performance" },
     { key: FEATURES.users, icon: LuShield, title: "គ្រប់គ្រងអ្នកប្រើប្រាស់", desc: "បន្ថែម កែប្រែ ឬលុបអ្នកប្រើប្រាស់", path: "/settings/users" },
     { key: FEATURES.users, icon: LuKeyRound, title: "សិទ្ធិតួនាទី", desc: "កំណត់ feature allow/none សម្រាប់រដ្ឋបាលនីមួយៗ", path: "/settings/role-permissions" },
     { key: FEATURES.reports, icon: LuFileText, title: "គំរូរបាយការណ៍", desc: "បញ្ចូល និងគ្រប់គ្រងគំរូ .docx / .html សម្រាប់របាយការណ៍", path: "/settings/report-templates" },
     { key: FEATURES.technical, icon: LuWrench, title: "Technical", desc: "System settings — ពាក្យសម្ងាត់ដើម និងការកំណត់ប្រព័ន្ធ", path: "/settings/technical" },
+    { key: FEATURES.performance_admin, icon: LuTarget, title: "គ្រប់គ្រង Performance", desc: "គ្រប់គ្រងដែន ចំណុចរង សូចនាករ និងរយៈពេល", path: "/settings/performance" },
   ];
 
   return (

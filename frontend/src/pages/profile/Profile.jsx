@@ -1,10 +1,13 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { LuUser, LuMail, LuPhone, LuMapPin, LuShield, LuPencil, LuCheck, LuArrowLeft } from "react-icons/lu";
 import { useAuth } from "../../hooks/useAuth";
 import { adminAPI } from "../../api/admin";
+import { authAPI } from "../../api/auth";
 import { isAdmin as userIsAdmin } from "../../utils/permissions";
 import { useRoleOptions } from "../../hooks/useRoleOptions";
+import ZoneCascadeSelect from "../../components/ZoneCascadeSelect";
+import { useZoneCascade } from "../../hooks/useZoneCascade";
 
 const ROLE_OPTIONS_FALLBACK = [
   { value: "recorder", label: "Recorder" },
@@ -21,6 +24,152 @@ function formatDate(value) {
   return value.slice(0, 10);
 }
 
+function SignatureDrawPad({ value, onChange }) {
+  const canvasRef = useRef(null);
+  const isDrawingRef = useRef(false);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    ctx.lineWidth = 3;
+    ctx.lineCap = "round";
+    ctx.strokeStyle = "#1e293b"; // Slate-800
+
+    if (value) {
+      const img = new Image();
+      img.onload = () => {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0);
+      };
+      img.src = value;
+    } else {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+  }, [value]);
+
+  const getCoordinates = (e) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return { x: 0, y: 0 };
+    const rect = canvas.getBoundingClientRect();
+    if (e.touches && e.touches[0]) {
+      return {
+        x: e.touches[0].clientX - rect.left,
+        y: e.touches[0].clientY - rect.top,
+      };
+    }
+    return {
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top,
+    };
+  };
+
+  const startDrawing = (e) => {
+    e.preventDefault();
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    const { x, y } = getCoordinates(e);
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    isDrawingRef.current = true;
+  };
+
+  const draw = (e) => {
+    if (!isDrawingRef.current) return;
+    e.preventDefault();
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext("2d");
+    const { x, y } = getCoordinates(e);
+    ctx.lineTo(x, y);
+    ctx.stroke();
+  };
+
+  const stopDrawing = () => {
+    if (!isDrawingRef.current) return;
+    isDrawingRef.current = false;
+    const canvas = canvasRef.current;
+    if (canvas) {
+      onChange(canvas.toDataURL("image/png"));
+    }
+  };
+
+  const clearCanvas = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    onChange("");
+  };
+
+  const handleImageUpload = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.type !== "image/png") {
+      alert("សូមជ្រើសរើសតែរូបភាពប្រភេទ PNG ប៉ុណ្ណោះ! (Please upload PNG image only)");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      onChange(event.target.result);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+      <div style={{ position: "relative", width: "100%", maxWidth: "400px", height: "150px", border: "1px dashed #cbd5e1", borderRadius: "8px", background: "#f8fafc", overflow: "hidden" }}>
+        <canvas
+          ref={canvasRef}
+          width={400}
+          height={150}
+          onMouseDown={startDrawing}
+          onMouseMove={draw}
+          onMouseUp={stopDrawing}
+          onMouseLeave={stopDrawing}
+          onTouchStart={startDrawing}
+          onTouchMove={draw}
+          onTouchEnd={stopDrawing}
+          style={{ width: "100%", height: "100%", cursor: "crosshair", display: "block" }}
+        />
+      </div>
+      <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+        <button
+          type="button"
+          className="btn btn-secondary btn-sm"
+          onClick={clearCanvas}
+          style={{ padding: "0.2rem 0.6rem", fontSize: "0.78rem" }}
+        >
+          លុបហត្ថលេខា
+        </button>
+        <label
+          className="btn btn-secondary btn-sm"
+          style={{
+            padding: "0.2rem 0.6rem",
+            fontSize: "0.78rem",
+            cursor: "pointer",
+            display: "inline-flex",
+            alignItems: "center",
+            background: "#f1f5f9",
+            border: "1px solid #cbd5e1",
+            borderRadius: "6px",
+          }}
+        >
+          📤 ផ្ទុកឡើងរូបភាព (PNG)
+          <input
+            type="file"
+            accept="image/png"
+            onChange={handleImageUpload}
+            style={{ display: "none" }}
+          />
+        </label>
+      </div>
+    </div>
+  );
+}
+
 export default function Profile() {
   const { user, refreshProfile } = useAuth();
   const navigate = useNavigate();
@@ -33,6 +182,7 @@ export default function Profile() {
     phone_number: user?.phone_number || "",
     zone_code: user?.zone_code || "",
     role: user?.role || "",
+    signature: user?.signature || "",
     password: "",
   });
   const [saving, setSaving] = useState(false);
@@ -41,6 +191,13 @@ export default function Profile() {
 
   const isAdmin = userIsAdmin(user);
   const displayRoles = user?.roles?.length ? user.roles : (user?.role ? [user.role] : []);
+
+  const zoneHook = useZoneCascade({
+    userZone: user?.zone_code || "",
+    isAdmin: isAdmin,
+    initialZoneCode: user?.zone_code || "",
+    showVillage: true,
+  });
 
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
@@ -51,13 +208,23 @@ export default function Profile() {
     setError("");
     setSuccess("");
     try {
-      await adminAPI.updateUser(user.id, {
-        full_name: form.full_name,
-        email: form.email,
-        phone_number: form.phone_number || undefined,
-        zone_code: isAdmin ? (form.zone_code || undefined) : undefined,
-        role: isAdmin ? form.role : undefined,
-      });
+      if (isAdmin) {
+        await adminAPI.updateUser(user.id, {
+          full_name: form.full_name,
+          email: form.email,
+          phone_number: form.phone_number || undefined,
+          zone_code: zoneHook.resolvedZone || undefined,
+          role: user.role, // role can't edit, keep original user role
+          signature: form.signature || undefined,
+        });
+      } else {
+        await authAPI.updateProfile({
+          full_name: form.full_name,
+          phone_number: form.phone_number || undefined,
+          signature: form.signature || undefined,
+        });
+      }
+
       if (form.password) {
         await adminAPI.resetUserPassword(user.id, form.password);
       }
@@ -80,9 +247,15 @@ export default function Profile() {
       phone_number: user?.phone_number || "",
       zone_code: user?.zone_code || "",
       role: user?.role || "",
+      signature: user?.signature || "",
       password: "",
     });
     setError("");
+    if (user?.zone_code) {
+      zoneHook.loadFromZoneCode(user.zone_code);
+    } else {
+      zoneHook.resetSelection();
+    }
   };
 
   if (!user) {
@@ -171,6 +344,26 @@ export default function Profile() {
               <span className="profile-detail-label">ធ្វើបច្ចុប្បន្នភាពចុងក្រោយ</span>
               <span className="profile-detail-value">{formatDate(user.updated_at)}</span>
             </div>
+            <div className="profile-detail-item" style={{ gridColumn: "span 2" }}>
+              <span className="profile-detail-label"><LuPencil size={14} /> ហត្ថលេខា</span>
+              <span className="profile-detail-value" style={{ marginTop: "0.5rem" }}>
+                {user.signature ? (
+                  <img
+                    src={user.signature}
+                    alt="ហត្ថលេខា"
+                    style={{
+                      maxHeight: "80px",
+                      background: "#ffffff",
+                      border: "1px dashed #cbd5e1",
+                      borderRadius: "8px",
+                      padding: "4px",
+                    }}
+                  />
+                ) : (
+                  <span style={{ color: "var(--text-muted)", fontStyle: "italic" }}>មិនទាន់មានហត្ថលេខា</span>
+                )}
+              </span>
+            </div>
           </div>
         ) : (
           <>
@@ -188,17 +381,24 @@ export default function Profile() {
             </div>
             {isAdmin && (
               <>
-                <div className="form-group">
-                  <label>តំបន់ (Zone Code)</label>
-                  <input name="zone_code" value={form.zone_code} onChange={handleChange} />
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "1rem", width: "100%", marginBottom: "1rem" }}>
+                  <ZoneCascadeSelect hook={zoneHook} />
                 </div>
                 <div className="form-group">
-                  <label>តួនាទី</label>
-                  <select name="role" value={form.role} onChange={handleChange}>
-                    {(roleOptions.length ? roleOptions : ROLE_OPTIONS_FALLBACK).map((r) => (
-                      <option key={r.value} value={r.value}>{r.label}</option>
-                    ))}
-                  </select>
+                  <label>តួនាទី (មិនអាចកែប្រែបាន)</label>
+                  <input
+                    type="text"
+                    value={roleLabelMap[user.role] || user.role}
+                    disabled
+                    style={{
+                      background: "#f1f5f9",
+                      color: "#64748b",
+                      border: "1px solid #cbd5e1",
+                      borderRadius: "6px",
+                      padding: "0.5rem",
+                      cursor: "not-allowed",
+                    }}
+                  />
                 </div>
               </>
             )}
@@ -210,6 +410,13 @@ export default function Profile() {
                 value={form.password}
                 onChange={handleChange}
                 placeholder="ទុកទទេរ"
+              />
+            </div>
+            <div className="form-group" style={{ gridColumn: "span 2" }}>
+              <label style={{ display: "block", marginBottom: "0.5rem" }}><LuPencil size={14} /> គូរហត្ថលេខា</label>
+              <SignatureDrawPad
+                value={form.signature}
+                onChange={(val) => setForm((prev) => ({ ...prev, signature: val }))}
               />
             </div>
             <div className="profile-actions" style={{ justifyContent: "flex-end" }}>

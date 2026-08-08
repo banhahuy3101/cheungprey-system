@@ -29,6 +29,7 @@ type ReportDocument struct {
 	HumanFatalities           int        `json:"human_fatalities"`
 	PropertyDamageDesc        string     `json:"property_damage_desc"`
 	Status                    string     `json:"status"`
+	RequireSignature          bool       `json:"require_signature"`
 	CreatedBy                 uuid.UUID  `json:"created_by"`
 	CreatedAt                 time.Time  `json:"created_at"`
 	UpdatedAt                 time.Time  `json:"updated_at"`
@@ -51,6 +52,7 @@ type ReportDocumentPayload struct {
 	HumanFatalities           int    `json:"human_fatalities"`
 	PropertyDamageDesc        string `json:"property_damage_desc"`
 	Status                    string `json:"status,omitempty"`
+	RequireSignature          *bool  `json:"require_signature,omitempty"`
 }
 
 type CreateReportDocumentRequest = ReportDocumentPayload
@@ -58,17 +60,19 @@ type CreateReportDocumentRequest = ReportDocumentPayload
 type UpdateReportDocumentRequest = ReportDocumentPayload
 
 type CreateSimpleReportDocumentRequest struct {
-	Title       string `json:"title"`
-	Description string `json:"description"`
-	Content     string `json:"content"`
-	Category    string `json:"category"`
+	Title            string `json:"title"`
+	Description      string `json:"description"`
+	Content          string `json:"content"`
+	Category         string `json:"category"`
+	RequireSignature *bool  `json:"require_signature,omitempty"`
 }
 
 type UpdateSimpleReportDocumentRequest struct {
-	Title       string `json:"title"`
-	Description string `json:"description"`
-	Content     string `json:"content"`
-	Category    string `json:"category"`
+	Title            string `json:"title"`
+	Description      string `json:"description"`
+	Content          string `json:"content"`
+	Category         string `json:"category"`
+	RequireSignature *bool  `json:"require_signature,omitempty"`
 }
 
 type ReportReview struct {
@@ -77,5 +81,6 @@ type ReportReview struct {
 	Action     string    `json:"action"`
 	Comment    string    `json:"comment,omitempty"`
 	ReviewerID uuid.UUID `json:"reviewer_id"`
+	Signature  *string   `json:"signature,omitempty"`
 	CreatedAt  time.Time `json:"created_at"`
 }

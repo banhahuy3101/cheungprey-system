@@ -30,6 +30,7 @@ export const reportDocumentsAPI = {
   update: (id, data) => client.put(`/report-documents/${id}`, data),
   updateSimple: (id, data) => client.put(`/report-documents/${id}/simple`, data),
   confirmStatus: (id) => client.put(`/report-documents/${id}/status`, { status: "published" }),
+  revertToDraft: (id) => client.put(`/report-documents/${id}/status`, { status: "draft" }),
   submit: (id) => client.put(`/report-documents/${id}/submit`),
   reject: (id, reason) => client.put(`/report-documents/${id}/reject`, { reason }),
   getReviews: (id) => client.get(`/report-documents/${id}/reviews`),

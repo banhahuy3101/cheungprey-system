@@ -1,6 +1,6 @@
 import { useNavigate, useParams, useLocation } from "react-router-dom";
-import PerformanceForm from "../../components/PerformanceForm";
-import PerformanceList from "../../components/PerformanceList";
+import PerformanceForm from "../../components/performance/PerformanceForm";
+import PerformanceList from "../../components/performance/PerformanceList";
 
 export default function Performance() {
   const navigate = useNavigate();

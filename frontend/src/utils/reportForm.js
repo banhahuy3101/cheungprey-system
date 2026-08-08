@@ -3,14 +3,16 @@ export const emptySimpleReportForm = () => ({
   description: "",
   content: "",
   category: "ផ្សេងៗ",
+  require_signature: true,
 });
 
-export function buildSimpleReportPayload({ title, description, content, category }) {
+export function buildSimpleReportPayload({ title, description, content, category, require_signature }) {
   return {
     title: title.trim(),
     description: description.trim(),
     content: content || "",
     category: category || "ផ្សេងៗ",
+    require_signature: require_signature !== false,
   };
 }
 
@@ -21,6 +23,7 @@ export function docToSimpleForm(doc) {
     description: doc.description || "",
     content: doc.content || "",
     category: doc.category || "ផ្សេងៗ",
+    require_signature: doc.require_signature !== false,
   };
 }
 

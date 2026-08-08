@@ -56,6 +56,9 @@ func (r *Repository) CreateProfile(profile *models.Profile) error {
 	if profile.ZoneCode != nil && *profile.ZoneCode != "" {
 		payload["zone_code"] = *profile.ZoneCode
 	}
+	if profile.Signature != nil {
+		payload["signature"] = *profile.Signature
+	}
 	var inserted []models.Profile
 	_, err := r.AdminClient.From("profiles").
 		Insert(payload, false, "", "*", "").
@@ -82,6 +85,9 @@ func (r *Repository) UpdateProfile(id uuid.UUID, req *models.UpdateProfileReques
 	}
 	if req.VillageID != "" {
 		body["village_id"] = req.VillageID
+	}
+	if req.Signature != "" {
+		body["signature"] = req.Signature
 	}
 	body["updated_at"] = "now()"
 
@@ -126,6 +132,9 @@ func (r *Repository) AdminUpdateProfile(id uuid.UUID, req *models.AdminUpdateUse
 	}
 	if req.ZoneCode != "" {
 		body["zone_code"] = req.ZoneCode
+	}
+	if req.Signature != "" {
+		body["signature"] = req.Signature
 	}
 	body["updated_at"] = "now()"
 

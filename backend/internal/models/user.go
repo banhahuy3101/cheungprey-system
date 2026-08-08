@@ -48,6 +48,7 @@ type Profile struct {
 	Role        UserRole      `json:"role"`
 	Roles       []UserRole    `json:"roles,omitempty"`
 	Permissions PermissionSet `json:"permissions,omitempty"`
+	Signature   *string       `json:"signature,omitempty"`
 	CreatedAt   time.Time     `json:"created_at"`
 	UpdatedAt   time.Time     `json:"updated_at"`
 }
@@ -65,6 +66,7 @@ type AdminUser struct {
 	Role        UserRole      `json:"role"`
 	Roles       []UserRole    `json:"roles,omitempty"`
 	Permissions PermissionSet `json:"permissions,omitempty"`
+	Signature   *string       `json:"signature,omitempty"`
 	CreatedAt   time.Time     `json:"created_at"`
 	UpdatedAt   time.Time     `json:"updated_at"`
 }
@@ -93,6 +95,7 @@ type UpdateProfileRequest struct {
 	PhoneNumber string   `json:"phone_number,omitempty"`
 	CommuneID   string   `json:"commune_id,omitempty"`
 	VillageID   string   `json:"village_id,omitempty"`
+	Signature   string   `json:"signature,omitempty"`
 }
 
 type AdminCreateUserRequest struct {
@@ -105,6 +108,7 @@ type AdminCreateUserRequest struct {
 	ZoneCode    string     `json:"zone_code,omitempty"`
 	CommuneID   string     `json:"commune_id,omitempty"`
 	VillageID   string     `json:"village_id,omitempty"`
+	Signature   string     `json:"signature,omitempty"`
 }
 
 type AdminUpdateUserRequest struct {
@@ -115,6 +119,7 @@ type AdminUpdateUserRequest struct {
 	ZoneCode    string     `json:"zone_code,omitempty"`
 	CommuneID   string     `json:"commune_id,omitempty"`
 	VillageID   string     `json:"village_id,omitempty"`
+	Signature   string     `json:"signature,omitempty"`
 }
 
 type AdminResetPasswordRequest struct {

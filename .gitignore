@@ -6,5 +6,6 @@ frontend/.env.local
 frontend/.env.development.local
 backend/bin/
 backend/app
+backend/api
 .DS_Store
 .DS_Store

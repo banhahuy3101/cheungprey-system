@@ -67,6 +67,10 @@ func reportDocumentFromRequest(req models.ReportDocumentPayload, userID uuid.UUI
 	}
 	month := req.ReportMonth
 	year := req.ReportYear
+	reqSig := true
+	if req.RequireSignature != nil {
+		reqSig = *req.RequireSignature
+	}
 	return &models.ReportDocument{
 		ID:                        uuid.New(),
 		PartyName:                 defaultPartyName(req.PartyName),
@@ -84,6 +88,7 @@ func reportDocumentFromRequest(req models.ReportDocumentPayload, userID uuid.UUI
 		HumanFatalities:           req.HumanFatalities,
 		PropertyDamageDesc:        defaultPropertyDamage(req.PropertyDamageDesc),
 		Status:                    status,
+		RequireSignature:          reqSig,
 		CreatedBy:                 userID,
 		CreatedAt:                 now,
 		UpdatedAt:                 now,
@@ -95,17 +100,22 @@ func simpleReportDocumentFromRequest(req models.CreateSimpleReportDocumentReques
 	if category == "" {
 		category = "ផ្សេងៗ"
 	}
+	reqSig := true
+	if req.RequireSignature != nil {
+		reqSig = *req.RequireSignature
+	}
 	return &models.ReportDocument{
-		ID:          uuid.New(),
-		Title:       req.Title,
-		Description: req.Description,
-		Content:     req.Content,
-		Category:    category,
-		ZoneCode:    zoneCode,
-		Status:      "draft",
-		CreatedBy:   userID,
-		CreatedAt:   now,
-		UpdatedAt:   now,
+		ID:               uuid.New(),
+		Title:            req.Title,
+		Description:      req.Description,
+		Content:          req.Content,
+		Category:         category,
+		ZoneCode:         zoneCode,
+		Status:           "draft",
+		RequireSignature: reqSig,
+		CreatedBy:        userID,
+		CreatedAt:        now,
+		UpdatedAt:        now,
 	}
 }
 
@@ -118,6 +128,9 @@ func simpleReportDocumentUpdateMap(req models.UpdateSimpleReportDocumentRequest)
 	}
 	if req.Category != "" {
 		data["category"] = req.Category
+	}
+	if req.RequireSignature != nil {
+		data["require_signature"] = *req.RequireSignature
 	}
 	return data
 }
@@ -144,6 +157,9 @@ func reportDocumentUpdateMap(req models.ReportDocumentPayload) map[string]any {
 	}
 	if req.Status != "" {
 		data["status"] = req.Status
+	}
+	if req.RequireSignature != nil {
+		data["require_signature"] = *req.RequireSignature
 	}
 	return data
 }
@@ -287,8 +303,61 @@ func (h *ReportDocumentHandler) UpdateStatus(c *gin.Context) {
 		return
 	}
 
+	userID, _ := auth.GetUserID(c)
+
+	if req.Status == "published" {
+		doc, err := h.repo.GetReportDocumentByID(id)
+		if err != nil || doc == nil {
+			utils.Error(c, http.StatusNotFound, "Report not found")
+			return
+		}
+
+		if doc.RequireSignature {
+			profile, err := h.repo.GetProfileByID(userID)
+			if err != nil || profile == nil {
+				utils.InternalError(c, "Failed to retrieve user profile")
+				return
+			}
+			if profile.Signature == nil || *profile.Signature == "" {
+				utils.BadRequest(c, "សូមរៀបចំទម្រង់ហត្ថលេខាក្នុងទំព័រប្រវត្តិរូបរបស់អ្នកជាមុនសិន ទើបអាចអនុម័តរបាយការណ៍បាន។")
+				return
+			}
+
+			review := &models.ReportReview{
+				ID:         uuid.New(),
+				ReportID:   id,
+				Action:     "approve",
+				ReviewerID: userID,
+				Signature:  profile.Signature,
+				CreatedAt:  time.Now(),
+			}
+			_ = h.repo.CreateReportReview(review)
+		} else {
+			review := &models.ReportReview{
+				ID:         uuid.New(),
+				ReportID:   id,
+				Action:     "approve",
+				ReviewerID: userID,
+				CreatedAt:  time.Now(),
+			}
+			_ = h.repo.CreateReportReview(review)
+		}
+
+		if err := h.repo.UpdateReportDocument(id, map[string]any{
+			"status":     "published",
+			"updated_at": time.Now(),
+		}); err != nil {
+			utils.InternalError(c, "Failed to approve report")
+			return
+		}
+
+		utils.JSON(c, http.StatusOK, gin.H{"message": "បានអនុម័ត"})
+		return
+	}
+
 	if err := h.repo.UpdateReportDocument(id, map[string]any{
-		"status": req.Status,
+		"status":     req.Status,
+		"updated_at": time.Now(),
 	}); err != nil {
 		utils.InternalError(c, "Failed to update status")
 		return

@@ -340,7 +340,12 @@ export default function ReportList({ onView, onEdit, onCreate }) {
         </div>
       </div>
 
-      <div className="card report-list-card">
+      <div className="card report-list-card" style={{ position: "relative" }}>
+        {loading && (
+          <div className="report-linear-loader">
+            <div className="report-linear-loader-fill" />
+          </div>
+        )}
         <div className="table-responsive">
           <table className="table report-table">
             <thead>

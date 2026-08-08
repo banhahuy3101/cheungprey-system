@@ -12,6 +12,8 @@ type Config struct {
 	JWTSecret          string
 	Port               string
 	DefaultUserPassword string
+	TelegramBotToken    string
+	TelegramChatID      string
 }
 
 func Load() *Config {
@@ -22,6 +24,8 @@ func Load() *Config {
 		JWTSecret:           getEnv("JWT_SECRET", ""),
 		Port:                getEnv("PORT", "8080"),
 		DefaultUserPassword: getEnv("DEFAULT_USER_PASSWORD", "Demo123!"),
+		TelegramBotToken:    getEnv("TELEGRAM_BOT_TOKEN", ""),
+		TelegramChatID:      getEnv("TELEGRAM_CHAT_ID", ""),
 	}
 }
 

@@ -12,13 +12,14 @@ import (
 
 func (r *Repository) CreateReportDocument(doc *models.ReportDocument) error {
 	row := map[string]any{
-		"id":          doc.ID.String(),
-		"title":       doc.Title,
-		"description": doc.Description,
-		"content":     doc.Content,
-		"status":      doc.Status,
-		"created_at":  doc.CreatedAt,
-		"updated_at":  doc.UpdatedAt,
+		"id":                doc.ID.String(),
+		"title":             doc.Title,
+		"description":       doc.Description,
+		"content":           doc.Content,
+		"status":            doc.Status,
+		"require_signature": doc.RequireSignature,
+		"created_at":        doc.CreatedAt,
+		"updated_at":        doc.UpdatedAt,
 	}
 	if doc.Category != "" {
 		row["category"] = doc.Category
@@ -131,15 +132,19 @@ func (r *Repository) DeleteReportDocument(id uuid.UUID) error {
 }
 
 func (r *Repository) CreateReportReview(review *models.ReportReview) error {
+	payload := map[string]any{
+		"id":          review.ID.String(),
+		"report_id":   review.ReportID.String(),
+		"action":      review.Action,
+		"comment":     review.Comment,
+		"reviewer_id": review.ReviewerID.String(),
+		"created_at":  review.CreatedAt,
+	}
+	if review.Signature != nil {
+		payload["signature"] = *review.Signature
+	}
 	_, _, err := r.AdminClient.From("report_reviews").
-		Insert(map[string]any{
-			"id":          review.ID.String(),
-			"report_id":   review.ReportID.String(),
-			"action":      review.Action,
-			"comment":     review.Comment,
-			"reviewer_id": review.ReviewerID.String(),
-			"created_at":  review.CreatedAt,
-		}, false, "", "", "").
+		Insert(payload, false, "", "", "").
 		Execute()
 	return err
 }
