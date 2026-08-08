@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   LuArrowLeft, LuSave, LuPencil, LuDownload,
-  LuSend, LuX, LuXCircle, LuCheckCircle, LuClock, LuCalendar, LuRotateCcw,
+  LuSend, LuX, LuCircleX, LuCircleCheck, LuClock, LuCalendar, LuRotateCcw,
   LuFileText, LuTag,
 } from "react-icons/lu";
 import { useAuth } from "../../hooks/useAuth";
@@ -393,11 +393,11 @@ export default function ReportForm({ mode = "create", reportId }) {
             <>
               <button className="btn btn-danger btn-sm" onClick={() => setRejectOpen(true)}
                 style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}>
-                <LuXCircle size={15} /> បដិសេធ
+                <LuCircleX size={15} /> បដិសេធ
               </button>
               <button className="btn btn-success btn-sm" onClick={doPublish} disabled={submitting}
                 style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}>
-                <LuCheckCircle size={15} /> អនុម័តរបាយការណ៍
+                <LuCircleCheck size={15} /> អនុម័តរបាយការណ៍
               </button>
             </>
           )}

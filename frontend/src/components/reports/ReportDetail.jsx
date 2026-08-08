@@ -8,8 +8,8 @@ import {
   LuSend,
   LuX,
   LuClock,
-  LuCheckCircle,
-  LuXCircle,
+  LuCircleCheck,
+  LuCircleX,
   LuFileText,
   LuUser,
   LuMapPin,
@@ -325,7 +325,7 @@ export default function ReportDetail({ reportId }) {
                 onClick={() => setRejectOpen(true)}
                 style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem", borderRadius: "8px", padding: "0.5rem 1rem" }}
               >
-                <LuXCircle size={16} /> បដិសេធ
+                <LuCircleX size={16} /> បដិសេធ
               </button>
               <button
                 className="btn btn-success btn-sm"
@@ -340,7 +340,7 @@ export default function ReportDetail({ reportId }) {
                   boxShadow: "0 2px 4px rgba(22, 101, 52, 0.15)",
                 }}
               >
-                <LuCheckCircle size={16} /> អនុម័តរបាយការណ៍
+                <LuCircleCheck size={16} /> អនុម័តរបាយការណ៍
               </button>
             </>
           )}
@@ -521,7 +521,7 @@ export default function ReportDetail({ reportId }) {
                           gap: "0.25rem",
                         }}
                       >
-                        {r.action === "confirm" ? <LuCheckCircle size={12} /> : r.action === "reject" ? <LuXCircle size={12} /> : <LuSend size={12} />}
+                        {r.action === "confirm" ? <LuCircleCheck size={12} /> : r.action === "reject" ? <LuCircleX size={12} /> : <LuSend size={12} />}
                         {r.action === "submit" ? "បានដាក់ស្នើ" : r.action === "confirm" ? "បានអនុម័ត" : "បានបដិសេធ"}
                       </span>
                       <span style={{ color: "var(--text-muted)", fontSize: "0.75rem" }}>{formatDate(r.created_at)}</span>
