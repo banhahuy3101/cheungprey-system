@@ -63,7 +63,7 @@ type CreateSimpleReportDocumentRequest struct {
 	Title            string `json:"title" binding:"required"`
 	Description      string `json:"description" binding:"required"`
 	Content          string `json:"content" binding:"required"`
-	Category         string `json:"category"`
+	Category         string `json:"category" binding:"required"`
 	RequireSignature *bool  `json:"require_signature,omitempty"`
 }
 
@@ -71,7 +71,7 @@ type UpdateSimpleReportDocumentRequest struct {
 	Title            string `json:"title" binding:"required"`
 	Description      string `json:"description" binding:"required"`
 	Content          string `json:"content" binding:"required"`
-	Category         string `json:"category"`
+	Category         string `json:"category" binding:"required"`
 	RequireSignature *bool  `json:"require_signature,omitempty"`
 }
 
