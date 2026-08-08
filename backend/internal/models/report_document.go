@@ -60,17 +60,17 @@ type CreateReportDocumentRequest = ReportDocumentPayload
 type UpdateReportDocumentRequest = ReportDocumentPayload
 
 type CreateSimpleReportDocumentRequest struct {
-	Title            string `json:"title"`
-	Description      string `json:"description"`
-	Content          string `json:"content"`
+	Title            string `json:"title" binding:"required"`
+	Description      string `json:"description" binding:"required"`
+	Content          string `json:"content" binding:"required"`
 	Category         string `json:"category"`
 	RequireSignature *bool  `json:"require_signature,omitempty"`
 }
 
 type UpdateSimpleReportDocumentRequest struct {
-	Title            string `json:"title"`
-	Description      string `json:"description"`
-	Content          string `json:"content"`
+	Title            string `json:"title" binding:"required"`
+	Description      string `json:"description" binding:"required"`
+	Content          string `json:"content" binding:"required"`
 	Category         string `json:"category"`
 	RequireSignature *bool  `json:"require_signature,omitempty"`
 }
