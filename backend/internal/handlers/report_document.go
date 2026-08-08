@@ -169,7 +169,7 @@ func (h *ReportDocumentHandler) Create(c *gin.Context) {
 
 	var req models.CreateReportDocumentRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, err.Error())
+		utils.ValidationErrors(c, err)
 		return
 	}
 
@@ -188,7 +188,7 @@ func (h *ReportDocumentHandler) CreateSimple(c *gin.Context) {
 
 	var req models.CreateSimpleReportDocumentRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, err.Error())
+		utils.ValidationErrors(c, err)
 		return
 	}
 
@@ -255,7 +255,7 @@ func (h *ReportDocumentHandler) Update(c *gin.Context) {
 
 	var req models.UpdateReportDocumentRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, err.Error())
+		utils.ValidationErrors(c, err)
 		return
 	}
 
@@ -276,7 +276,7 @@ func (h *ReportDocumentHandler) UpdateSimple(c *gin.Context) {
 
 	var req models.UpdateSimpleReportDocumentRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, err.Error())
+		utils.ValidationErrors(c, err)
 		return
 	}
 
@@ -299,7 +299,7 @@ func (h *ReportDocumentHandler) UpdateStatus(c *gin.Context) {
 		Status string `json:"status" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, err.Error())
+		utils.ValidationErrors(c, err)
 		return
 	}
 

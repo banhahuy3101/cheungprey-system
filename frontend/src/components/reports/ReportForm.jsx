@@ -39,6 +39,7 @@ export default function ReportForm({ mode = "create", reportId }) {
   const [submitting, setSubmitting] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [error, setError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState({});
   const [msg, setMsg] = useState("");
   const [rejectOpen, setRejectOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
@@ -62,7 +63,7 @@ export default function ReportForm({ mode = "create", reportId }) {
     return () => { ok = false; };
   }, [reportId, isCreate]);
 
-  const setField = (k, v) => setForm(p => ({ ...p, [k]: v }));
+  const setField = (k, v) => { setForm(p => ({ ...p, [k]: v })); setFieldErrors(prev => { const n = { ...prev }; delete n[k]; return n; }); };
 
   /* ---- actions ---- */
   const doSave = async (e) => {
@@ -74,7 +75,14 @@ export default function ReportForm({ mode = "create", reportId }) {
       const r = await reportDocumentsAPI.createSimple(p);
       const d = r.data?.data ?? r.data;
       if (d?.id) navigate(`/reports/${d.id}`); else setError("រក្សាទុកមិនបាន");
-    } catch (err) { setError(err.response?.data?.error || "រក្សាទុកមិនបាន"); }
+    } catch (err) {
+      if (err.response?.data?.errors) {
+        setFieldErrors(err.response.data.errors);
+        setError(err.response.data.error || "សូមបំពេញព័ត៌មានឲ្យបានគ្រប់");
+      } else {
+        setError(err.response?.data?.error || "រក្សាទុកមិនបាន");
+      }
+    }
     finally { setSaving(false); }
   };
 
@@ -227,6 +235,7 @@ export default function ReportForm({ mode = "create", reportId }) {
                   fontFamily: "var(--font-khmer)",
                 }}
               />
+              {fieldErrors.title && <span className="field-error" style={{ color: "#dc2626", fontSize: "0.78rem", fontWeight: "500", marginTop: "0.15rem", display: "block" }}>{fieldErrors.title}</span>}
               <div style={{ height: "1px", background: "rgba(0, 0, 0, 0.06)", width: "100%" }} />
               <input
                 className="report-form-desc"
@@ -253,6 +262,7 @@ export default function ReportForm({ mode = "create", reportId }) {
                 onChange={v => setField("content", v)}
                 placeholder="សូមបញ្ចូលខ្លឹមសាររបាយការណ៍..."
               />
+              {fieldErrors.content && <span className="field-error" style={{ color: "#dc2626", fontSize: "0.78rem", fontWeight: "500", marginTop: "0.25rem", display: "block" }}>{fieldErrors.content}</span>}
             </div>
           </div>
 
@@ -300,6 +310,7 @@ export default function ReportForm({ mode = "create", reportId }) {
                   <option value="រដ្ឋបាល">រដ្ឋបាល</option>
                   <option value="ផ្សេងៗ">ផ្សេងៗ</option>
                 </select>
+                {fieldErrors.category && <span className="field-error" style={{ color: "#dc2626", fontSize: "0.78rem", fontWeight: "500", marginTop: "0.15rem", display: "block" }}>{fieldErrors.category}</span>}
               </div>
 
               <div className="form-group" style={{ margin: 0, marginTop: "0.85rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
@@ -524,8 +535,9 @@ export default function ReportForm({ mode = "create", reportId }) {
               rows={4}
               placeholder="សូមបញ្ចូលមូលហេតុ ឬការណែនាំសម្រាប់អ្នកកែប្រែ..."
               style={{ width: "100%", padding: "0.6rem 0.75rem", borderRadius: "6px", border: "1px solid var(--border)", fontSize: "0.9rem" }}
-            />
-          </div>
+              />
+              {fieldErrors.description && <span className="field-error" style={{ color: "#dc2626", fontSize: "0.78rem", fontWeight: "500", marginTop: "0.15rem", display: "block" }}>{fieldErrors.description}</span>}
+            </div>
           <div style={{ display: "flex", gap: "0.75rem", justifyContent: "flex-end", marginTop: "1.25rem" }}>
             <button className="btn btn-secondary" onClick={() => setRejectOpen(false)}>
               បោះបង់

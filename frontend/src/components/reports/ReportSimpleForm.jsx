@@ -35,6 +35,7 @@ export default function ReportSimpleForm({ mode = "create", reportId, initialDoc
   const [saving, setSaving] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [error, setError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState({});
 
   useEffect(() => {
     if (!reportId || isCreate || initialDoc) return;
@@ -61,6 +62,7 @@ export default function ReportSimpleForm({ mode = "create", reportId, initialDoc
 
   const setField = (key, value) => {
     setForm((prev) => ({ ...prev, [key]: value }));
+    setFieldErrors(prev => { const n = { ...prev }; delete n[key]; return n; });
   };
 
   const handleSubmit = async (e) => {
@@ -83,7 +85,12 @@ export default function ReportSimpleForm({ mode = "create", reportId, initialDoc
       }
       navigate(`/reports/${doc.id}`);
     } catch (err) {
-      setError(err.response?.data?.error || err.response?.data?.message || "រក្សាទុកមិនបាន");
+      if (err.response?.data?.errors) {
+        setFieldErrors(err.response.data.errors);
+        setError(err.response.data.error || "សូមបំពេញព័ត៌មានឲ្យបានគ្រប់");
+      } else {
+        setError(err.response?.data?.error || err.response?.data?.message || "រក្សាទុកមិនបាន");
+      }
     } finally {
       setSaving(false);
     }
@@ -208,6 +215,7 @@ export default function ReportSimpleForm({ mode = "create", reportId, initialDoc
           placeholder="ចំណងជើងរបាយការណ៍"
           autoFocus={isCreate}
         />
+        {fieldErrors.title && <span className="field-error" style={{ color: "#dc2626", fontSize: "0.78rem", fontWeight: "500", marginTop: "0.1rem", display: "block" }}>{fieldErrors.title}</span>}
         <input
           type="text"
           className="report-create-description"
@@ -215,6 +223,7 @@ export default function ReportSimpleForm({ mode = "create", reportId, initialDoc
           onChange={(e) => setField("description", e.target.value)}
           placeholder="ការពិពណ៌នា (ជម្រើស)"
         />
+        {fieldErrors.description && <span className="field-error" style={{ color: "#dc2626", fontSize: "0.78rem", fontWeight: "500", marginTop: "0.1rem", display: "block" }}>{fieldErrors.description}</span>}
       </div>
 
       <div className="report-create-editor">
@@ -224,6 +233,7 @@ export default function ReportSimpleForm({ mode = "create", reportId, initialDoc
           onChange={(val) => setField("content", val)}
           placeholder="សូមបញ្ចូលខ្លឹមសាររបាយការណ៍..."
         />
+        {fieldErrors.content && <span className="field-error" style={{ color: "#dc2626", fontSize: "0.78rem", fontWeight: "500", marginTop: "0.25rem", display: "block" }}>{fieldErrors.content}</span>}
       </div>
     </form>
   );
