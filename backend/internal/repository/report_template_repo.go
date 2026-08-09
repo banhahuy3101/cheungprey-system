@@ -257,3 +257,35 @@ func (r *Repository) DeleteTemplateFile(storagePath string) error {
 func boolPtr(b bool) *bool {
 	return &b
 }
+
+func (r *Repository) ListReportTemplateKeys(templateID uuid.UUID) ([]models.ReportTemplateKey, error) {
+	var keys []models.ReportTemplateKey
+	_, err := r.AdminClient.From("report_template_keys").
+		Select("*", "exact", false).
+		Eq("template_id", templateID.String()).
+		Order("created_at", &postgrest.OrderOpts{Ascending: true}).
+		ExecuteTo(&keys)
+	if err != nil {
+		return nil, fmt.Errorf("list template keys: %w", err)
+	}
+	return keys, nil
+}
+
+func (r *Repository) CreateReportTemplateKey(key *models.ReportTemplateKey) error {
+	row := map[string]any{
+		"id":            key.ID.String(),
+		"template_id":   key.TemplateID.String(),
+		"key_name":      key.KeyName,
+		"display_label": key.DisplayLabel,
+		"category":      key.Category,
+		"field_type":    key.FieldType,
+		"default_value": key.DefaultValue,
+		"is_required":   key.IsRequired,
+		"created_at":    key.CreatedAt,
+		"updated_at":    key.UpdatedAt,
+	}
+	_, _, err := r.AdminClient.From("report_template_keys").
+		Insert(row, false, "", "", "").
+		Execute()
+	return err
+}

@@ -41,3 +41,11 @@ export function sanitizeDownloadFilename(title, ext = "pdf") {
   if (!base) return `report.${ext}`;
   return `${base.slice(0, 80)}.${ext}`;
 }
+
+export function stripHtml(html) {
+  return (html || "").replace(/<[^>]*>/g, "").replace(/&nbsp;/g, " ").trim();
+}
+
+export function isEmptyContent(html) {
+  return stripHtml(html) === "";
+}

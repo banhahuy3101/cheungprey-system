@@ -192,6 +192,10 @@ export default function Profile() {
   const isAdmin = userIsAdmin(user);
   const displayRoles = user?.roles?.length ? user.roles : (user?.role ? [user.role] : []);
 
+  useEffect(() => {
+    if (refreshProfile) refreshProfile();
+  }, []);
+
   const zoneHook = useZoneCascade({
     userZone: user?.zone_code || "",
     isAdmin: isAdmin,

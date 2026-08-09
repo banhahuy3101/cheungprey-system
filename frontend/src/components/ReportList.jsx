@@ -67,6 +67,9 @@ export default function ReportList({ onView, onEdit, onCreate }) {
   const [categoryFilter, setCategoryFilter] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [showTrash, setShowTrash] = useState(false);
+  const [trashPopup, setTrashPopup] = useState(false);
+  const [trashRecords, setTrashRecords] = useState([]);
+  const [trashLoading, setTrashLoading] = useState(false);
 
   const zoneHook = useZoneCascade({
     userZone: user?.zone_code || "",
@@ -81,7 +84,6 @@ export default function ReportList({ onView, onEdit, onCreate }) {
       const params = {};
       if (categoryFilter) params.category = categoryFilter;
       if (searchTerm) params.search = searchTerm;
-      if (showTrash) params.trash = "true";
       const selectedZoneCode = zoneHook.resolvedZone?.zone_code;
       if (selectedZoneCode) {
         params.zone_code = selectedZoneCode;
@@ -94,7 +96,26 @@ export default function ReportList({ onView, onEdit, onCreate }) {
     } finally {
       setLoading(false);
     }
-  }, [categoryFilter, searchTerm, showTrash, zoneHook.resolvedZone?.zone_code]);
+  }, [categoryFilter, searchTerm, zoneHook.resolvedZone?.zone_code]);
+
+  const fetchTrash = async () => {
+    setTrashLoading(true);
+    try {
+      const params = { trash: "true" };
+      const res = await reportDocumentsAPI.getAll(params);
+      const data = res.data?.data ?? res.data ?? [];
+      setTrashRecords(Array.isArray(data) ? data : []);
+    } catch {
+      setTrashRecords([]);
+    } finally {
+      setTrashLoading(false);
+    }
+  };
+
+  const openTrashPopup = () => {
+    setTrashPopup(true);
+    fetchTrash();
+  };
 
   useEffect(() => {
     fetchRecords();
@@ -165,10 +186,20 @@ export default function ReportList({ onView, onEdit, onCreate }) {
     if (!deleteTarget) return;
     setDeleting(true);
     try {
-      await reportDocumentsAPI.delete(deleteTarget.id);
-      setMessage(showTrash ? "លុបដោយជោគជ័យ" : "បានផ្លាស់ទីទៅធុងសំរាម");
+      if (deleteTarget.deleted_at) {
+        await reportDocumentsAPI.permanentDelete(deleteTarget.id);
+      } else {
+        await reportDocumentsAPI.delete(deleteTarget.id);
+      }
+      setMessage(deleteTarget.deleted_at ? "លុបដោយជោគជ័យ" : "បានផ្លាស់ទីទៅធុងសំរាម");
+      if (trashPopup) {
+        setTrashRecords(prev => prev.filter(r => r.id !== deleteTarget.id));
+      } else {
+        setRecords(prev => prev.filter(r => r.id !== deleteTarget.id));
+      }
       setDeleteTarget(null);
       fetchRecords();
+      if (trashPopup) fetchTrash();
       setTimeout(() => setMessage(""), 2500);
     } catch {
       setMessage("លុបមិនបាន");
@@ -177,12 +208,13 @@ export default function ReportList({ onView, onEdit, onCreate }) {
     }
   };
 
-  const handleRestore = async (record) => {
-    setMessage("");
+  const handleRestoreFromTrash = async (record) => {
     try {
       await reportDocumentsAPI.restore(record.id);
+      setTrashRecords(prev => prev.filter(r => r.id !== record.id));
       setMessage("បានស្តារឡើងវិញ");
       fetchRecords();
+      fetchTrash();
       setTimeout(() => setMessage(""), 2500);
     } catch {
       setMessage("ស្តារឡើងវិញមិនបាន");
@@ -320,8 +352,8 @@ export default function ReportList({ onView, onEdit, onCreate }) {
 
           <button
             type="button"
-            className={`btn ${showTrash ? "btn-secondary" : "btn-outline"}`}
-            onClick={() => setShowTrash((prev) => !prev)}
+            className="btn btn-outline"
+            onClick={openTrashPopup}
             style={{
               minHeight: "2.5rem",
               display: "flex",
@@ -335,11 +367,12 @@ export default function ReportList({ onView, onEdit, onCreate }) {
             }}
           >
             <LuTrash2 size={16} />
-            {showTrash ? "របាយការណ៍" : "ធុងសំរាម"}
+            ធុងសំរាម
           </button>
         </div>
       </div>
 
+      {(records.length > 0 || loading) && (
       <div className="card report-list-card" style={{ position: "relative" }}>
         {loading && (
           <div className="report-linear-loader">
@@ -360,7 +393,7 @@ export default function ReportList({ onView, onEdit, onCreate }) {
               </tr>
             </thead>
             <tbody style={{ opacity: loading ? 0.6 : 1, transition: "opacity 0.2s" }}>
-              {records.length === 0 && loading ? (
+              {loading ? (
                 Array.from({ length: 5 }).map((_, i) => (
                   <tr key={`skeleton-${i}`}>
                     <td><div className="skeleton-item" style={{ width: "24px" }} /></td>
@@ -378,21 +411,6 @@ export default function ReportList({ onView, onEdit, onCreate }) {
                     </td>
                   </tr>
                 ))
-              ) : records.length === 0 ? (
-                <tr>
-                  <td colSpan={7} style={{ textAlign: "center", padding: "3rem" }}>
-                    <div className="report-empty" style={{ margin: 0, padding: 0, border: "none", background: "none", boxShadow: "none" }}>
-                      <LuScrollText className="report-empty-icon" />
-                      <h3>{showTrash ? "គ្មានរបាយការណ៍ក្នុងធុងសំរាម" : "គ្មានរបាយការណ៍"}</h3>
-                      <p>{showTrash ? "" : "ចុច «បង្កើតរបាយការណ៍» ដើម្បីចាប់ផ្តើម — បំពេញចំណងជើង ការពិពណ៌នា និងខ្លឹមសារ"}</p>
-                      {!showTrash && (
-                        <button type="button" className="btn btn-primary" style={{ marginTop: "0.75rem", marginInline: "auto" }} onClick={() => setShowCreateModal(true)}>
-                          <LuPlus /> បង្កើតរបាយការណ៍
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
               ) : (
                 records.map((r, idx) => (
                   <tr key={r.id} style={r.deleted_at ? { opacity: 0.6 } : undefined}>
@@ -426,58 +444,50 @@ export default function ReportList({ onView, onEdit, onCreate }) {
                     <td>{formatDate(r.updated_at)}</td>
                     <td>
                       <div className="actions">
-                        {showTrash ? (
-                          <button type="button" className="btn-icon btn-success" onClick={() => handleRestore(r)} title="ស្តារឡើងវិញ">
-                            <LuRefreshCw />
+                        <button type="button" className="btn-icon" onClick={() => onView(r.id)} title="មើល">
+                          <LuEye />
+                        </button>
+                        {(r.status === "draft" || r.status === "rejected") && (
+                          <button type="button" className="btn-icon" onClick={() => onEdit(r.id)} title="កែប្រែ">
+                            <LuPencil />
                           </button>
-                        ) : (
+                        )}
+                        {r.status === "pending_review" && (user?.role === "district_chief" || user?.role === "commune_chief" || user?.role === "admin" || user?.role === "super_admin") && (
+                          <button type="button" className="btn-icon" onClick={() => handleConfirm(r)} title="អនុម័ត">
+                            <LuCheck />
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          className="btn-icon"
+                          onClick={() => handleDownload(r)}
+                          disabled={downloadTarget?.id === r.id}
+                          title="ទាញយក PDF"
+                        >
+                          <LuDownload />
+                        </button>
+                        {(r.status === "draft" || r.status === "rejected") && (
                           <>
-                            <button type="button" className="btn-icon" onClick={() => onView(r.id)} title="មើល">
-                              <LuEye />
-                            </button>
-                            {(r.status === "draft" || r.status === "rejected") && (
-                              <button type="button" className="btn-icon" onClick={() => onEdit(r.id)} title="កែប្រែ">
-                                <LuPencil />
-                              </button>
-                            )}
-                            {r.status === "pending_review" && (user?.role === "district_chief" || user?.role === "commune_chief" || user?.role === "admin" || user?.role === "super_admin") && (
-                              <button type="button" className="btn-icon" onClick={() => handleConfirm(r)} title="អនុម័ត">
-                                <LuCheck />
-                              </button>
-                            )}
                             <button
                               type="button"
                               className="btn-icon"
-                              onClick={() => handleDownload(r)}
-                              disabled={downloadTarget?.id === r.id}
-                              title="ទាញយក PDF"
+                              onClick={() => {
+                                setDuplicateTarget(r);
+                                setDuplicateTitle(r.title + " (ច្បាប់ចម្លង)");
+                                setDuplicateDescription(r.description || "");
+                              }}
+                              title="ចម្លង"
                             >
-                              <LuDownload />
+                              <LuCopy />
                             </button>
-                            {(r.status === "draft" || r.status === "rejected") && (
-                              <>
-                                <button
-                                  type="button"
-                                  className="btn-icon"
-                                  onClick={() => {
-                                    setDuplicateTarget(r);
-                                    setDuplicateTitle(r.title + " (ច្បាប់ចម្លង)");
-                                    setDuplicateDescription(r.description || "");
-                                  }}
-                                  title="ចម្លង"
-                                >
-                                  <LuCopy />
-                                </button>
-                                <button
-                                  type="button"
-                                  className="btn-icon btn-danger"
-                                  onClick={() => setDeleteTarget(r)}
-                                  title="លុប"
-                                >
-                                  <LuTrash2 />
-                                </button>
-                              </>
-                            )}
+                            <button
+                              type="button"
+                              className="btn-icon btn-danger"
+                              onClick={() => setDeleteTarget(r)}
+                              title="លុប"
+                            >
+                              <LuTrash2 />
+                            </button>
                           </>
                         )}
                       </div>
@@ -489,6 +499,21 @@ export default function ReportList({ onView, onEdit, onCreate }) {
           </table>
         </div>
       </div>
+      )}
+
+      {records.length === 0 && !loading && (
+        <div className="card" style={{
+          display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+          minHeight: "320px", textAlign: "center", padding: "3rem 1rem",
+        }}>
+          <LuScrollText size={48} style={{ color: "#94a3b8", marginBottom: "0.75rem" }} />
+          <h3 style={{ margin: "0 0 0.5rem 0", fontSize: "1.1rem", fontWeight: "700", color: "var(--text)" }}>គ្មានរបាយការណ៍</h3>
+          <p style={{ color: "var(--text-muted)", maxWidth: "420px", margin: "0 0 1.25rem 0", fontSize: "0.9rem", lineHeight: "1.5" }}>ចុច «បង្កើតរបាយការណ៍» ដើម្បីចាប់ផ្តើម — បំពេញចំណងជើង ការពិពណ៌នា និងខ្លឹមសារ</p>
+          <button type="button" className="btn btn-primary" onClick={() => setShowCreateModal(true)} style={{ fontSize: "0.9rem", fontWeight: "600", padding: "0.6rem 1.5rem", borderRadius: "10px" }}>
+            <LuPlus size={16} /> បង្កើតរបាយការណ៍
+          </button>
+        </div>
+      )}
 
       {downloadTarget && (
         <div className="modal-overlay modal-overlay-top">
@@ -550,8 +575,8 @@ export default function ReportList({ onView, onEdit, onCreate }) {
       )}
 
       {deleteTarget && (
-        <div className="modal-overlay modal-overlay-top" onClick={() => !deleting && setDeleteTarget(null)}>
-          <div className="modal modal-confirm" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-overlay modal-overlay-top" style={trashPopup ? { zIndex: 1100 } : {}} onClick={() => !deleting && setDeleteTarget(null)}>
+          <div className="modal modal-confirm" style={trashPopup ? { zIndex: 1101 } : {}} onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h3>លុបរបាយការណ៍</h3>
               <button type="button" className="btn-icon" onClick={() => setDeleteTarget(null)} disabled={deleting}>
@@ -570,6 +595,71 @@ export default function ReportList({ onView, onEdit, onCreate }) {
               <button type="button" className="btn btn-primary btn-danger-solid" onClick={confirmDelete} disabled={deleting}>
                 {deleting ? "កំពុងលុប..." : "លុប"}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {trashPopup && (
+        <div className="modal-overlay modal-overlay-top" onClick={() => setTrashPopup(false)}>
+          <div className="modal modal-lg" onClick={(e) => e.stopPropagation()} style={{ width: "90vw", maxWidth: "1200px", maxHeight: "85vh", overflow: "auto" }}>
+            <div className="modal-header">
+              <h3><LuTrash2 size={18} /> ធុងសំរាម</h3>
+              <button type="button" className="btn-icon" onClick={() => setTrashPopup(false)}><LuX /></button>
+            </div>
+            <div className="modal-body" style={{ padding: 0 }}>
+              <div className="table-responsive">
+                <table className="table report-table">
+                  <thead>
+                    <tr>
+                      <th>#</th>
+                      <th>របាយការណ៍</th>
+                      <th>ប្រភេទ</th>
+                      <th>តំបន់</th>
+                      <th>កាលបរិច្ឆេទលុប</th>
+                      <th>សកម្មភាព</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {trashLoading ? (
+                      Array.from({ length: 3 }).map((_, i) => (
+                        <tr key={`ts-${i}`}>
+                          <td><div className="skeleton-item" style={{ width: "24px" }} /></td>
+                          <td><div className="skeleton-item" style={{ width: "200px" }} /></td>
+                          <td><div className="skeleton-item" style={{ width: "64px" }} /></td>
+                          <td><div className="skeleton-item" style={{ width: "80px" }} /></td>
+                          <td><div className="skeleton-item" style={{ width: "100px" }} /></td>
+                          <td><div className="skeleton-item" style={{ width: "60px" }} /></td>
+                        </tr>
+                      ))
+                    ) : trashRecords.length === 0 ? (
+                      <tr><td colSpan={6} style={{ textAlign: "center", padding: "3rem", color: "var(--text-muted)" }}>គ្មានរបាយការណ៍ក្នុងធុងសំរាម</td></tr>
+                    ) : (
+                      trashRecords.map((r, idx) => (
+                        <tr key={r.id} style={{ opacity: 0.7 }}>
+                          <td>{idx + 1}</td>
+                          <td style={{ fontWeight: "500" }}>{reportSummaryLabel(r)}</td>
+                          <td>
+                            {r.category && <span style={{ color: CATEGORY_COLORS[r.category] || "#6b7280", fontWeight: "600", fontSize: "0.85rem" }}>{r.category}</span>}
+                          </td>
+                          <td>{r.zone_name || "—"}</td>
+                          <td>{formatDate(r.deleted_at || r.updated_at)}</td>
+                          <td>
+                            <div className="actions" style={{ gap: "0.35rem" }}>
+                              <button type="button" className="btn-icon btn-success" onClick={() => handleRestoreFromTrash(r)} title="ស្តារឡើងវិញ">
+                                <LuRefreshCw />
+                              </button>
+                              <button type="button" className="btn-icon btn-danger" onClick={() => setDeleteTarget(r)} title="លុបជាអចិន្ត្រៃយ៍">
+                                <LuTrash2 />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         </div>

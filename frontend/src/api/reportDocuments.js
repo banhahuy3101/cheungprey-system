@@ -35,6 +35,7 @@ export const reportDocumentsAPI = {
   reject: (id, reason) => client.put(`/report-documents/${id}/reject`, { reason }),
   getReviews: (id) => client.get(`/report-documents/${id}/reviews`),
   delete: (id) => client.delete(`/report-documents/${id}`),
+  permanentDelete: (id) => client.delete(`/report-documents/${id}?permanent=true`),
   restore: (id) => client.put(`/report-documents/${id}/restore`),
   downloadPDF: async (id, title) => {
     try {

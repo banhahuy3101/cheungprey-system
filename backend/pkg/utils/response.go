@@ -41,6 +41,18 @@ var validationLabels = map[string]string{
 	"PartyName":       "party_name",
 }
 
+var validationMessages = map[string]string{
+	"title":       "សូមបញ្ចូលចំណងជើងរបាយការណ៍",
+	"description": "សូមបញ្ចូលការពិពណ៌នា",
+	"content":     "សូមបញ្ចូលខ្លឹមសាររបាយការណ៍",
+	"category":    "សូមជ្រើសរើសប្រភេទរបាយការណ៍",
+	"province_name": "សូមបញ្ចូលខេត្ត",
+	"district_name": "សូមបញ្ចូលស្រុក",
+	"report_month":  "សូមបញ្ចូលខែ",
+	"report_year":   "សូមបញ្ចូលឆ្នាំ",
+	"party_name":    "សូមបញ្ចូលឈ្មោះគណបក្ស",
+}
+
 func ValidationErrors(c *gin.Context, err error) {
 	fieldErrors := make(map[string]string)
 
@@ -50,7 +62,11 @@ func ValidationErrors(c *gin.Context, err error) {
 			if l, ok := validationLabels[fe.Field()]; ok {
 				label = l
 			}
-			fieldErrors[label] = fmt.Sprintf("%s is required", label)
+			if msg, ok := validationMessages[label]; ok {
+				fieldErrors[label] = msg
+			} else {
+				fieldErrors[label] = fmt.Sprintf("%s is required", label)
+			}
 		}
 	}
 

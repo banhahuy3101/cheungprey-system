@@ -196,8 +196,27 @@ export default function ReportDetail({ reportId }) {
 
   if (loading) {
     return (
-      <div className="report-detail-loading" style={{ padding: "4rem 2rem", textAlign: "center", color: "var(--text-muted)" }}>
-        <div className="loading" style={{ fontSize: "1rem" }}>កំពុងផ្ទុកទិន្នន័យរបាយការណ៍...</div>
+      <div style={{ maxWidth: "1350px", margin: "0 auto", padding: "0 0.5rem 2rem 0.5rem" }}>
+        {/* Topbar skeleton */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "1rem 1.5rem", marginBottom: "1.5rem", background: "rgba(255,255,255,0.85)", borderRadius: "12px", border: "1px solid var(--border)" }}>
+          <Skeleton w={180} h={34} r={8} />
+          <Skeleton w={100} h={34} r={8} />
+        </div>
+        {/* Content skeleton */}
+        <div style={{ display: "flex", gap: "1.5rem", flexWrap: "wrap" }}>
+          <div style={{ flex: "2 1 600px", display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+            <Skeleton w="80%" h={32} r={8} />
+            <Skeleton w="50%" h={18} r={6} />
+            <Skeleton w="100%" h={250} r={10} />
+          </div>
+          <div style={{ flex: "1 1 280px" }}>
+            <div style={{ padding: "1.25rem", borderRadius: "12px", background: "#fff", border: "1px solid var(--border)", display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+              <Skeleton w="100%" h={40} r={8} />
+              <Skeleton w="100%" h={40} r={8} />
+              <Skeleton w="100%" h={40} r={8} />
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
@@ -571,6 +590,19 @@ export default function ReportDetail({ reportId }) {
         </div>
       </Modal>
     </div >
+  );
+}
+
+function Skeleton({ w, h, r = 6 }) {
+  return (
+    <div
+      style={{
+        width: w, height: h, borderRadius: r,
+        background: "linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%)",
+        backgroundSize: "200% 100%",
+        animation: "skeleton-pulse 1.5s ease-in-out infinite",
+      }}
+    />
   );
 }
 

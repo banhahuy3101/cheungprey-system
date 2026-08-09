@@ -23,6 +23,7 @@ import SettingsRolePermissions from "./pages/SettingsRolePermissions";
 import SettingsTechnical from "./pages/settings/SettingsTechnical";
 import SettingsSystem from "./pages/settings/SettingsSystem";
 import SettingsReportTemplates from "./pages/settings/SettingsReportTemplates";
+import SettingsReportTemplateDetail from "./pages/settings/SettingsReportTemplateDetail";
 import ReportCreateFromTemplate from "./pages/reports/ReportCreateFromTemplate";
 import Admin from "./pages/admin/Admin";
 import Profile from "./pages/profile/Profile";
@@ -92,6 +93,7 @@ function App() {
             <Route path="settings/performance_period/:id/edit" element={<ProtectedRoute feature={FEATURES.performance_admin}><SettingsPeriodForm /></ProtectedRoute>} />
             <Route path="settings/performance" element={<ProtectedRoute feature={FEATURES.performance_admin}><SettingsPerformance /></ProtectedRoute>} />
             <Route path="settings/report-templates" element={<ProtectedRoute feature={FEATURES.reports}><SettingsReportTemplates /></ProtectedRoute>} />
+            <Route path="settings/report-templates/:id" element={<ProtectedRoute feature={FEATURES.reports}><SettingsReportTemplateDetail /></ProtectedRoute>} />
             <Route path="admin" element={<ProtectedRoute adminOnly><Admin /></ProtectedRoute>} />
           </Route>
 

@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"encoding/xml"
 	"fmt"
+	"html"
 	"io"
 	"log"
 	"mime/multipart"
@@ -157,7 +158,9 @@ func (h *ReportTemplateHandler) Upload(c *gin.Context) {
 			return
 		}
 
-		tmpl.Keys = extractDocxKeys(data)
+		htmlContent, keys := extractDocxContentHTML(data)
+		tmpl.Content = htmlContent
+		tmpl.Keys = keys
 
 		contentType := file.Header.Get("Content-Type")
 		if contentType == "" {
@@ -205,6 +208,21 @@ func (h *ReportTemplateHandler) GetByID(c *gin.Context) {
 	if tmpl == nil {
 		utils.Error(c, http.StatusNotFound, "Template not found")
 		return
+	}
+
+	// Auto-extract Word document HTML content for DOCX templates if content is empty
+	if tmpl.Format == "docx" && (tmpl.Content == "" || len(tmpl.Content) < 10) && tmpl.StoragePath != "" {
+		data, err := h.repo.DownloadTemplateFile(tmpl.StoragePath)
+		if err == nil && len(data) > 0 {
+			htmlContent, keys := extractDocxContentHTML(data)
+			if htmlContent != "" {
+				tmpl.Content = htmlContent
+				if len(tmpl.Keys) == 0 && len(keys) > 0 {
+					tmpl.Keys = keys
+				}
+				_ = h.repo.UpdateReportTemplate(tmpl)
+			}
+		}
 	}
 
 	utils.JSON(c, http.StatusOK, tmpl)
@@ -440,41 +458,68 @@ func extractKeys(text string) []string {
 	return keys
 }
 
-func extractDocxKeys(data []byte) []string {
+func extractDocxContentHTML(data []byte) (string, []string) {
 	r, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
 	if err != nil {
-		return nil
+		return "", nil
 	}
 	for _, f := range r.File {
 		if f.Name == "word/document.xml" {
 			rc, err := f.Open()
 			if err != nil {
-				return nil
+				return "", nil
 			}
 			defer rc.Close()
-			var doc struct {
-				Body struct {
-					P []struct {
-						R []struct {
-							T string `xml:"t"`
-						} `xml:"r"`
-					} `xml:"p"`
-				} `xml:"body"`
+
+			contentBytes, err := io.ReadAll(rc)
+			if err != nil {
+				return "", nil
 			}
-			if err := xml.NewDecoder(rc).Decode(&doc); err != nil {
-				return nil
-			}
-			var buf strings.Builder
-			for _, p := range doc.Body.P {
-				for _, r := range p.R {
-					buf.WriteString(r.T)
+			rawXML := string(contentBytes)
+
+			var htmlBuf strings.Builder
+			var plainTextBuf strings.Builder
+
+			pRe := regexp.MustCompile(`(?s)<w:p[^>]*>(.*?)</w:p>`)
+			tRe := regexp.MustCompile(`<w:t[^>]*>(.*?)</w:t>`)
+
+			pMatches := pRe.FindAllStringSubmatch(rawXML, -1)
+			if len(pMatches) == 0 {
+				tMatches := tRe.FindAllStringSubmatch(rawXML, -1)
+				var line strings.Builder
+				for _, tm := range tMatches {
+					line.WriteString(tm[1])
 				}
-				buf.WriteString("\n")
+				text := line.String()
+				keys := extractKeys(text)
+				return "<p style=\"margin-bottom:0.75rem; line-height:1.6;\">" + html.EscapeString(text) + "</p>", keys
 			}
-			return extractKeys(buf.String())
+
+			for _, pm := range pMatches {
+				pInner := pm[1]
+				tMatches := tRe.FindAllStringSubmatch(pInner, -1)
+				var pText strings.Builder
+				for _, tm := range tMatches {
+					pText.WriteString(tm[1])
+				}
+				pStr := strings.TrimSpace(pText.String())
+				if pStr != "" {
+					htmlBuf.WriteString("<p style=\"margin-bottom:0.75rem; line-height:1.6;\">" + html.EscapeString(pStr) + "</p>\n")
+					plainTextBuf.WriteString(pStr + "\n")
+				}
+			}
+
+			fullText := plainTextBuf.String()
+			keys := extractKeys(fullText)
+			return htmlBuf.String(), keys
 		}
 	}
-	return nil
+	return "", nil
+}
+
+func extractDocxKeys(data []byte) []string {
+	_, keys := extractDocxContentHTML(data)
+	return keys
 }
 
 func (h *ReportTemplateHandler) AddKey(c *gin.Context) {
@@ -485,7 +530,8 @@ func (h *ReportTemplateHandler) AddKey(c *gin.Context) {
 	}
 
 	var req struct {
-		Key string `json:"key" binding:"required"`
+		Key   string `json:"key" binding:"required"`
+		Label string `json:"label"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "Key is required")
@@ -512,6 +558,17 @@ func (h *ReportTemplateHandler) AddKey(c *gin.Context) {
 		utils.InternalError(c, "Failed to update keys")
 		return
 	}
+
+	// Insert structured key into report_template_keys table
+	keyItem := &models.ReportTemplateKey{
+		ID:           uuid.New(),
+		TemplateID:   tmpl.ID,
+		KeyName:      req.Key,
+		DisplayLabel: req.Label,
+		CreatedAt:    time.Now(),
+		UpdatedAt:    time.Now(),
+	}
+	_ = h.repo.CreateReportTemplateKey(keyItem)
 
 	utils.JSON(c, http.StatusOK, tmpl)
 }

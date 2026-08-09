@@ -31,3 +31,16 @@ type CreateReportTemplateRequest struct {
 	File        *multipart.FileHeader `form:"file"`
 	Content     string                `form:"content"`
 }
+
+type ReportTemplateKey struct {
+	ID           uuid.UUID `json:"id"`
+	TemplateID   uuid.UUID `json:"template_id"`
+	KeyName      string    `json:"key_name"`
+	DisplayLabel string    `json:"display_label"`
+	Category     string    `json:"category"`
+	FieldType    string    `json:"field_type"`
+	DefaultValue string    `json:"default_value"`
+	IsRequired   bool      `json:"is_required"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
+}

@@ -5,10 +5,12 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
 
 	"github.com/banhahuy/cheungprey-system/backend/internal/auth"
@@ -187,8 +189,8 @@ func (h *ReportDocumentHandler) CreateSimple(c *gin.Context) {
 	userID, _ := auth.GetUserID(c)
 
 	var req models.CreateSimpleReportDocumentRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.ValidationErrors(c, err)
+	if errs := bindAndValidateSimple(c, &req); len(errs) > 0 {
+		c.JSON(400, utils.APIResponse{Success: false, Error: "validation failed", Errors: errs})
 		return
 	}
 
@@ -275,8 +277,8 @@ func (h *ReportDocumentHandler) UpdateSimple(c *gin.Context) {
 	}
 
 	var req models.UpdateSimpleReportDocumentRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.ValidationErrors(c, err)
+	if errs := bindAndValidateSimple(c, &req); len(errs) > 0 {
+		c.JSON(400, utils.APIResponse{Success: false, Error: "validation failed", Errors: errs})
 		return
 	}
 
@@ -370,6 +372,15 @@ func (h *ReportDocumentHandler) Delete(c *gin.Context) {
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		utils.BadRequest(c, "Invalid report ID")
+		return
+	}
+
+	if c.Query("permanent") == "true" {
+		if err := h.repo.DeleteReportDocument(id); err != nil {
+			utils.InternalError(c, "Failed to permanently delete report")
+			return
+		}
+		utils.JSON(c, http.StatusOK, gin.H{"message": "Report permanently deleted"})
 		return
 	}
 
@@ -528,4 +539,61 @@ func (h *ReportDocumentHandler) DownloadPDF(c *gin.Context) {
 	c.Header("Content-Type", "application/pdf")
 	c.Header("Content-Disposition", contentDispositionAttachment(filename))
 	c.Data(http.StatusOK, "application/pdf", pdfBytes)
+}
+
+var htmlTagRe = regexp.MustCompile(`<[^>]*>`)
+var whitespaceRe = regexp.MustCompile(`&nbsp;|\s`)
+
+func isEmptyHTML(s string) bool {
+	stripped := htmlTagRe.ReplaceAllString(s, "")
+	stripped = whitespaceRe.ReplaceAllString(stripped, "")
+	return stripped == ""
+}
+
+func bindAndValidateSimple(c *gin.Context, req interface{}) map[string]string {
+	errs := make(map[string]string)
+
+	if err := c.ShouldBindJSON(req); err != nil {
+		if ve, ok := err.(validator.ValidationErrors); ok {
+			for _, fe := range ve {
+				label := camelToSnake(fe.Field())
+				if msg, ok := simpleFieldMsg[label]; ok {
+					errs[label] = msg
+				} else {
+					errs[label] = fmt.Sprintf("%s is required", label)
+				}
+			}
+		}
+	}
+
+	if r, ok := req.(*models.CreateSimpleReportDocumentRequest); ok && r.Content != "" && isEmptyHTML(r.Content) {
+		errs["content"] = "សូមបញ្ចូលខ្លឹមសាររបាយការណ៍"
+	}
+	if r, ok := req.(*models.UpdateSimpleReportDocumentRequest); ok && r.Content != "" && isEmptyHTML(r.Content) {
+		errs["content"] = "សូមបញ្ចូលខ្លឹមសាររបាយការណ៍"
+	}
+
+	return errs
+}
+
+var simpleFieldMsg = map[string]string{
+	"title":       "សូមបញ្ចូលចំណងជើងរបាយការណ៍",
+	"description": "សូមបញ្ចូលការពិពណ៌នា",
+	"content":     "សូមបញ្ចូលខ្លឹមសាររបាយការណ៍",
+	"category":    "សូមជ្រើសរើសប្រភេទរបាយការណ៍",
+}
+
+func camelToSnake(s string) string {
+	var buf strings.Builder
+	for i, c := range s {
+		if c >= 'A' && c <= 'Z' {
+			if i > 0 {
+				buf.WriteByte('_')
+			}
+			buf.WriteRune(c + 32)
+		} else {
+			buf.WriteRune(c)
+		}
+	}
+	return buf.String()
 }
