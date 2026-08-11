@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { LuArrowLeft, LuShieldCheck, LuPlus, LuX, LuSave } from "react-icons/lu";
 import { modulesAPI } from "../../api/modules";
+import { useModules } from "../../hooks/useModules";
 import { useToast } from "../../components/Toast";
 import Select from "../../components/Select";
 
@@ -31,6 +32,7 @@ const MODULE_LABELS = {
 export default function ModuleSettings() {
   const navigate = useNavigate();
   const toast = useToast();
+  const { refresh: refreshModules } = useModules();
   const [original, setOriginal] = useState([]);
   const [draft, setDraft] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -159,6 +161,7 @@ export default function ModuleSettings() {
       setDraftSteps(JSON.parse(JSON.stringify(cleanSteps)));
 
       toast.success("បានរក្សាទុកការកំណត់");
+      refreshModules();
     } catch (err) {
       toast.error("ការរក្សាទុកបរាជ័យ");
     } finally {

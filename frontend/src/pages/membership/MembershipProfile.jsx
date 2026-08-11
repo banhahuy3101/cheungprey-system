@@ -90,11 +90,11 @@ export default function MembershipProfile({ profile: initialProfile, onBack, onE
   };
 
   const loadApprovals = () => {
-    if (!member || approvalHistory.length > 0) return;
+    if (!member) return;
     setApprovalLoading(true);
     approvalsAPI.history("membership", member.id)
       .then((res) => setApprovalHistory(res.data?.data || res.data || []))
-      .catch(() => {})
+      .catch(() => setApprovalHistory([]))
       .finally(() => setApprovalLoading(false));
   };
 
@@ -290,39 +290,47 @@ export default function MembershipProfile({ profile: initialProfile, onBack, onE
                   <p>មិនមានដំណើរការយល់ព្រម</p>
                 </div>
               ) : (
-                <div className="table-responsive">
-                  <table className="table">
-                    <thead>
-                      <tr>
-                        <th>ជំហាន</th>
-                        <th>ស្ថានភាព</th>
-                        <th>យល់ព្រមដោយ</th>
-                        <th>កាលបរិច្ឆេទ</th>
-                        <th>កំណត់ចំណាំ</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {approvalHistory.map((a) => (
-                        <tr key={a.id}>
-                          <td><strong>Step {a.step_order}</strong></td>
-                          <td>
-                            <span className={`badge ${
-                              a.status === "approved" ? "badge-success" :
-                              a.status === "rejected" ? "badge-danger" :
-                              "badge-info"
-                            }`}>
-                              {a.status === "approved" ? "បានយល់ព្រម" :
-                               a.status === "rejected" ? "បានបដិសេធ" :
-                               "រង់ចាំ"}
-                            </span>
-                          </td>
-                          <td style={{ fontSize: "0.85rem" }}>{a.approved_by || "—"}</td>
-                          <td style={{ fontSize: "0.85rem" }}>{a.approved_at ? new Date(a.approved_at).toLocaleString() : "—"}</td>
-                          <td style={{ fontSize: "0.85rem" }}>{a.notes || "—"}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                  {approvalHistory.map((a, i) => (
+                    <div key={i} style={{
+                      display: "flex", alignItems: "center", gap: "1rem",
+                      padding: "0.7rem 1rem", borderRadius: 10,
+                      background: "#fff", border: "1px solid #f1f5f9",
+                    }}>
+                      <div style={{
+                        width: 32, height: 32, borderRadius: "50%",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        fontSize: "0.75rem", fontWeight: 700, flexShrink: 0,
+                        background: a.status === "approved" ? "#ecfdf5" : a.status === "rejected" ? "#fef2f2" : "#fef3c7",
+                        color: a.status === "approved" ? "#059669" : a.status === "rejected" ? "#dc2626" : "#d97706",
+                      }}>
+                        {a.status === "approved" ? "✓" : a.status === "rejected" ? "✕" : a.step_order}
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontWeight: 700, fontSize: "0.85rem" }}>
+                          Step {a.step_order} — {a.approver_role === "commune_chief" ? "ប្រធានឃុំ" :
+                            a.approver_role === "district_chief" ? "ប្រធានស្រុក" :
+                            a.approver_role === "province_chief" ? "ប្រធានខេត្ត" :
+                            a.approver_role || "—"}
+                        </div>
+                        <div style={{ fontSize: "0.72rem", color: "#94a3b8", marginTop: "0.1rem" }}>
+                          {a.approver_name && <span>អ្នកទទួលបន្ទុក: <strong style={{ color: "#0f172a" }}>{a.approver_name}</strong> · </span>}
+                          {a.status === "approved" ? "បានយល់ព្រម" :
+                           a.status === "rejected" ? "បានបដិសេធ" : "រង់ចាំការយល់ព្រម"}
+                          {a.approved_by_name && <span> ដោយ <strong style={{ color: "#0f172a" }}>{a.approved_by_name}</strong></span>}
+                          {a.approved_at && ` · ${new Date(a.approved_at).toLocaleString()}`}
+                          {a.notes && ` · ${a.notes}`}
+                        </div>
+                      </div>
+                      <span className={`badge ${
+                        a.status === "approved" ? "badge-success" :
+                        a.status === "rejected" ? "badge-danger" : "badge-info"
+                      }`} style={{ fontSize: "0.7rem" }}>
+                        {a.status === "approved" ? "បានយល់ព្រម" :
+                         a.status === "rejected" ? "បដិសេធ" : "រង់ចាំ"}
+                      </span>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>

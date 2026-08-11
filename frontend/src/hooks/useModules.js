@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { modulesAPI } from "../api/modules";
 
 let cached = null;
@@ -8,24 +8,33 @@ export function useModules() {
   const [modules, setModules] = useState(cached || []);
   const [loading, setLoading] = useState(!cached);
 
+  const fetch = useCallback(() => {
+    setLoading(true);
+    fetchPromise = modulesAPI.list()
+      .then((res) => {
+        cached = res.data?.data || res.data || [];
+        setModules(cached);
+        return cached;
+      })
+      .catch(() => {
+        cached = [];
+        setModules([]);
+        return [];
+      })
+      .finally(() => setLoading(false));
+    return fetchPromise;
+  }, []);
+
   useEffect(() => {
     if (cached) return;
-    if (!fetchPromise) {
-      fetchPromise = modulesAPI.list()
-        .then((res) => {
-          cached = res.data?.data || res.data || [];
-          return cached;
-        })
-        .catch(() => {
-          cached = [];
-          return [];
-        });
-    }
-    fetchPromise.then((data) => {
-      setModules(data);
-      setLoading(false);
-    });
-  }, []);
+    fetch();
+  }, [fetch]);
+
+  const refresh = useCallback(() => {
+    cached = null;
+    fetchPromise = null;
+    return fetch();
+  }, [fetch]);
 
   const isEnabled = (moduleKey) => {
     if (moduleKey === "dashboard" || moduleKey === "settings") return true;
@@ -33,5 +42,5 @@ export function useModules() {
     return m ? m.enabled : true;
   };
 
-  return { modules, loading, isEnabled };
+  return { modules, loading, isEnabled, refresh };
 }

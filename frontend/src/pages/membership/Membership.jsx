@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
-import { LuPlus } from "react-icons/lu";
+import { LuPlus, LuList, LuShieldCheck } from "react-icons/lu";
 import { membershipAPI } from "../../api/membership";
 import { partyAPI } from "../../api/party";
 import { useAuth } from "../../hooks/useAuth";
 import { canAccess, FEATURES } from "../../utils/permissions";
 import MembershipList from "./MembershipList";
+import ApprovalQueue from "./ApprovalQueue";
 import MembershipProfile from "./MembershipProfile";
 import MembershipForm from "./MembershipForm";
 import MembershipDemographics from "./MembershipDemographics";
@@ -66,12 +67,15 @@ export default function Membership() {
   const [genderFilter, setGenderFilter] = useState("");
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
+  const [viewMode, setViewMode] = useState("list");
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(initialForm);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [profile, setProfile] = useState(null);
+
+  const canApprove = canAccess(user, FEATURES.membership_admin) || user?.role === "district_chief" || user?.role === "province_chief" || user?.role === "admin" || user?.role === "super_admin";
 
   const memberZone = useZoneCascade({
     userZone: "",
@@ -236,6 +240,32 @@ export default function Membership() {
       <div className="page-header">
         <h2 className="section-title">បញ្ជីសមាជិក</h2>
         <div className="actions" style={{ display: "flex", gap: "0.5rem" }}>
+          {canApprove && (
+            <div style={{ display: "flex", gap: 0, background: "#f1f5f9", borderRadius: 8, padding: 2, marginRight: "0.5rem" }}>
+              <button
+                onClick={() => setViewMode("list")}
+                style={{
+                  display: "flex", alignItems: "center", gap: "0.3rem",
+                  padding: "0.35rem 0.7rem", borderRadius: 6,
+                  border: "none", cursor: "pointer", fontSize: "0.78rem", fontWeight: 600,
+                  background: viewMode === "list" ? "#fff" : "transparent",
+                  color: viewMode === "list" ? "#4f46e5" : "#64748b",
+                  boxShadow: viewMode === "list" ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
+                }}
+              ><LuList size={14} /> បញ្ជី</button>
+              <button
+                onClick={() => setViewMode("queue")}
+                style={{
+                  display: "flex", alignItems: "center", gap: "0.3rem",
+                  padding: "0.35rem 0.7rem", borderRadius: 6,
+                  border: "none", cursor: "pointer", fontSize: "0.78rem", fontWeight: 600,
+                  background: viewMode === "queue" ? "#fff" : "transparent",
+                  color: viewMode === "queue" ? "#d97706" : "#64748b",
+                  boxShadow: viewMode === "queue" ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
+                }}
+              ><LuShieldCheck size={14} /> យល់ព្រម</button>
+            </div>
+          )}
           <button className="btn btn-secondary" onClick={() => navigate("/membership/stats")}>ស្ថិតិ</button>
           <button className="btn btn-secondary" onClick={() => navigate("/membership/import")}>នាំចូល</button>
           <button className="btn btn-primary" onClick={() => navigate("/membership/create")}>
@@ -244,28 +274,34 @@ export default function Membership() {
         </div>
       </div>
 
-      {loading ? (
-        <div className="loading">កំពុងផ្ទុក...</div>
+      {viewMode === "queue" && canApprove ? (
+        <ApprovalQueue onRefresh={fetchMembers} />
       ) : (
-        <MembershipList
-          members={members}
-          search={search}
-          setSearch={setSearch}
-          statusFilter={statusFilter}
-          setStatusFilter={setStatusFilter}
-          zoneFilter={zoneFilter}
-          setZoneFilter={setZoneFilter}
-          roleFilter={roleFilter}
-          setRoleFilter={setRoleFilter}
-          genderFilter={genderFilter}
-          setGenderFilter={setGenderFilter}
-          page={page}
-          setPage={setPage}
-          total={total}
-          loading={loading}
-          canApprove={canAccess(user, FEATURES.membership_admin) || user?.role === "district_chief" || user?.role === "admin" || user?.role === "super_admin"}
-          onRefresh={fetchMembers}
-        />
+        <>
+          {loading ? (
+            <div className="loading">កំពុងផ្ទុក...</div>
+          ) : (
+            <MembershipList
+              members={members}
+              search={search}
+              setSearch={setSearch}
+              statusFilter={statusFilter}
+              setStatusFilter={setStatusFilter}
+              zoneFilter={zoneFilter}
+              setZoneFilter={setZoneFilter}
+              roleFilter={roleFilter}
+              setRoleFilter={setRoleFilter}
+              genderFilter={genderFilter}
+              setGenderFilter={setGenderFilter}
+              page={page}
+              setPage={setPage}
+              total={total}
+              loading={loading}
+              canApprove={canApprove}
+              onRefresh={fetchMembers}
+            />
+          )}
+        </>
       )}
 
       {showModal && (

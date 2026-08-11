@@ -224,3 +224,46 @@ func fetchUserNames(r *Repository, userIDs []string) map[string]string {
 	}
 	return result
 }
+
+func (r *Repository) GetZoneChiefName(villageCode string, role string) (string, error) {
+	if villageCode == "" {
+		return "", nil
+	}
+
+	var zoneCode string
+	switch role {
+	case "commune_chief":
+		if len(villageCode) >= 6 {
+			zoneCode = villageCode[:6]
+		}
+	case "district_chief":
+		if len(villageCode) >= 4 {
+			zoneCode = villageCode[:4]
+		}
+	case "province_chief":
+		if len(villageCode) >= 2 {
+			zoneCode = villageCode[:2]
+		}
+	default:
+		return "", nil
+	}
+
+	if zoneCode == "" {
+		return "", nil
+	}
+
+	assignment, err := r.GetZoneChiefAssignment(zoneCode)
+	if err != nil || assignment == nil {
+		return "", nil
+	}
+
+	return assignment.UserName, nil
+}
+
+func (r *Repository) GetProfileName(userID uuid.UUID) (string, error) {
+	names := fetchUserNames(r, []string{userID.String()})
+	if name, ok := names[userID.String()]; ok {
+		return name, nil
+	}
+	return "", nil
+}

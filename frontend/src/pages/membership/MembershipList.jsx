@@ -68,14 +68,6 @@ export default function MembershipList({
     }
   };
 
-  const filterPills = [
-    { key: "status", value: "Active", label: "សកម្ម", color: "var(--success)" },
-    { key: "status", value: "Suspended", label: "ផ្អាក", color: "var(--warning)" },
-    { key: "status", value: "Pending", label: "រង់ចាំ", color: "var(--primary)" },
-    { key: "gender", value: "Male", label: "ប្រុស", color: "#3b82f6" },
-    { key: "gender", value: "Female", label: "ស្រី", color: "#ec4899" },
-  ];
-
   return (
     <>
       {/* Stats bar */}
@@ -89,31 +81,6 @@ export default function MembershipList({
           <StatCard value={`$${stats?.dues_this_month || 0}`} label="រំលោះខែនេះ" color="#d97706" />
         </div>
       )}
-
-      {/* Quick filter pills */}
-      <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap", marginBottom: "0.75rem" }}>
-        <button
-          className={`btn ${statusFilter || roleFilter || genderFilter ? "btn-secondary" : "btn-primary"}`}
-          style={{ fontSize: "0.8rem", padding: "0.3rem 0.75rem" }}
-          onClick={() => { setStatusFilter(""); setRoleFilter(""); setGenderFilter(""); setPage(1); }}
-        >
-          ទាំងអស់
-        </button>
-        {filterPills.map((p) => (
-          <button
-            key={`${p.key}-${p.value}`}
-            className="btn btn-secondary"
-            style={{ fontSize: "0.8rem", padding: "0.3rem 0.75rem", borderColor: p.color, color: p.color }}
-            onClick={() => {
-              if (p.key === "status") { setStatusFilter(statusFilter === p.value ? "" : p.value); setRoleFilter(""); setGenderFilter(""); }
-              if (p.key === "gender") { setGenderFilter(genderFilter === p.value ? "" : p.value); setStatusFilter(""); setRoleFilter(""); }
-              setPage(1);
-            }}
-          >
-            {p.label}
-          </button>
-        ))}
-      </div>
 
       {/* Search + filters */}
       <div className="search-bar" style={{ marginBottom: "0.5rem" }}>
