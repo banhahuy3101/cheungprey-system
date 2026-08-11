@@ -1,11 +1,12 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  LuArrowLeft, LuArrowRight, LuCheck, LuUser, LuPhone, LuMapPin, LuAward, LuClipboardCheck,
+  LuArrowLeft, LuArrowRight, LuCheck, LuUser, LuPhone, LuMapPin, LuAward, LuClipboardCheck, LuFileText,
 } from "react-icons/lu";
 import ZoneCascadeSelect from "../../components/ZoneCascadeSelect";
 import Select from "../../components/Select";
 import { partyAPI } from "../../api/party";
+import { membershipAPI } from "../../api/membership";
 import { useZoneCascade } from "../../hooks/useZoneCascade";
 import { useToast } from "../../components/Toast";
 
@@ -14,7 +15,8 @@ const STEPS = [
   { key: 2, label: "ទំនាក់ទំនង", icon: LuPhone },
   { key: 3, label: "ទីតាំង គណបក្ស", icon: LuMapPin },
   { key: 4, label: "ប្រភេទសមាជិក", icon: LuAward },
-  { key: 5, label: "ពិនិត្យ រក្សាទុក", icon: LuClipboardCheck },
+  { key: 5, label: "ទិន្នន័យផ្ទាល់ខ្លួន", icon: LuFileText },
+  { key: 6, label: "ពិនិត្យ រក្សាទុក", icon: LuClipboardCheck },
 ];
 
 const initialForm = {
@@ -37,6 +39,15 @@ const initialForm = {
   membership_type: "Full",
   membership_tier: "Basic",
   exempt_from_dues: false,
+  // demographics
+  marital_status: "",
+  occupation: "",
+  education_level: "",
+  ethnicity: "",
+  religion: "",
+  blood_type: "",
+  emergency_contact_name: "",
+  emergency_contact_phone: "",
 };
 
 export default function MembershipCreate() {
@@ -112,8 +123,29 @@ export default function MembershipCreate() {
     setError("");
     setSubmitting(true);
     try {
-      await partyAPI.createMember({ ...form, registered_village_code: getVillageCode() });
-      toast.success("បានបង្កើតសមាជិកថ្មីដោយជោគជ័យ");
+      const res = await partyAPI.createMember({ ...form, registered_village_code: getVillageCode() });
+      const newMember = res.data?.data || res.data;
+      const memberId = newMember?.id || newMember?.member_id;
+      const hasDemos = form.marital_status || form.occupation || form.education_level
+        || form.ethnicity || form.religion || form.blood_type
+        || form.emergency_contact_name || form.emergency_contact_phone;
+      if (memberId && hasDemos) {
+        try {
+          await membershipAPI.updateDemographics(memberId, {
+            marital_status: form.marital_status,
+            occupation: form.occupation,
+            education_level: form.education_level,
+            ethnicity: form.ethnicity,
+            religion: form.religion,
+            blood_type: form.blood_type,
+            emergency_contact_name: form.emergency_contact_name,
+            emergency_contact_phone: form.emergency_contact_phone,
+          });
+        } catch {
+          // demographics save is optional
+        }
+      }
+      toast.success("បានដាក់សំណើបង្កើតសមាជិក — រង់ចាំការយល់ព្រមពីថ្នាក់ស្រុក");
       navigate("/membership");
     } catch (err) {
       setError(err.response?.data?.error || err.response?.data?.message || "ការរក្សាទុកបរាជ័យ");
@@ -135,7 +167,7 @@ export default function MembershipCreate() {
         </div>
         <span style={{ color: "var(--text-muted)" }}>
           <StepIcon style={{ marginRight: "0.25rem", verticalAlign: "middle" }} />
-          ជំហានទី {step}/5: {STEPS[step - 1]?.label}
+          ជំហានទី {step}/6: {STEPS[step - 1]?.label}
         </span>
       </div>
 
@@ -147,7 +179,7 @@ export default function MembershipCreate() {
               key={s.key}
               style={{
                 display: "flex", flexDirection: "column", alignItems: "center",
-                gap: "0.35rem", flex: "0 0 20%", position: "relative",
+                gap: "0.35rem",                 flex: "0 0 16.66%", position: "relative",
                 cursor: s.key < step ? "pointer" : "default",
               }}
               onClick={() => { if (s.key < step) setStep(s.key); }}
@@ -184,7 +216,7 @@ export default function MembershipCreate() {
 
       {/* Steps */}
       <div className="card" style={{ maxWidth: "780px", margin: "0 auto", padding: "2rem" }}>
-        <form onSubmit={(e) => { e.preventDefault(); step < 5 ? next() : handleSubmit(); }}>
+        <form onSubmit={(e) => { e.preventDefault(); step < 6 ? next() : handleSubmit(); }}>
           {step === 1 && (
             <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
               <h3 style={{ margin: "0 0 0.5rem 0", color: "var(--primary)" }}>ព័ត៌មានមូលដ្ឋាន</h3>
@@ -352,6 +384,79 @@ export default function MembershipCreate() {
 
           {step === 5 && (
             <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+              <h3 style={{ margin: "0 0 0.5rem 0", color: "var(--primary)" }}>ទិន្នន័យផ្ទាល់ខ្លួន (ស្រេចចិត្ត)</h3>
+              <div className="form-row">
+                <div className="form-group">
+                  <label>ស្ថានភាពអាពាហ៍ពិពាហ៍</label>
+                  <Select name="marital_status" value={form.marital_status} onChange={handleChange}>
+                    <option value="">-- ជ្រើសរើស --</option>
+                    <option value="Single">នៅលីវ</option>
+                    <option value="Married">រៀបការ</option>
+                    <option value="Divorced">លែងលះ</option>
+                    <option value="Widowed">មេម៉ាយ</option>
+                  </Select>
+                </div>
+                <div className="form-group">
+                  <label>មុខរបរ</label>
+                  <input name="occupation" value={form.occupation} onChange={handleChange} />
+                </div>
+              </div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label>កម្រិតសិក្សា</label>
+                  <Select name="education_level" value={form.education_level} onChange={handleChange}>
+                    <option value="">-- ជ្រើសរើស --</option>
+                    <option value="None">គ្មាន</option>
+                    <option value="Primary">បឋមសិក្សា</option>
+                    <option value="Secondary">មធ្យមសិក្សា</option>
+                    <option value="HighSchool">វិទ្យាល័យ</option>
+                    <option value="Bachelor">បរិញ្ញាបត្រ</option>
+                    <option value="Master">អនុបណ្ឌិត</option>
+                    <option value="PhD">បណ្ឌិត</option>
+                  </Select>
+                </div>
+                <div className="form-group">
+                  <label>ជនជាតិ</label>
+                  <input name="ethnicity" value={form.ethnicity} onChange={handleChange} />
+                </div>
+              </div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label>សាសនា</label>
+                  <Select name="religion" value={form.religion} onChange={handleChange}>
+                    <option value="">-- ជ្រើសរើស --</option>
+                    <option value="Buddhist">ព្រះពុទ្ធ</option>
+                    <option value="Muslim">ឥស្លាម</option>
+                    <option value="Christian">គ្រិស្ត</option>
+                    <option value="Other">ផ្សេងៗ</option>
+                  </Select>
+                </div>
+                <div className="form-group">
+                  <label>ប្រភេទឈាម</label>
+                  <Select name="blood_type" value={form.blood_type} onChange={handleChange}>
+                    <option value="">-- ជ្រើសរើស --</option>
+                    <option value="A">A</option>
+                    <option value="B">B</option>
+                    <option value="AB">AB</option>
+                    <option value="O">O</option>
+                  </Select>
+                </div>
+              </div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label>ឈ្មោះទំនាក់ទំនងបន្ទាន់</label>
+                  <input name="emergency_contact_name" value={form.emergency_contact_name} onChange={handleChange} />
+                </div>
+                <div className="form-group">
+                  <label>លេខទូរសព្ទបន្ទាន់</label>
+                  <input name="emergency_contact_phone" value={form.emergency_contact_phone} onChange={handleChange} />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {step === 6 && (
+            <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
               <h3 style={{ margin: "0 0 0.5rem 0", color: "var(--primary)" }}>ពិនិត្យមុនរក្សាទុក</h3>
               <div className="card" style={{ padding: "1rem", background: "var(--bg)" }}>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
@@ -371,6 +476,14 @@ export default function MembershipCreate() {
                   <ReviewItem label="ប្រភេទ" value={form.membership_type} />
                   <ReviewItem label="កម្រិត" value={form.membership_tier} />
                   <ReviewItem label="លើកលែងបង់រំលោះ" value={form.exempt_from_dues ? "បាទ/ចាស" : "ទេ"} />
+                  <ReviewItem label="ស្ថានភាពអាពាហ៍" value={form.marital_status || "—"} />
+                  <ReviewItem label="មុខរបរ" value={form.occupation || "—"} />
+                  <ReviewItem label="កម្រិតសិក្សា" value={form.education_level || "—"} />
+                  <ReviewItem label="ជនជាតិ" value={form.ethnicity || "—"} />
+                  <ReviewItem label="សាសនា" value={form.religion || "—"} />
+                  <ReviewItem label="ប្រភេទឈាម" value={form.blood_type || "—"} />
+                  <ReviewItem label="ទំនាក់ទំនងបន្ទាន់" value={form.emergency_contact_name || "—"} />
+                  <ReviewItem label="ទូរសព្ទបន្ទាន់" value={form.emergency_contact_phone || "—"} />
                 </div>
                 <button type="button" className="btn btn-secondary" style={{ marginTop: "0.75rem" }} onClick={() => setStep(1)}>
                   កែប្រែព័ត៌មាន
@@ -393,7 +506,7 @@ export default function MembershipCreate() {
               <button type="button" className="btn btn-secondary" onClick={() => navigate("/membership")}>
                 បោះបង់
               </button>
-              {step < 5 ? (
+              {step < 6 ? (
                 <button type="button" className="btn btn-primary" onClick={next}>
                   បន្ទាប់ <LuArrowRight />
                 </button>

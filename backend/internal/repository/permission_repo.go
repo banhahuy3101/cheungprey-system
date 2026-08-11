@@ -3,6 +3,7 @@ package repository
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/google/uuid"
 
@@ -114,9 +115,9 @@ func (r *Repository) GetAllRolePermissionsMap() (map[models.UserRole]models.Perm
 		m[item.Role] = item.Permissions
 	}
 	for _, role := range []models.UserRole{
-		models.RoleSuperAdmin, models.RoleAdmin, models.RoleDistrictChief,
-		models.RoleCommuneChief, models.RoleCommuneClerk, models.RoleVillageChief,
-		models.RoleRecorder, models.RoleRegularUser,
+		models.RoleSuperAdmin, models.RoleAdmin, models.RoleProvinceChief,
+		models.RoleDistrictChief, models.RoleCommuneChief, models.RoleCommuneClerk,
+		models.RoleVillageChief, models.RoleRecorder, models.RoleRegularUser,
 	} {
 		if _, ok := m[role]; !ok {
 			m[role] = models.DefaultPermissionsForRole(role)
@@ -230,6 +231,7 @@ func builtinRoles() []models.Role {
 	return []models.Role{
 		{Role: "super_admin", Label: "Super Admin", IsSystem: true},
 		{Role: "admin", Label: "Admin", IsSystem: true},
+		{Role: "province_chief", Label: "Province Chief", IsSystem: true},
 		{Role: "district_chief", Label: "District Chief", IsSystem: true},
 		{Role: "commune_chief", Label: "Commune Chief", IsSystem: true},
 		{Role: "commune_clerk", Label: "Commune Clerk", IsSystem: true},
@@ -240,6 +242,15 @@ func builtinRoles() []models.Role {
 }
 
 func (r *Repository) CreateRole(role, label string) error {
+	role = strings.TrimSpace(strings.ToLower(role))
+	if role == "" {
+		return fmt.Errorf("role key is required")
+	}
+	for _, c := range role {
+		if !((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_') {
+			return fmt.Errorf("role key must be snake_case: only lowercase letters, numbers, underscores")
+		}
+	}
 	userRole := models.UserRole(role)
 	if exists, err := r.roleExists(role); err != nil {
 		return fmt.Errorf("check role: %w", err)
@@ -305,9 +316,9 @@ func (r *Repository) DeleteRole(role string) error {
 
 func isSystemRole(role string) bool {
 	switch models.UserRole(role) {
-	case models.RoleSuperAdmin, models.RoleAdmin, models.RoleDistrictChief,
-		models.RoleCommuneChief, models.RoleCommuneClerk, models.RoleVillageChief,
-		models.RoleRecorder, models.RoleRegularUser:
+	case models.RoleSuperAdmin, models.RoleAdmin, models.RoleProvinceChief,
+		models.RoleDistrictChief, models.RoleCommuneChief, models.RoleCommuneClerk,
+		models.RoleVillageChief, models.RoleRecorder, models.RoleRegularUser:
 		return true
 	default:
 		return false
@@ -323,9 +334,9 @@ func (r *Repository) SeedRolePermissionsIfEmpty() error {
 		return nil
 	}
 	for _, role := range []models.UserRole{
-		models.RoleSuperAdmin, models.RoleAdmin, models.RoleDistrictChief,
-		models.RoleCommuneChief, models.RoleCommuneClerk, models.RoleVillageChief,
-		models.RoleRecorder, models.RoleRegularUser,
+		models.RoleSuperAdmin, models.RoleAdmin, models.RoleProvinceChief,
+		models.RoleDistrictChief, models.RoleCommuneChief, models.RoleCommuneClerk,
+		models.RoleVillageChief, models.RoleRecorder, models.RoleRegularUser,
 	} {
 		if err := r.UpdateRolePermissions(role, models.DefaultPermissionsForRole(role)); err != nil {
 			return err

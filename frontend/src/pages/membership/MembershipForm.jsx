@@ -159,6 +159,77 @@ export default function MembershipForm({ editing, form, setForm, error, submitti
               </div>
             </label>
 
+            <div style={{ borderTop: "1px solid var(--border)", paddingTop: "0.75rem", marginTop: "0.25rem" }}>
+              <h4 style={{ margin: "0 0 0.75rem 0", fontSize: "0.9rem", color: "var(--text-muted)" }}>ទិន្នន័យផ្ទាល់ខ្លួន (ស្រេចចិត្ត)</h4>
+              <div className="form-row">
+                <div className="form-group">
+                  <label>ស្ថានភាពអាពាហ៍ពិពាហ៍</label>
+                  <Select name="marital_status" value={form.marital_status || ""} onChange={handleChange}>
+                    <option value="">-- ជ្រើសរើស --</option>
+                    <option value="Single">នៅលីវ</option>
+                    <option value="Married">រៀបការ</option>
+                    <option value="Divorced">លែងលះ</option>
+                    <option value="Widowed">មេម៉ាយ</option>
+                  </Select>
+                </div>
+                <div className="form-group">
+                  <label>មុខរបរ</label>
+                  <input name="occupation" value={form.occupation || ""} onChange={handleChange} />
+                </div>
+              </div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label>កម្រិតសិក្សា</label>
+                  <Select name="education_level" value={form.education_level || ""} onChange={handleChange}>
+                    <option value="">-- ជ្រើសរើស --</option>
+                    <option value="None">គ្មាន</option>
+                    <option value="Primary">បឋមសិក្សា</option>
+                    <option value="Secondary">មធ្យមសិក្សា</option>
+                    <option value="HighSchool">វិទ្យាល័យ</option>
+                    <option value="Bachelor">បរិញ្ញាបត្រ</option>
+                    <option value="Master">អនុបណ្ឌិត</option>
+                    <option value="PhD">បណ្ឌិត</option>
+                  </Select>
+                </div>
+                <div className="form-group">
+                  <label>ជនជាតិ</label>
+                  <input name="ethnicity" value={form.ethnicity || ""} onChange={handleChange} />
+                </div>
+              </div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label>សាសនា</label>
+                  <Select name="religion" value={form.religion || ""} onChange={handleChange}>
+                    <option value="">-- ជ្រើសរើស --</option>
+                    <option value="Buddhist">ព្រះពុទ្ធ</option>
+                    <option value="Muslim">ឥស្លាម</option>
+                    <option value="Christian">គ្រិស្ត</option>
+                    <option value="Other">ផ្សេងៗ</option>
+                  </Select>
+                </div>
+                <div className="form-group">
+                  <label>ប្រភេទឈាម</label>
+                  <Select name="blood_type" value={form.blood_type || ""} onChange={handleChange}>
+                    <option value="">-- ជ្រើសរើស --</option>
+                    <option value="A">A</option>
+                    <option value="B">B</option>
+                    <option value="AB">AB</option>
+                    <option value="O">O</option>
+                  </Select>
+                </div>
+              </div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label>ឈ្មោះទំនាក់ទំនងបន្ទាន់</label>
+                  <input name="emergency_contact_name" value={form.emergency_contact_name || ""} onChange={handleChange} />
+                </div>
+                <div className="form-group">
+                  <label>លេខទូរសព្ទបន្ទាន់</label>
+                  <input name="emergency_contact_phone" value={form.emergency_contact_phone || ""} onChange={handleChange} />
+                </div>
+              </div>
+            </div>
+
             {error && <div className="alert alert-error">{error}</div>}
           </div>
           <div className="modal-footer">

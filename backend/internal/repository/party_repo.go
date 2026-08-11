@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/google/uuid"
@@ -30,6 +31,28 @@ func (r *Repository) ListZones(zoneType string) ([]models.GeographicZone, error)
 		return nil, fmt.Errorf("list zones: %w", err)
 	}
 	return zones, nil
+}
+
+type ZoneTypeCount struct {
+	ZoneType string `json:"zone_type"`
+	Count    int    `json:"count"`
+}
+
+func (r *Repository) CountZonesByType() (map[string]int, error) {
+	result := r.AdminClient.Rpc("get_zone_counts", "", nil)
+	if result == "" {
+		return map[string]int{"Province": 0, "District": 0, "Commune": 0, "Village": 0}, nil
+	}
+
+	var counts map[string]int
+	if err := json.Unmarshal([]byte(result), &counts); err != nil {
+		return nil, fmt.Errorf("count zones by type: %w", err)
+	}
+
+	if counts == nil {
+		counts = map[string]int{"Province": 0, "District": 0, "Commune": 0, "Village": 0}
+	}
+	return counts, nil
 }
 
 func (r *Repository) GetChildren(parentCode string) ([]models.GeographicZone, error) {

@@ -27,4 +27,13 @@ export const membershipAPI = {
   updateCard: (id, data) => client.put(`/membership/cards/${id}`, data),
 
   bulkImport: (data) => client.post("/membership/import", data),
+
+  approve: (id, data) => client.post(`/membership/${id}/approve`, data || {}),
+  reject: (id, data) => client.post(`/membership/${id}/reject`, data),
+};
+
+export const approvalsAPI = {
+  queue: (module) => client.get("/approvals/queue", { params: { module } }),
+  approve: (id, data) => client.post(`/approvals/${id}/approve`, data || {}),
+  reject: (id, data) => client.post(`/approvals/${id}/reject`, data),
 };

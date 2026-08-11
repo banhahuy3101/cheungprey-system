@@ -11,6 +11,7 @@ type UserRole string
 const (
 	RoleSuperAdmin    UserRole = "super_admin"
 	RoleAdmin         UserRole = "admin"
+	RoleProvinceChief UserRole = "province_chief"
 	RoleDistrictChief UserRole = "district_chief"
 	RoleCommuneChief  UserRole = "commune_chief"
 	RoleCommuneClerk  UserRole = "commune_clerk"
@@ -20,8 +21,9 @@ const (
 )
 
 var RoleHierarchy = map[UserRole]int{
-	RoleSuperAdmin:    7,
-	RoleAdmin:         6,
+	RoleSuperAdmin:    8,
+	RoleAdmin:         7,
+	RoleProvinceChief: 6,
 	RoleDistrictChief: 5,
 	RoleCommuneChief:  4,
 	RoleCommuneClerk:  3,

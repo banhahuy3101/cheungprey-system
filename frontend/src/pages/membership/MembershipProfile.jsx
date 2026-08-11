@@ -1,19 +1,57 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { LuArrowLeft, LuPencil, LuBanknote, LuActivity, LuUserCheck, LuCreditCard } from "react-icons/lu";
+import {
+  LuArrowLeft,
+  LuPencil,
+  LuBanknote,
+  LuActivity,
+  LuUserCheck,
+  LuCreditCard,
+  LuCalendar,
+  LuPhone,
+  LuMail,
+  LuMapPin,
+  LuShieldCheck,
+  LuBadgeCheck,
+  LuTrash2,
+  LuRefreshCw,
+  LuUser,
+} from "react-icons/lu";
 import { useAuth } from "../../hooks/useAuth";
 import { useToast } from "../../components/Toast";
 import ConfirmDialog from "../../components/ConfirmDialog";
 import { canAccess, FEATURES } from "../../utils/permissions";
 import { membershipAPI } from "../../api/membership";
 import { partyAPI } from "../../api/party";
+import { approvalsAPI } from "../../api/modules";
 import Select from "../../components/Select";
 
 const TABS = [
   { key: "overview", label: "ទិដ្ឋភាពទូទៅ" },
   { key: "demographics", label: "ទិន្នន័យផ្ទាល់ខ្លួន" },
   { key: "history", label: "ប្រវត្តិស្ថានភាព" },
+  { key: "approval", label: "ដំណើរការយល់ព្រម" },
 ];
+
+const STATUS_MAP = {
+  Pending: "pending",
+  Active: "active",
+  Suspended: "suspended",
+  Resigned: "resigned",
+  Expelled: "expelled",
+  Deceased: "deceased",
+};
+
+const STATUS_LABEL = {
+  Pending: "កំពុងរងចាំ",
+  Active: "សកម្ម",
+  Suspended: "ផ្អាក",
+  Resigned: "លាឈប់",
+  Expelled: "បណ្តេញចេញ",
+  Deceased: "មរណៈ",
+};
+
+const GENDER_LABEL = { Male: "ប្រុស", Female: "ស្រី" };
 
 export default function MembershipProfile({ profile: initialProfile, onBack, onEdit }) {
   const navigate = useNavigate();
@@ -29,6 +67,9 @@ export default function MembershipProfile({ profile: initialProfile, onBack, onE
   const [statusError, setStatusError] = useState("");
   const [statusSubmitting, setStatusSubmitting] = useState(false);
 
+  const [approvalHistory, setApprovalHistory] = useState([]);
+  const [approvalLoading, setApprovalLoading] = useState(false);
+
   const member = profile?.member;
   const demos = profile?.demographics;
   const positions = profile?.positions || [];
@@ -41,14 +82,26 @@ export default function MembershipProfile({ profile: initialProfile, onBack, onE
   const loadHistory = () => {
     if (!member) return;
     setStatusLoading(true);
-    membershipAPI.getStatusHistory(member.id).then((res) => {
-      setStatusHistory(res.data?.data || res.data || []);
-    }).catch(() => {}).finally(() => setStatusLoading(false));
+    membershipAPI
+      .getStatusHistory(member.id)
+      .then((res) => setStatusHistory(res.data?.data || res.data || []))
+      .catch(() => {})
+      .finally(() => setStatusLoading(false));
+  };
+
+  const loadApprovals = () => {
+    if (!member || approvalHistory.length > 0) return;
+    setApprovalLoading(true);
+    approvalsAPI.history("membership", member.id)
+      .then((res) => setApprovalHistory(res.data?.data || res.data || []))
+      .catch(() => {})
+      .finally(() => setApprovalLoading(false));
   };
 
   const handleTabChange = (tab) => {
     setActiveTab(tab);
     if (tab === "history") loadHistory();
+    if (tab === "approval") loadApprovals();
   };
 
   const handleStatusSubmit = async (e) => {
@@ -66,7 +119,7 @@ export default function MembershipProfile({ profile: initialProfile, onBack, onE
         loadHistory();
       }
     } catch (err) {
-      setStatusError(err.response?.data?.error || "Failed to change status");
+      setStatusError(err.response?.data?.error || "បរាជ័យ");
     } finally {
       setStatusSubmitting(false);
     }
@@ -84,113 +137,116 @@ export default function MembershipProfile({ profile: initialProfile, onBack, onE
   };
 
   const statusBadge = (s) => {
-    const map = { Pending: "badge-info", Active: "badge-success", Suspended: "badge-warning", Resigned: "badge-danger", Expelled: "badge-danger", Deceased: "badge-danger" };
+    const map = {
+      Pending: "badge-info",
+      Active: "badge-success",
+      Suspended: "badge-warning",
+      Resigned: "badge-danger",
+      Expelled: "badge-danger",
+      Deceased: "badge-danger",
+    };
     return map[s] || "badge";
   };
 
   if (!member) {
-    return <div className="page"><div className="loading">កំពុងផ្ទុក...</div></div>;
+    return (
+      <div className="page">
+        <div className="loading">កំពុងផ្ទុក...</div>
+      </div>
+    );
   }
+
+  const initials = ((member.last_name_kh?.[0] || "") + (member.first_name_kh?.[0] || "")) || "?";
 
   return (
     <div className="page">
-      <div className="page-header">
-        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-          <button className="btn-icon" onClick={onBack}><LuArrowLeft /></button>
-          <h2 className="section-title">ព័ត៌មានសមាជិក</h2>
+      {/* Hero Card */}
+      <div className="member-hero">
+        <div className="member-hero-head">
+          <button className="btn-icon" onClick={onBack} style={{ color: "#fff", zIndex: 1, marginRight: "0.5rem" }}>
+            <LuArrowLeft />
+          </button>
+          <div className="member-avatar">{initials}</div>
+          <div className="member-hero-info">
+            <h2 className="member-hero-name">
+              {member.last_name_kh} {member.first_name_kh}
+            </h2>
+            <p className="member-hero-sub">
+              {member.last_name_en} {member.first_name_en}
+            </p>
+            <div className="member-hero-badges">
+              <span className={`member-badge member-badge status-${STATUS_MAP[member.status] || "pending"}`}>
+                {STATUS_LABEL[member.status] || member.status}
+              </span>
+              <span className="member-badge member-badge" style={{ background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.2)" }}>
+                {member.membership_card_no}
+              </span>
+              {member.party_role && (
+                <span className="member-badge member-badge" style={{ background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.2)" }}>
+                  {member.party_role}
+                </span>
+              )}
+            </div>
+          </div>
+          <div className="member-hero-actions">
+            <button className="btn" onClick={onEdit}><LuPencil /> កែប្រែ</button>
+            {canAdmin && (
+              <>
+                <button className="btn" onClick={() => setShowStatusModal(true)}><LuRefreshCw /> ស្ថានភាព</button>
+                <button className="btn btn-danger" onClick={() => setShowConfirmDelete(true)}><LuTrash2 /></button>
+              </>
+            )}
+          </div>
         </div>
-        <div className="actions" style={{ display: "flex", gap: "0.5rem" }}>
-          <button className="btn btn-secondary" onClick={onEdit}><LuPencil /> កែប្រែ</button>
-          {canAdmin && (
-            <>
-              <button className="btn btn-secondary" onClick={() => setShowStatusModal(true)}>ប្តូរស្ថានភាព</button>
-              <button className="btn btn-danger" onClick={() => setShowConfirmDelete(true)}>លុប</button>
-            </>
-          )}
-        </div>
-      </div>
 
-      <div className="card" style={{ marginBottom: "1rem" }}>
-        <div className="profile-detail-grid">
-          <div className="profile-detail-item">
-            <span className="profile-detail-label">ឈ្មោះខ្មែរ</span>
-            <span className="profile-detail-value">{member.last_name_kh} {member.first_name_kh}</span>
+        {/* Quick Stats */}
+        <div className="member-quick-stats">
+          <div className="member-stat-item">
+            <span className="member-stat-value">{member.gender ? GENDER_LABEL[member.gender] || member.gender : "—"}</span>
+            <span className="member-stat-label">ភេទ</span>
           </div>
-          <div className="profile-detail-item">
-            <span className="profile-detail-label">ឈ្មោះឡាតាំង</span>
-            <span className="profile-detail-value">{member.last_name_en} {member.first_name_en}</span>
+          <div className="member-stat-item">
+            <span className="member-stat-value">{member.date_of_birth || "—"}</span>
+            <span className="member-stat-label">ថ្ងៃខែឆ្នាំកំណើត</span>
           </div>
-          <div className="profile-detail-item">
-            <span className="profile-detail-label">លេខសមាជិក</span>
-            <span className="profile-detail-value">{member.membership_card_no}</span>
+          <div className="member-stat-item">
+            <span className="member-stat-value">{member.phone_number || "—"}</span>
+            <span className="member-stat-label">លេខទូរសព្ទ</span>
           </div>
-          <div className="profile-detail-item">
-            <span className="profile-detail-label">អត្តសញ្ញាណប័ណ្ណ</span>
-            <span className="profile-detail-value">{member.national_id || "—"}</span>
+          <div className="member-stat-item">
+            <span className="member-stat-value">{member.join_date || "—"}</span>
+            <span className="member-stat-label">ថ្ងៃចូលជាសមាជិក</span>
           </div>
-          <div className="profile-detail-item">
-            <span className="profile-detail-label">ភេទ</span>
-            <span className="profile-detail-value">{member.gender === "Male" ? "ប្រុស" : member.gender === "Female" ? "ស្រី" : "ផ្សេងៗ"}</span>
-          </div>
-          <div className="profile-detail-item">
-            <span className="profile-detail-label">ថ្ងៃខែឆ្នាំកំណើត</span>
-            <span className="profile-detail-value">{member.date_of_birth}</span>
-          </div>
-          <div className="profile-detail-item">
-            <span className="profile-detail-label">លេខទូរសព្ទ</span>
-            <span className="profile-detail-value">{member.phone_number}</span>
-          </div>
-          <div className="profile-detail-item">
-            <span className="profile-detail-label">អ៊ីមែល</span>
-            <span className="profile-detail-value">{member.email || "—"}</span>
-          </div>
-          <div className="profile-detail-item">
-            <span className="profile-detail-label">Telegram</span>
-            <span className="profile-detail-value">{member.telegram_username || "—"}</span>
-          </div>
-          <div className="profile-detail-item">
-            <span className="profile-detail-label">ថ្ងៃចូល</span>
-            <span className="profile-detail-value">{member.join_date}</span>
-          </div>
-          <div className="profile-detail-item">
-            <span className="profile-detail-label">ឋានៈ</span>
-            <span className="profile-detail-value">{member.party_role}</span>
-          </div>
-          <div className="profile-detail-item">
-            <span className="profile-detail-label">ស្ថានភាព</span>
-            <span className="profile-detail-value">
-              <span className={`badge ${statusBadge(member.status)}`}>{member.status}</span>
+          <div className="member-stat-item">
+            <span className="member-stat-value">
+              {member.membership_type || "—"} / {member.membership_tier || "—"}
             </span>
-          </div>
-          <div className="profile-detail-item">
-            <span className="profile-detail-label">ប្រភេទ</span>
-            <span className="profile-detail-value">{member.membership_type}</span>
-          </div>
-          <div className="profile-detail-item">
-            <span className="profile-detail-label">កម្រិត</span>
-            <span className="profile-detail-value">{member.membership_tier}</span>
-          </div>
-          <div className="profile-detail-item">
-            <span className="profile-detail-label">លើកលែងបង់រំលោះ</span>
-            <span className="profile-detail-value">{member.exempt_from_dues ? "បាទ/ចាស" : "ទេ"}</span>
+            <span className="member-stat-label">ប្រភេទ / កម្រិត</span>
           </div>
         </div>
-      </div>
 
-      <div className="card" style={{ marginBottom: "1rem", display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-        <button className="btn btn-secondary" onClick={() => navigate(`/membership/${member.id}/dues`)}><LuBanknote /> បង់រំលោះ {dues && `($${dues.total_paid || 0})`}</button>
-        <button className="btn btn-secondary" onClick={() => navigate(`/membership/${member.id}/activity`)}><LuActivity /> សកម្មភាព ({activity.length})</button>
-        <button className="btn btn-secondary" onClick={() => navigate(`/membership/${member.id}/positions`)}><LuUserCheck /> ឋានៈ ({positions.length})</button>
-        <button className="btn btn-secondary" onClick={() => navigate(`/membership/${member.id}/cards`)}><LuCreditCard /> កាត ({cards.length})</button>
-      </div>
+        {/* Quick Action Toolbar */}
+        <div className="member-toolbar">
+          <button className="btn btn-secondary" onClick={() => navigate(`/membership/${member.id}/dues`)}>
+            <LuBanknote /> បង់រំលោះ {dues ? `($${dues.total_paid || 0})` : ""}
+          </button>
+          <button className="btn btn-secondary" onClick={() => navigate(`/membership/${member.id}/activity`)}>
+            <LuActivity /> សកម្មភាព ({activity.length})
+          </button>
+          <button className="btn btn-secondary" onClick={() => navigate(`/membership/${member.id}/positions`)}>
+            <LuUserCheck /> ឋានៈ ({positions.length})
+          </button>
+          <button className="btn btn-secondary" onClick={() => navigate(`/membership/${member.id}/cards`)}>
+            <LuCreditCard /> កាត ({cards.length})
+          </button>
+        </div>
 
-      <div className="card">
-        <div className="tabs" style={{ display: "flex", gap: "0", borderBottom: "1px solid var(--border)", marginBottom: "1rem" }}>
+        {/* Tabs */}
+        <div className="member-tabs">
           {TABS.map((tab) => (
             <button
               key={tab.key}
-              className={`btn ${activeTab === tab.key ? "btn-primary" : "btn-secondary"}`}
-              style={{ borderRadius: 0, borderBottom: activeTab === tab.key ? "2px solid var(--primary)" : "none" }}
+              className={`member-tab ${activeTab === tab.key ? "active" : ""}`}
               onClick={() => handleTabChange(tab.key)}
             >
               {tab.label}
@@ -198,93 +254,356 @@ export default function MembershipProfile({ profile: initialProfile, onBack, onE
           ))}
         </div>
 
-        {activeTab === "overview" && (
-          <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-            {currentPosition && (
-              <div className="card" style={{ padding: "0.75rem" }}>
-                <h4 style={{ margin: "0 0 0.5rem 0" }}>ឋានៈបច្ចុប្បន្ន</h4>
-                <p style={{ margin: 0 }}>{currentPosition.party_role}{currentPosition.position_title ? ` — ${currentPosition.position_title}` : ""}{currentPosition.committee ? ` (${currentPosition.committee})` : ""}</p>
-                <p style={{ margin: 0, fontSize: "0.85rem", color: "var(--text-muted)" }}>ចាប់ពី: {currentPosition.start_date}</p>
-              </div>
-            )}
-            {dues && (
-              <div className="card" style={{ padding: "0.75rem" }}>
-                <h4 style={{ margin: "0 0 0.5rem 0" }}>សង្ខេបការបង់រំលោះ</h4>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem" }}>
-                  <div><span className="profile-detail-label">សរុបបានបង់</span><span className="profile-detail-value">${dues.total_paid}</span></div>
-                  <div><span className="profile-detail-label">ចំនួនដង</span><span className="profile-detail-value">{dues.payment_count}</span></div>
-                  <div><span className="profile-detail-label">បង់ចុងក្រោយ</span><span className="profile-detail-value">{dues.last_payment_date || "—"}</span></div>
-                  <div><span className="profile-detail-label">ចំនួនចុងក្រោយ</span><span className="profile-detail-value">${dues.last_payment_amount || 0}</span></div>
-                </div>
-              </div>
-            )}
-            {demos && (
-              <div className="card" style={{ padding: "0.75rem" }}>
-                <h4 style={{ margin: "0 0 0.5rem 0" }}>ទិន្នន័យផ្ទាល់ខ្លួន</h4>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem" }}>
-                  <div><span className="profile-detail-label">ស្ថានភាពអាពាហ៍</span><span className="profile-detail-value">{demos.marital_status || "—"}</span></div>
-                  <div><span className="profile-detail-label">មុខរបរ</span><span className="profile-detail-value">{demos.occupation || "—"}</span></div>
-                  <div><span className="profile-detail-label">កម្រិតសិក្សា</span><span className="profile-detail-value">{demos.education_level || "—"}</span></div>
-                  <div><span className="profile-detail-label">ជនជាតិ</span><span className="profile-detail-value">{demos.ethnicity || "—"}</span></div>
-                  <div><span className="profile-detail-label">សាសនា</span><span className="profile-detail-value">{demos.religion || "—"}</span></div>
-                  <div><span className="profile-detail-label">ប្រភេទឈាម</span><span className="profile-detail-value">{demos.blood_type || "—"}</span></div>
-                </div>
-                <button className="btn btn-secondary" style={{ marginTop: "0.5rem" }} onClick={() => navigate(`/membership/${member.id}/demographics`)}>កែប្រែទិន្នន័យ</button>
-              </div>
-            )}
-          </div>
-        )}
+        {/* Tab Content */}
+        <div className="member-tab-content">
+          {activeTab === "overview" && (
+            <div className="member-section">
+              {/* Current Position */}
+              {currentPosition ? (
+                <div className="member-card">
+                  <div className="member-card-header">
+                    <div className="member-card-icon purple"><LuUserCheck size={18} /></div>
+                    <h4 className="member-card-title">ឋានៈបច្ចុប្បន្ន</h4>
+                  </div>
+                  <div className="member-card-body">
+                    <div className="member-card-row">
+                      <span className="member-card-row-label">តួនាទី</span>
+                      <span className="member-card-row-value">
+                        {currentPosition.party_role}
+                        {currentPosition.position_title ? ` — ${currentPosition.position_title}` : ""}
+                      </span>
+                    </div>
+                    {currentPosition.committee && (
+                      <div className="member-card-row">
+                        <span className="member-card-row-label">គណៈកម្មការ</span>
+                        <span className="member-card-row-value">{currentPosition.committee}</span>
+            </div>
+          )}
 
-        {activeTab === "demographics" && (
-          <div>
-            {demos ? (
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
-                <div className="profile-detail-item"><span className="profile-detail-label">ស្ថានភាពអាពាហ៍</span><span className="profile-detail-value">{demos.marital_status || "—"}</span></div>
-                <div className="profile-detail-item"><span className="profile-detail-label">មុខរបរ</span><span className="profile-detail-value">{demos.occupation || "—"}</span></div>
-                <div className="profile-detail-item"><span className="profile-detail-label">កម្រិតសិក្សា</span><span className="profile-detail-value">{demos.education_level || "—"}</span></div>
-                <div className="profile-detail-item"><span className="profile-detail-label">ជនជាតិ</span><span className="profile-detail-value">{demos.ethnicity || "—"}</span></div>
-                <div className="profile-detail-item"><span className="profile-detail-label">សាសនា</span><span className="profile-detail-value">{demos.religion || "—"}</span></div>
-                <div className="profile-detail-item"><span className="profile-detail-label">ប្រភេទឈាម</span><span className="profile-detail-value">{demos.blood_type || "—"}</span></div>
-                <div className="profile-detail-item"><span className="profile-detail-label">ឈ្មោះទំនាក់ទំនងបន្ទាន់</span><span className="profile-detail-value">{demos.emergency_contact_name || "—"}</span></div>
-                <div className="profile-detail-item"><span className="profile-detail-label">ទូរសព្ទបន្ទាន់</span><span className="profile-detail-value">{demos.emergency_contact_phone || "—"}</span></div>
-              </div>
-            ) : (
-              <p style={{ textAlign: "center", color: "var(--text-muted)" }}>មិនទាន់មានទិន្នន័យ</p>
-            )}
-            <button className="btn btn-secondary" style={{ marginTop: "1rem" }} onClick={() => navigate(`/membership/${member.id}/demographics`)}>កែប្រែទិន្នន័យ</button>
-          </div>
-        )}
-
-        {activeTab === "history" && (
-          <div>
-            {statusLoading ? (
-              <div className="loading">កំពុងផ្ទុក...</div>
-            ) : statusHistory.length === 0 ? (
-              <p style={{ textAlign: "center", color: "var(--text-muted)" }}>មិនទាន់មានប្រវត្តិ</p>
-            ) : (
-              <div className="table-responsive">
-                <table className="table">
-                  <thead><tr><th>កាលបរិច្ឆេទ</th><th>ពី</th><th>ទៅ</th><th>មូលហេតុ</th></tr></thead>
-                  <tbody>
-                    {statusHistory.map((h) => (
-                      <tr key={h.id}>
-                        <td>{new Date(h.changed_at).toLocaleDateString()}</td>
-                        <td><span className={`badge ${statusBadge(h.old_status)}`}>{h.old_status}</span></td>
-                        <td><span className={`badge ${statusBadge(h.new_status)}`}>{h.new_status}</span></td>
-                        <td>{h.reason || "—"}</td>
+          {activeTab === "approval" && (
+            <div>
+              {approvalLoading ? (
+                <div className="loading">កំពុងផ្ទុក...</div>
+              ) : approvalHistory.length === 0 ? (
+                <div className="member-history-empty">
+                  <div className="member-history-empty-icon"><LuShieldCheck size={36} /></div>
+                  <p>មិនមានដំណើរការយល់ព្រម</p>
+                </div>
+              ) : (
+                <div className="table-responsive">
+                  <table className="table">
+                    <thead>
+                      <tr>
+                        <th>ជំហាន</th>
+                        <th>ស្ថានភាព</th>
+                        <th>យល់ព្រមដោយ</th>
+                        <th>កាលបរិច្ឆេទ</th>
+                        <th>កំណត់ចំណាំ</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {approvalHistory.map((a) => (
+                        <tr key={a.id}>
+                          <td><strong>Step {a.step_order}</strong></td>
+                          <td>
+                            <span className={`badge ${
+                              a.status === "approved" ? "badge-success" :
+                              a.status === "rejected" ? "badge-danger" :
+                              "badge-info"
+                            }`}>
+                              {a.status === "approved" ? "បានយល់ព្រម" :
+                               a.status === "rejected" ? "បានបដិសេធ" :
+                               "រង់ចាំ"}
+                            </span>
+                          </td>
+                          <td style={{ fontSize: "0.85rem" }}>{a.approved_by || "—"}</td>
+                          <td style={{ fontSize: "0.85rem" }}>{a.approved_at ? new Date(a.approved_at).toLocaleString() : "—"}</td>
+                          <td style={{ fontSize: "0.85rem" }}>{a.notes || "—"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+                    <div className="member-card-row">
+                      <span className="member-card-row-label">ចាប់ពី</span>
+                      <span className="member-card-row-value">{currentPosition.start_date}</span>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="member-card">
+                  <div className="member-card-header">
+                    <div className="member-card-icon purple"><LuUserCheck size={18} /></div>
+                    <h4 className="member-card-title">ឋានៈបច្ចុប្បន្ន</h4>
+                  </div>
+                  <div className="member-card-body">
+                    <p style={{ color: "var(--text-muted)", fontSize: "0.85rem", textAlign: "center", padding: "1rem 0" }}>
+                      មិនទាន់មានឋានៈ
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Dues Summary */}
+              <div className="member-card">
+                <div className="member-card-header">
+                  <div className="member-card-icon green"><LuBanknote size={18} /></div>
+                  <h4 className="member-card-title">ការបង់រំលោះ</h4>
+                </div>
+                <div className="member-card-body">
+                  {dues ? (
+                    <>
+                      <div className="member-card-row">
+                        <span className="member-card-row-label">សរុបបានបង់</span>
+                        <span className="member-card-row-value" style={{ color: "#059669" }}>${dues.total_paid}</span>
+                      </div>
+                      <div className="member-card-row">
+                        <span className="member-card-row-label">ចំនួនដង</span>
+                        <span className="member-card-row-value">{dues.payment_count}</span>
+                      </div>
+                      <div className="member-card-row">
+                        <span className="member-card-row-label">បង់ចុងក្រោយ</span>
+                        <span className="member-card-row-value">{dues.last_payment_date || "—"}</span>
+                      </div>
+                      <div className="member-card-row">
+                        <span className="member-card-row-label">ចំនួនចុងក្រោយ</span>
+                        <span className="member-card-row-value">${dues.last_payment_amount || 0}</span>
+                      </div>
+                    </>
+                  ) : (
+                    <p style={{ color: "var(--text-muted)", fontSize: "0.85rem", textAlign: "center", padding: "1rem 0" }}>
+                      មិនទាន់មានការបង់រំលោះ
+                    </p>
+                  )}
+                </div>
               </div>
-            )}
-          </div>
-        )}
+
+              {/* Demographics */}
+              {demos ? (
+                <div className="member-card">
+                  <div className="member-card-header">
+                    <div className="member-card-icon blue"><LuUser size={18} /></div>
+                    <h4 className="member-card-title">ទិន្នន័យផ្ទាល់ខ្លួន</h4>
+                  </div>
+                  <div className="member-card-body">
+                    <div className="member-card-row">
+                      <span className="member-card-row-label">ស្ថានភាពអាពាហ៍</span>
+                      <span className="member-card-row-value">{demos.marital_status || "—"}</span>
+                    </div>
+                    <div className="member-card-row">
+                      <span className="member-card-row-label">មុខរបរ</span>
+                      <span className="member-card-row-value">{demos.occupation || "—"}</span>
+                    </div>
+                    <div className="member-card-row">
+                      <span className="member-card-row-label">កម្រិតសិក្សា</span>
+                      <span className="member-card-row-value">{demos.education_level || "—"}</span>
+                    </div>
+                    <div className="member-card-row">
+                      <span className="member-card-row-label">ជនជាតិ</span>
+                      <span className="member-card-row-value">{demos.ethnicity || "—"}</span>
+                    </div>
+                    <div className="member-card-row">
+                      <span className="member-card-row-label">សាសនា</span>
+                      <span className="member-card-row-value">{demos.religion || "—"}</span>
+                    </div>
+                    <div className="member-card-row">
+                      <span className="member-card-row-label">ប្រភេទឈាម</span>
+                      <span className="member-card-row-value">{demos.blood_type || "—"}</span>
+                    </div>
+                    <button
+                      className="btn btn-secondary"
+                      style={{ marginTop: "0.25rem", fontSize: "0.8rem" }}
+                      onClick={() => navigate(`/membership/${member.id}/demographics`)}
+                    >
+                      កែប្រែទិន្នន័យ
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="member-card">
+                  <div className="member-card-header">
+                    <div className="member-card-icon blue"><LuUser size={18} /></div>
+                    <h4 className="member-card-title">ទិន្នន័យផ្ទាល់ខ្លួន</h4>
+                  </div>
+                  <div className="member-card-body">
+                    <p style={{ color: "var(--text-muted)", fontSize: "0.85rem", textAlign: "center", padding: "1rem 0" }}>
+                      មិនទាន់មានទិន្នន័យ
+                    </p>
+                    <button
+                      className="btn btn-secondary"
+                      style={{ fontSize: "0.8rem" }}
+                      onClick={() => navigate(`/membership/${member.id}/demographics`)}
+                    >
+                      បន្ថែមទិន្នន័យ
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Contact Info */}
+              <div className="member-card">
+                <div className="member-card-header">
+                  <div className="member-card-icon amber"><LuPhone size={18} /></div>
+                  <h4 className="member-card-title">ព័ត៌មានទំនាក់ទំនង</h4>
+                </div>
+                <div className="member-card-body">
+                  <div className="member-card-row">
+                    <span className="member-card-row-label"><LuPhone size={14} style={{ marginRight: 4 }} /> ទូរសព្ទ</span>
+                    <span className="member-card-row-value">{member.phone_number || "—"}</span>
+                  </div>
+                  <div className="member-card-row">
+                    <span className="member-card-row-label"><LuMail size={14} style={{ marginRight: 4 }} /> អ៊ីមែល</span>
+                    <span className="member-card-row-value">{member.email || "—"}</span>
+                  </div>
+                  <div className="member-card-row">
+                    <span className="member-card-row-label"><LuActivity size={14} style={{ marginRight: 4 }} /> Telegram</span>
+                    <span className="member-card-row-value">{member.telegram_username || "—"}</span>
+                  </div>
+                  <div className="member-card-row">
+                    <span className="member-card-row-label"><LuMapPin size={14} style={{ marginRight: 4 }} /> លេខសម្គាល់</span>
+                    <span className="member-card-row-value">{member.national_id || "—"}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Membership Details */}
+              <div className="member-card">
+                <div className="member-card-header">
+                  <div className="member-card-icon purple"><LuBadgeCheck size={18} /></div>
+                  <h4 className="member-card-title">ព័ត៌មានសមាជិកភាព</h4>
+                </div>
+                <div className="member-card-body">
+                  <div className="member-card-row">
+                    <span className="member-card-row-label">លេខសមាជិក</span>
+                    <span className="member-card-row-value">{member.membership_card_no}</span>
+                  </div>
+                  <div className="member-card-row">
+                    <span className="member-card-row-label">ប្រភេទ</span>
+                    <span className="member-card-row-value">{member.membership_type || "—"}</span>
+                  </div>
+                  <div className="member-card-row">
+                    <span className="member-card-row-label">កម្រិត</span>
+                    <span className="member-card-row-value">{member.membership_tier || "—"}</span>
+                  </div>
+                  <div className="member-card-row">
+                    <span className="member-card-row-label">ឋានៈ</span>
+                    <span className="member-card-row-value">{member.party_role || "—"}</span>
+                  </div>
+                  <div className="member-card-row">
+                    <span className="member-card-row-label">លើកលែងបង់រំលោះ</span>
+                    <span className="member-card-row-value">{member.exempt_from_dues ? "បាទ/ចាស" : "ទេ"}</span>
+                  </div>
+                  <div className="member-card-row">
+                    <span className="member-card-row-label"><LuCalendar size={14} style={{ marginRight: 4 }} /> ថ្ងៃចូល</span>
+                    <span className="member-card-row-value">{member.join_date || "—"}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === "demographics" && (
+            <div>
+              {demos ? (
+                <div className="profile-detail-grid" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))" }}>
+                  <div className="profile-detail-item">
+                    <span className="profile-detail-label">ស្ថានភាពអាពាហ៍</span>
+                    <span className="profile-detail-value">{demos.marital_status || "—"}</span>
+                  </div>
+                  <div className="profile-detail-item">
+                    <span className="profile-detail-label">មុខរបរ</span>
+                    <span className="profile-detail-value">{demos.occupation || "—"}</span>
+                  </div>
+                  <div className="profile-detail-item">
+                    <span className="profile-detail-label">កម្រិតសិក្សា</span>
+                    <span className="profile-detail-value">{demos.education_level || "—"}</span>
+                  </div>
+                  <div className="profile-detail-item">
+                    <span className="profile-detail-label">ជនជាតិ</span>
+                    <span className="profile-detail-value">{demos.ethnicity || "—"}</span>
+                  </div>
+                  <div className="profile-detail-item">
+                    <span className="profile-detail-label">សាសនា</span>
+                    <span className="profile-detail-value">{demos.religion || "—"}</span>
+                  </div>
+                  <div className="profile-detail-item">
+                    <span className="profile-detail-label">ប្រភេទឈាម</span>
+                    <span className="profile-detail-value">{demos.blood_type || "—"}</span>
+                  </div>
+                  <div className="profile-detail-item">
+                    <span className="profile-detail-label">ឈ្មោះទំនាក់ទំនងបន្ទាន់</span>
+                    <span className="profile-detail-value">{demos.emergency_contact_name || "—"}</span>
+                  </div>
+                  <div className="profile-detail-item">
+                    <span className="profile-detail-label">ទូរសព្ទបន្ទាន់</span>
+                    <span className="profile-detail-value">{demos.emergency_contact_phone || "—"}</span>
+                  </div>
+                  <div className="profile-detail-item">
+                    <span className="profile-detail-label">អាសយដ្ឋាន</span>
+                    <span className="profile-detail-value">{demos.address || "—"}</span>
+                  </div>
+                </div>
+              ) : (
+                <div className="member-history-empty">
+                  <div className="member-history-empty-icon"><LuUser size={36} /></div>
+                  <p>មិនទាន់មានទិន្នន័យផ្ទាល់ខ្លួន</p>
+                </div>
+              )}
+              <button
+                className="btn btn-secondary"
+                style={{ marginTop: "1rem" }}
+                onClick={() => navigate(`/membership/${member.id}/demographics`)}
+              >
+                កែប្រែទិន្នន័យ
+              </button>
+            </div>
+          )}
+
+          {activeTab === "history" && (
+            <div>
+              {statusLoading ? (
+                <div className="loading">កំពុងផ្ទុក...</div>
+              ) : statusHistory.length === 0 ? (
+                <div className="member-history-empty">
+                  <div className="member-history-empty-icon"><LuRefreshCw size={36} /></div>
+                  <p>មិនទាន់មានប្រវត្តិផ្លាស់ប្តូរស្ថានភាព</p>
+                </div>
+              ) : (
+                <div className="table-responsive">
+                  <table className="table">
+                    <thead>
+                      <tr>
+                        <th>កាលបរិច្ឆេទ</th>
+                        <th>ពី</th>
+                        <th>ទៅ</th>
+                        <th>មូលហេតុ</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {statusHistory.map((h) => (
+                        <tr key={h.id}>
+                          <td>{new Date(h.changed_at).toLocaleDateString()}</td>
+                          <td><span className={`badge ${statusBadge(h.old_status)}`}>{h.old_status}</span></td>
+                          <td><span className={`badge ${statusBadge(h.new_status)}`}>{h.new_status}</span></td>
+                          <td>{h.reason || "—"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
+      {/* Status Change Modal */}
       {showStatusModal && (
         <div className="modal-overlay" onClick={() => setShowStatusModal(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "400px" }}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "420px" }}>
             <div className="modal-header">
               <h3>ប្តូរស្ថានភាពសមាជិក</h3>
               <button className="btn-icon" onClick={() => setShowStatusModal(false)}>✕</button>
@@ -293,24 +612,35 @@ export default function MembershipProfile({ profile: initialProfile, onBack, onE
               <div className="modal-body" style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
                 <div className="form-group">
                   <label>ស្ថានភាពថ្មី *</label>
-                  <Select name="status" value={statusForm.status} onChange={(e) => setStatusForm({ ...statusForm, status: e.target.value })}>
+                  <Select
+                    name="status"
+                    value={statusForm.status}
+                    onChange={(e) => setStatusForm({ ...statusForm, status: e.target.value })}
+                  >
                     <option value="">-- ជ្រើសរើស --</option>
-                    <option value="Pending">Pending</option>
-                    <option value="Active">Active</option>
-                    <option value="Suspended">Suspended</option>
-                    <option value="Resigned">Resigned</option>
-                    <option value="Expelled">Expelled</option>
-                    <option value="Deceased">Deceased</option>
+                    <option value="Pending">Pending — កំពុងរងចាំ</option>
+                    <option value="Active">Active — សកម្ម</option>
+                    <option value="Suspended">Suspended — ផ្អាក</option>
+                    <option value="Resigned">Resigned — លាឈប់</option>
+                    <option value="Expelled">Expelled — បណ្តេញចេញ</option>
+                    <option value="Deceased">Deceased — មរណៈ</option>
                   </Select>
                 </div>
                 <div className="form-group">
                   <label>មូលហេតុ</label>
-                  <input value={statusForm.reason} onChange={(e) => setStatusForm({ ...statusForm, reason: e.target.value })} />
+                  <textarea
+                    rows={3}
+                    value={statusForm.reason}
+                    onChange={(e) => setStatusForm({ ...statusForm, reason: e.target.value })}
+                    placeholder="សូមបញ្ចូលមូលហេតុនៃការផ្លាស់ប្តូរស្ថានភាព..."
+                  />
                 </div>
                 {statusError && <div className="alert alert-error">{statusError}</div>}
               </div>
               <div className="modal-footer">
-                <button type="button" className="btn btn-secondary" onClick={() => setShowStatusModal(false)}>បោះបង់</button>
+                <button type="button" className="btn btn-secondary" onClick={() => setShowStatusModal(false)}>
+                  បោះបង់
+                </button>
                 <button type="submit" className="btn btn-primary" disabled={statusSubmitting}>
                   {statusSubmitting ? "រក្សាទុក..." : "រក្សាទុក"}
                 </button>

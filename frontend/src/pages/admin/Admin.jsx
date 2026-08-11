@@ -13,6 +13,7 @@ import {
 const ROLE_OPTIONS_FALLBACK = [
   { value: "super_admin", label: "អ្នកគ្រប់គ្រងជាន់ខ្ពស់" },
   { value: "admin", label: "អ្នកគ្រប់គ្រង" },
+  { value: "province_chief", label: "ប្រធានខេត្ត" },
   { value: "district_chief", label: "ប្រធានស្រុក" },
   { value: "commune_chief", label: "ប្រធានឃុំ" },
   { value: "commune_clerk", label: "ស្មៀនឃុំ" },
@@ -24,6 +25,7 @@ const ROLE_OPTIONS_FALLBACK = [
 const ROLE_BADGE_STYLES = {
   super_admin: { background: "#fce4ec", color: "#c62828", padding: "0.15rem 0.5rem", borderRadius: "20px", fontSize: "0.75rem", fontWeight: 500 },
   admin: { background: "#e8eaf6", color: "#283593", padding: "0.15rem 0.5rem", borderRadius: "20px", fontSize: "0.75rem", fontWeight: 500 },
+  province_chief: { background: "#f3e5f5", color: "#7b1fa2", padding: "0.15rem 0.5rem", borderRadius: "20px", fontSize: "0.75rem", fontWeight: 500 },
   district_chief: { background: "#e0f2f1", color: "#00695c", padding: "0.15rem 0.5rem", borderRadius: "20px", fontSize: "0.75rem", fontWeight: 500 },
   commune_chief: { background: "#e8f5e9", color: "#2e7d32", padding: "0.15rem 0.5rem", borderRadius: "20px", fontSize: "0.75rem", fontWeight: 500 },
   commune_clerk: { background: "#ede7f6", color: "#4527a0", padding: "0.15rem 0.5rem", borderRadius: "20px", fontSize: "0.75rem", fontWeight: 500 },

@@ -3,6 +3,7 @@ import client from "./client";
 export const partyAPI = {
   // Zones
   getZones: (params) => client.get("/party/zones", { params }),
+  getZoneCounts: () => client.get("/party/zones/counts"),
   getZoneTree: () => client.get("/party/zones/tree"),
   getStructures: () => client.get("/party/structures"),
 

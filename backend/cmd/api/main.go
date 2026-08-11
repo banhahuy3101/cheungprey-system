@@ -19,6 +19,34 @@ import (
 	"github.com/banhahuy/cheungprey-system/backend/pkg/middleware"
 )
 
+func membershipApprovalMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		perms, _ := auth.GetPermissions(c)
+		isAdmin := perms != nil && perms[models.FeatureMembershipAdmin]
+		if isAdmin {
+			c.Next()
+			return
+		}
+		role, _ := auth.GetUserRole(c)
+		if role == models.RoleSuperAdmin || role == models.RoleAdmin || role == models.RoleDistrictChief {
+			c.Next()
+			return
+		}
+		c.AbortWithStatusJSON(403, gin.H{"error": "Requires district chief or higher"})
+	}
+}
+
+func moduleEnabled(repo *repository.Repository, key string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		cfg, err := repo.GetModuleConfig(key)
+		if err != nil || cfg == nil || !cfg.Enabled {
+			c.AbortWithStatusJSON(503, gin.H{"error": "Module disabled"})
+			return
+		}
+		c.Next()
+	}
+}
+
 func main() {
 	if err := godotenv.Load(); err != nil && !os.IsNotExist(err) {
 		log.Printf("warning: could not load .env: %v", err)
@@ -64,6 +92,8 @@ func main() {
 	fmsHandler := handlers.NewFMSHandler(repo)
 	reportTemplateHandler := handlers.NewReportTemplateHandler(repo)
 	membershipHandler := handlers.NewMembershipHandler(repo)
+	zoneChiefHandler := handlers.NewZoneChiefHandler(repo)
+	moduleConfigHandler := handlers.NewModuleConfigHandler(repo)
 
 	r := gin.Default()
 	r.Use(middleware.CORS())
@@ -117,9 +147,14 @@ func main() {
 				admin.DELETE("/roles/:role", permissionHandler.DeleteRole)
 				admin.GET("/cron/status", cronHandler.Status)
 				admin.POST("/cron/run", cronHandler.RunNow)
+				admin.GET("/zone-chiefs", zoneChiefHandler.ListAssignments)
+				admin.GET("/zone-chiefs/:zoneCode", zoneChiefHandler.GetAssignment)
+				admin.POST("/zone-chiefs", zoneChiefHandler.Assign)
+				admin.DELETE("/zone-chiefs", zoneChiefHandler.Remove)
 			}
 
 			records := protected.Group("/records")
+			records.Use(moduleEnabled(repo, "records"))
 			records.Use(auth.RequireFeature(models.FeatureRecords))
 			{
 				records.POST("", recordHandler.CreateRecord)
@@ -133,6 +168,7 @@ func main() {
 			{
 				party.GET("/zones", partyHandler.GetZones)
 				party.GET("/zones/tree", partyHandler.GetZoneTree)
+				party.GET("/zones/counts", partyHandler.GetZoneCounts)
 				party.GET("/structures", partyHandler.GetStructures)
 
 				members := party.Group("")
@@ -153,6 +189,7 @@ func main() {
 				}
 
 				files := party.Group("")
+				files.Use(moduleEnabled(repo, "files"))
 				files.Use(auth.RequireFeature(models.FeatureFiles))
 				{
 					files.POST("/files", partyHandler.UploadFile)
@@ -163,6 +200,7 @@ func main() {
 			}
 
 			membership := protected.Group("/membership")
+			membership.Use(moduleEnabled(repo, "membership"))
 			membership.Use(auth.RequireFeature(models.FeatureMembers))
 			{
 				membership.GET("", membershipHandler.SearchMembers)
@@ -200,6 +238,13 @@ func main() {
 					admin.POST("/status/bulk", membershipHandler.BulkStatusChange)
 				}
 
+				approval := membership.Group("")
+				approval.Use(membershipApprovalMiddleware())
+				{
+					approval.POST("/:id/approve", membershipHandler.ApproveMember)
+					approval.POST("/:id/reject", membershipHandler.RejectMember)
+				}
+
 				delete := membership.Group("")
 				delete.Use(auth.RequireFeature(models.FeatureMembershipDelete))
 				{
@@ -214,7 +259,28 @@ func main() {
 				}
 			}
 
+			modules := protected.Group("/modules")
+			modules.Use(auth.RequireFeature(models.FeatureTechnical))
+			{
+				modules.GET("", moduleConfigHandler.ListModules)
+				modules.PUT("/:key", moduleConfigHandler.UpdateModule)
+				modules.GET("/:key/steps", moduleConfigHandler.ListSteps)
+				modules.POST("/:key/steps", moduleConfigHandler.CreateStep)
+				modules.PUT("/:key/steps/:stepId", moduleConfigHandler.UpdateStep)
+				modules.DELETE("/:key/steps/:stepId", moduleConfigHandler.DeleteStep)
+				modules.PUT("/:key/steps/reorder", moduleConfigHandler.ReorderSteps)
+			}
+
+			approvals := protected.Group("/approvals")
+			{
+				approvals.GET("/queue", moduleConfigHandler.ApprovalQueue)
+				approvals.GET("/:module/:itemId", moduleConfigHandler.ItemApprovalHistory)
+				approvals.POST("/:id/approve", moduleConfigHandler.ApproveItem)
+				approvals.POST("/:id/reject", moduleConfigHandler.RejectItem)
+			}
+
 			reports := protected.Group("/reports")
+			reports.Use(moduleEnabled(repo, "reports"))
 			reports.Use(auth.RequireFeature(models.FeatureReports))
 			{
 				reports.GET("/members", reportHandler.MemberReport)
@@ -256,6 +322,7 @@ func main() {
 			}
 
 			performance := protected.Group("/performance")
+			performance.Use(moduleEnabled(repo, "performance"))
 			performance.Use(auth.RequireFeature(models.FeaturePerformance))
 			{
 				performance.GET("/domains", performanceHandler.ListDomains)
@@ -295,6 +362,7 @@ func main() {
 			}
 
 			fms := protected.Group("/fms")
+			fms.Use(moduleEnabled(repo, "finances"))
 			fms.Use(auth.RequireFeature(models.FeatureFinances))
 			{
 				// Chart of Accounts

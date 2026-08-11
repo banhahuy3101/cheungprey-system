@@ -4,6 +4,7 @@ import { adminAPI } from "../api/admin";
 const FALLBACK_ROLES = [
   { value: "super_admin", label: "អ្នកគ្រប់គ្រងជាន់ខ្ពស់" },
   { value: "admin", label: "អ្នកគ្រប់គ្រង" },
+  { value: "province_chief", label: "ប្រធានខេត្ត" },
   { value: "district_chief", label: "ប្រធានស្រុក" },
   { value: "commune_chief", label: "ប្រធានឃុំ" },
   { value: "commune_clerk", label: "ស្មៀនឃុំ" },

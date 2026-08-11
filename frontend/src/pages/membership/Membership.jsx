@@ -3,6 +3,8 @@ import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { LuPlus } from "react-icons/lu";
 import { membershipAPI } from "../../api/membership";
 import { partyAPI } from "../../api/party";
+import { useAuth } from "../../hooks/useAuth";
+import { canAccess, FEATURES } from "../../utils/permissions";
 import MembershipList from "./MembershipList";
 import MembershipProfile from "./MembershipProfile";
 import MembershipForm from "./MembershipForm";
@@ -38,6 +40,7 @@ const initialForm = {
 };
 
 export default function Membership() {
+  const { user } = useAuth();
   const params = useParams();
   const navigate = useNavigate();
   const location = useLocation();
@@ -114,6 +117,7 @@ export default function Membership() {
     if (mode === "edit" && params.id) {
       membershipAPI.getProfile(params.id).then((res) => {
         const m = (res.data?.data || res.data)?.member;
+        const d = (res.data?.data || res.data)?.demographics;
         if (m) {
           setEditing(m);
           setForm({
@@ -136,6 +140,15 @@ export default function Membership() {
             membership_type: m.membership_type || "Full",
             membership_tier: m.membership_tier || "Basic",
             exempt_from_dues: m.exempt_from_dues || false,
+            // demographics
+            marital_status: d?.marital_status || "",
+            occupation: d?.occupation || "",
+            education_level: d?.education_level || "",
+            ethnicity: d?.ethnicity || "",
+            religion: d?.religion || "",
+            blood_type: d?.blood_type || "",
+            emergency_contact_name: d?.emergency_contact_name || "",
+            emergency_contact_phone: d?.emergency_contact_phone || "",
           });
           setError("");
           setShowModal(true);
@@ -171,6 +184,15 @@ export default function Membership() {
         });
         updatePayload.registered_village_code = getVillageCode();
         await partyAPI.updateMember(editing.id, updatePayload);
+
+        const demoFields = ["marital_status", "occupation", "education_level", "ethnicity", "religion", "blood_type", "emergency_contact_name", "emergency_contact_phone"];
+        const demoPayload = {};
+        demoFields.forEach((k) => { demoPayload[k] = payload[k] || ""; });
+        try {
+          await membershipAPI.updateDemographics(editing.id, demoPayload);
+        } catch {
+          // demographics save is optional
+        }
       } else {
         await partyAPI.createMember(payload);
       }
@@ -241,6 +263,8 @@ export default function Membership() {
           setPage={setPage}
           total={total}
           loading={loading}
+          canApprove={canAccess(user, FEATURES.membership_admin) || user?.role === "district_chief" || user?.role === "admin" || user?.role === "super_admin"}
+          onRefresh={fetchMembers}
         />
       )}
 

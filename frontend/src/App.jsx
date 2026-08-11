@@ -24,6 +24,8 @@ import SettingsReportTemplates from "./pages/settings/SettingsReportTemplates";
 import SettingsReportTemplateCreate from "./pages/settings/SettingsReportTemplateCreate";
 import SettingsReportTemplateDetail from "./pages/settings/SettingsReportTemplateDetail";
 import SettingsReportTemplateEdit from "./pages/settings/SettingsReportTemplateEdit";
+import SettingsZoneChief from "./pages/settings/SettingsZoneChief";
+import ModuleSettings from "./pages/settings/ModuleSettings";
 import ReportCreateFromTemplate from "./pages/reports/ReportCreateFromTemplate";
 import Admin from "./pages/admin/Admin";
 import Profile from "./pages/profile/Profile";
@@ -91,6 +93,8 @@ function App() {
             <Route path="settings/report-templates/new" element={<ProtectedRoute feature={FEATURES.reports}><SettingsReportTemplateCreate /></ProtectedRoute>} />
             <Route path="settings/report-templates/:id/edit" element={<ProtectedRoute feature={FEATURES.reports}><SettingsReportTemplateEdit /></ProtectedRoute>} />
             <Route path="settings/report-templates/:id" element={<ProtectedRoute feature={FEATURES.reports}><SettingsReportTemplateDetail /></ProtectedRoute>} />
+            <Route path="settings/zone-chiefs" element={<ProtectedRoute adminOnly><SettingsZoneChief /></ProtectedRoute>} />
+            <Route path="settings/modules" element={<ProtectedRoute feature={FEATURES.technical}><ModuleSettings /></ProtectedRoute>} />
             <Route path="admin" element={<ProtectedRoute adminOnly><Admin /></ProtectedRoute>} />
           </Route>
 

@@ -95,6 +95,7 @@ import {
   LuTrash2,
   LuSplit,
   LuCombine,
+  LuSearch,
 } from "react-icons/lu";
 
 const theme = {
@@ -530,7 +531,7 @@ function HtmlInitialLoaderPlugin({ initialHtml }) {
   return null;
 }
 
-function HtmlOnChangePlugin({ onChange, setStats }) {
+function HtmlOnChangePlugin({ onChange, setStats, setPageCount }) {
   const [editor] = useLexicalComposerContext();
 
   useEffect(() => {
@@ -541,12 +542,24 @@ function HtmlOnChangePlugin({ onChange, setStats }) {
         const words = text.trim() ? text.trim().split(/\s+/).length : 0;
         const chars = text.length;
         setStats?.({ words, chars });
-
         const html = $generateHtmlFromNodes(editor, null);
         onChange?.(html);
       });
     });
-  }, [editor, onChange, setStats]);
+  }, [editor, onChange, setStats, setPageCount]);
+
+  useEffect(() => {
+    const el = editor.getRootElement();
+    if (!el) return;
+    const observer = new ResizeObserver(() => {
+      const contentH = el.scrollHeight;
+      const pageH = 984;
+      const pages = Math.max(1, Math.ceil(contentH / pageH));
+      setPageCount?.(pages);
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [editor, setPageCount]);
 
   return null;
 }
@@ -759,7 +772,7 @@ function DragDropPasteImagePlugin() {
 }
 
 // MS Word Ribbon Toolbar Plugin
-function WordRibbonToolbar({ activeTab, setActiveTab, zoomLevel, setZoomLevel, isFullscreen, setIsFullscreen, readOnly = false }) {
+function WordRibbonToolbar({ activeTab, setActiveTab, zoomLevel, setZoomLevel, isFullscreen, setIsFullscreen, readOnly = false, showHeaderFooter, setShowHeaderFooter, headerText, setHeaderText, footerText, setFooterText }) {
   const [editor] = useLexicalComposerContext();
   const [isBold, setIsBold] = useState(false);
   const [isItalic, setIsItalic] = useState(false);
@@ -772,6 +785,16 @@ function WordRibbonToolbar({ activeTab, setActiveTab, zoomLevel, setZoomLevel, i
   const [fontSize, setFontSize] = useState(16);
   const [painterStyle, setPainterStyle] = useState(null);
   const [isInTable, setIsInTable] = useState(false);
+  const [showFindReplace, setShowFindReplace] = useState(false);
+  const [findText, setFindText] = useState("");
+  const [replaceText, setReplaceText] = useState("");
+  const [showCaseMenu, setShowCaseMenu] = useState(false);
+  const [showColorSwatches, setShowColorSwatches] = useState(false);
+  const [showHighlightSwatches, setShowHighlightSwatches] = useState(false);
+  const [showBorders, setShowBorders] = useState(false);
+  const [showSymbols, setShowSymbols] = useState(false);
+  const [showParagraphMarks, setShowParagraphMarks] = useState(false);
+  const [saved, setSaved] = useState(false);
 
   const updateToolbar = useCallback(() => {
     const selection = $getSelection();
@@ -1042,6 +1065,196 @@ function WordRibbonToolbar({ activeTab, setActiveTab, zoomLevel, setZoomLevel, i
     e.target.value = "";
   };
 
+  const changeCase = (caseType) => {
+    setShowCaseMenu(false);
+    editor.update(() => {
+      const selection = $getSelection();
+      if (!$isRangeSelection(selection) || selection.isCollapsed()) return;
+      const text = selection.getTextContent();
+      let result = text;
+      switch (caseType) {
+        case "sentence": result = text.charAt(0).toUpperCase() + text.slice(1).toLowerCase(); break;
+        case "lower": result = text.toLowerCase(); break;
+        case "upper": result = text.toUpperCase(); break;
+        case "capitalize": result = text.replace(/\b\w/g, (c) => c.toUpperCase()).replace(/\B[A-Z]/g, (c) => c.toLowerCase()); break;
+        case "toggle": result = text.split("").map((c) => c === c.toUpperCase() ? c.toLowerCase() : c.toUpperCase()).join(""); break;
+      }
+      if (result !== text) {
+        selection.insertNodes([$createTextNode(result)]);
+      }
+    });
+  };
+
+  const applyParagraphBorder = (borderStyle) => {
+    setShowBorders(false);
+    editor.update(() => {
+      const selection = $getSelection();
+      if ($isRangeSelection(selection)) {
+        let block = selection.anchor.getNode();
+        while (block && block.__type !== "paragraph" && block.__type !== "heading" && block.__type !== "quote") {
+          block = block.getParent?.() || null;
+          if (!block) break;
+        }
+        if (block) {
+          const writable = block.getWritable();
+          if (!writable.__style) writable.__style = "";
+          writable.__style = writable.__style.replace(/border[^;]*;?/g, "").trim();
+          if (borderStyle === "bottom") writable.__style += ";border-bottom:1px solid #000";
+          else if (borderStyle === "top") writable.__style += ";border-top:1px solid #000";
+          else if (borderStyle === "all") writable.__style += ";border:1px solid #000";
+          else if (borderStyle === "outside") writable.__style += ";border:1px solid #000;border-bottom:none;border-top:none";
+        }
+      }
+    });
+  };
+
+  const insertSymbol = (symbol) => {
+    setShowSymbols(false);
+    editor.update(() => {
+      const selection = $getSelection();
+      if ($isRangeSelection(selection)) selection.insertNodes([$createTextNode(symbol)]);
+    });
+  };
+
+  const insertDropCap = () => {
+    editor.update(() => {
+      const selection = $getSelection();
+      if ($isRangeSelection(selection)) {
+        const text = selection.getTextContent();
+        if (text.length > 0) {
+          const dropHtml = `<span style="float:left;font-size:3em;line-height:1;margin-right:4px;font-weight:700">${text[0]}</span>${text.slice(1)}`;
+          const parser = new DOMParser();
+          const dom = parser.parseFromString(dropHtml, "text/html");
+          const nodes = $generateNodesFromDOM(editor, dom);
+          $insertNodes(nodes);
+        }
+      }
+    });
+  };
+
+  const toggleTextDirection = () => {
+    editor.update(() => {
+      const selection = $getSelection();
+      if ($isRangeSelection(selection)) {
+        let block = selection.anchor.getNode();
+        while (block && block.__type !== "paragraph" && block.__type !== "heading" && block.__type !== "quote") {
+          block = block.getParent?.() || null;
+          if (!block) break;
+        }
+        if (block) {
+          const writable = block.getWritable();
+          if (!writable.__style) writable.__style = "";
+          const isRtl = writable.__style.includes("direction:rtl");
+          writable.__style = writable.__style.replace(/direction:[^;]*;?/g, "").trim();
+          writable.__style += isRtl ? ";direction:ltr" : ";direction:rtl";
+        }
+      }
+    });
+  };
+
+  const applyCellAlignment = (valign) => {
+    editor.update(() => {
+      const selection = $getSelection();
+      if ($isRangeSelection(selection)) {
+        const cellNode = $getTableCellNodeFromLexicalNode(selection.anchor.getNode());
+        if (cellNode) {
+          const writable = cellNode.getWritable();
+          if (!writable.__style) writable.__style = "";
+          writable.__style = writable.__style.replace(/vertical-align:[^;]*;?/g, "").replace(/text-align:[^;]*;?/g, "").trim();
+          writable.__style += `;vertical-align:${valign};text-align:center`;
+        }
+      }
+    });
+  };
+
+  const insertDateTime = () => {
+    const now = new Date();
+    const kh = ["មករា","កុម្ភៈ","មីនា","មេសា","ឧសភា","មិថុនា","កក្កដា","សីហា","កញ្ញា","តុលា","វិច្ឆិកា","ធ្នូ"];
+    const s = `ថ្ងៃទី${now.getDate()} ខែ${kh[now.getMonth()]} ឆ្នាំ${now.getFullYear()}`;
+    editor.update(() => { const sel = $getSelection(); if ($isRangeSelection(sel)) sel.insertNodes([$createTextNode(s)]); });
+  };
+
+  const handleFindNext = useCallback(() => {
+    if (!findText) return;
+    editor.update(() => {
+      const root = $getRoot();
+      if (!root.getTextContent().toLowerCase().includes(findText.toLowerCase())) return;
+      const nodes = [];
+      root.getDescendants().forEach((n) => { if (n.__type === "text") nodes.push(n); });
+      const sel = window.getSelection();
+      let startFrom = 0;
+      if (sel?.rangeCount > 0 && sel.getRangeAt(0).startContainer.textContent)
+        startFrom = sel.getRangeAt(0).startOffset + 1;
+      let found = false;
+      for (const node of nodes) {
+        const text = node.getTextContent();
+        const idx = text.toLowerCase().indexOf(findText.toLowerCase(), startFrom);
+        if (idx >= 0) {
+          const el = editor.getElementByKey(node.getKey());
+          if (el) {
+            try {
+              const range = document.createRange();
+              const child = el.firstChild || el;
+              range.setStart(child, idx);
+              range.setEnd(child, idx + findText.length);
+              sel.removeAllRanges();
+              sel.addRange(range);
+              el.scrollIntoView({ behavior: "smooth", block: "center" });
+              found = true;
+            } catch (_) {}
+          }
+          break;
+        }
+        startFrom = 0;
+      }
+      if (!found && nodes.length > 0) {
+        const node = nodes[0];
+        const el = editor.getElementByKey(node.getKey());
+        const text = node.getTextContent();
+        const idx = text.toLowerCase().indexOf(findText.toLowerCase());
+        if (el && idx >= 0) {
+          try {
+            const range = document.createRange();
+            range.setStart(el.firstChild || el, idx);
+            range.setEnd(el.firstChild || el, idx + findText.length);
+            sel.removeAllRanges();
+            sel.addRange(range);
+          } catch (_) {}
+        }
+      }
+    });
+  }, [editor, findText]);
+
+  const handleReplaceOne = useCallback(() => {
+    if (!findText) return;
+    const sel = window.getSelection();
+    if (sel?.toString().toLowerCase() === findText.toLowerCase()) {
+      editor.update(() => {
+        const selection = $getSelection();
+        if ($isRangeSelection(selection)) selection.insertNodes([$createTextNode(replaceText)]);
+      });
+    }
+    handleFindNext();
+  }, [editor, findText, replaceText, handleFindNext]);
+
+  const handleReplaceAll = useCallback(() => {
+    if (!findText) return;
+    editor.update(() => {
+      const root = $getRoot();
+      const escaped = findText.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const regex = new RegExp(escaped, "gi");
+      root.getDescendants().forEach((node) => {
+        if (node.__type === "text") {
+          const text = node.getTextContent();
+          if (regex.test(text)) {
+            regex.lastIndex = 0;
+            node.getWritable().__text = text.replace(regex, replaceText);
+          }
+        }
+      });
+    });
+  }, [editor, findText, replaceText]);
+
   const clearFormatting = () => {
     editor.update(() => {
       const selection = $getSelection();
@@ -1066,6 +1279,7 @@ function WordRibbonToolbar({ activeTab, setActiveTab, zoomLevel, setZoomLevel, i
         <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
           <LuFileText size={18} />
           <span>Report Document - Microsoft Word</span>
+          {saved && <span style={{ background: "#22c55e", color: "#fff", fontSize: "0.72rem", padding: "0.1rem 0.5rem", borderRadius: "999px", fontWeight: "600", transition: "opacity 0.3s" }}>Saved</span>}
           {readOnly && (
             <span style={{ background: "rgba(255, 255, 255, 0.22)", color: "#fff", fontSize: "0.75rem", padding: "0.15rem 0.55rem", borderRadius: "999px", fontWeight: "600", display: "inline-flex", alignItems: "center", gap: "0.25rem" }}>
               🔒 Read-Only Mode (Disabled Editing)
@@ -1075,6 +1289,14 @@ function WordRibbonToolbar({ activeTab, setActiveTab, zoomLevel, setZoomLevel, i
         <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
           <button type="button" style={{ background: "transparent", border: "none", color: "#fff", cursor: "pointer" }} onClick={() => editor.dispatchCommand(UNDO_COMMAND, undefined)} title="Undo">
             <LuUndo size={14} />
+          </button>
+          <div style={{ width: "1px", height: "14px", background: "rgba(255, 255, 255, 0.3)" }} />
+          <button type="button" style={{ background: "transparent", border: "none", color: "#fff", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "0.3rem", fontSize: "0.78rem" }} onClick={() => {
+            editor.update(() => {});
+            setSaved(true);
+            setTimeout(() => setSaved(false), 1500);
+          }} title="Save">
+            <LuSave size={14} /> Save
           </button>
           <button type="button" style={{ background: "transparent", border: "none", color: "#fff", cursor: "pointer" }} onClick={() => editor.dispatchCommand(REDO_COMMAND, undefined)} title="Redo">
             <LuRedo size={14} />
@@ -1161,6 +1383,8 @@ function WordRibbonToolbar({ activeTab, setActiveTab, zoomLevel, setZoomLevel, i
         >
           View
         </button>
+        <button type="button" onClick={() => setActiveTab("layout")} style={{ padding: "0.5rem 1rem", fontSize: "0.85rem", fontWeight: activeTab === "layout" ? "600" : "500", color: activeTab === "layout" ? "#185abd" : "#475569", borderBottom: activeTab === "layout" ? "2.5px solid #185abd" : "2.5px solid transparent", background: "transparent", borderTop: "none", borderLeft: "none", borderRight: "none", cursor: "pointer" }}>Layout</button>
+        <button type="button" onClick={() => setActiveTab("design")} style={{ padding: "0.5rem 1rem", fontSize: "0.85rem", fontWeight: activeTab === "design" ? "600" : "500", color: activeTab === "design" ? "#7c3aed" : "#475569", borderBottom: activeTab === "design" ? "2.5px solid #7c3aed" : "2.5px solid transparent", background: "transparent", borderTop: "none", borderLeft: "none", borderRight: "none", cursor: "pointer" }}>Design</button>
         {/* Table tab — shown only when cursor is inside a table */}
         {isInTable && (
           <button
@@ -1193,9 +1417,6 @@ function WordRibbonToolbar({ activeTab, setActiveTab, zoomLevel, setZoomLevel, i
               <button type="button" className={`btn-icon btn-sm ${painterStyle ? "active" : ""}`} onClick={toggleFormatPainter} title="Format Painter">
                 <LuPaintbrush size={15} />
               </button>
-              <button type="button" className="btn-icon btn-sm" onClick={clearFormatting} title="Clear Formatting">
-                <LuRemoveFormatting size={15} />
-              </button>
             </div>
 
             {/* FONT GROUP */}
@@ -1208,6 +1429,8 @@ function WordRibbonToolbar({ activeTab, setActiveTab, zoomLevel, setZoomLevel, i
               >
                 <option value="Khmer OS Battambang">Khmer OS Battambang</option>
                 <option value="Khmer OS Muol Light">Khmer OS Muol Light</option>
+                <option value="Khmer OS Siemreap">Khmer OS Siemreap</option>
+                <option value="Khmer OS Moul">Khmer OS Moul</option>
                 <option value="Inter">Inter</option>
                 <option value="Roboto">Roboto</option>
                 <option value="Arial">Arial</option>
@@ -1262,6 +1485,10 @@ function WordRibbonToolbar({ activeTab, setActiveTab, zoomLevel, setZoomLevel, i
                 </button>
               </div>
 
+              <button type="button" className="btn-icon btn-sm" onClick={clearFormatting} title="Clear Formatting">
+                <LuRemoveFormatting size={15} />
+              </button>
+
               <button type="button" className={`btn-icon btn-sm ${isBold ? "active" : ""}`} onClick={() => formatText("bold")} title="Bold">
                 <LuBold size={15} />
               </button>
@@ -1271,19 +1498,53 @@ function WordRibbonToolbar({ activeTab, setActiveTab, zoomLevel, setZoomLevel, i
               <button type="button" className={`btn-icon btn-sm ${isUnderline ? "active" : ""}`} onClick={() => formatText("underline")} title="Underline">
                 <LuUnderline size={15} />
               </button>
-              <button type="button" className={`btn-icon btn-sm ${isStrikethrough ? "active" : ""}`} onClick={() => formatText("strikethrough")} title="Strikethrough">
-                <LuStrikethrough size={15} />
+               <button type="button" className={`btn-icon btn-sm ${isStrikethrough ? "active" : ""}`} onClick={() => formatText("strikethrough")} title="Strikethrough">
+                 <LuStrikethrough size={15} />
+               </button>
+              <button type="button" className={`btn-icon btn-sm ${isSubscript ? "active" : ""}`} onClick={() => formatText("subscript")} title="Subscript">
+                <LuSubscript size={15} />
               </button>
-
-              <label className="btn-icon btn-sm" style={{ cursor: "pointer", display: "inline-flex", alignItems: "center" }} title="Text Color">
-                <LuPalette size={15} />
-                <input type="color" onChange={(e) => applyTextColor(e.target.value)} style={{ width: 0, height: 0, opacity: 0, position: "absolute" }} />
-              </label>
-
-              <label className="btn-icon btn-sm" style={{ cursor: "pointer", display: "inline-flex", alignItems: "center" }} title="Highlight Color">
-                <LuHighlighter size={15} />
-                <input type="color" onChange={(e) => applyHighlightColor(e.target.value)} style={{ width: 0, height: 0, opacity: 0, position: "absolute" }} />
-              </label>
+              <button type="button" className={`btn-icon btn-sm ${isSuperscript ? "active" : ""}`} onClick={() => formatText("superscript")} title="Superscript">
+                <LuSuperscript size={15} />
+              </button>
+              <div style={{ position: "relative" }}>
+                <button type="button" className={`btn-icon btn-sm ${showCaseMenu ? "active" : ""}`} onClick={() => setShowCaseMenu(!showCaseMenu)} title="Change Case">
+                  <span style={{ fontWeight: 700, fontSize: "14px" }}>Aa</span>
+                </button>
+                {showCaseMenu && (
+                  <div style={{ position: "absolute", top: "100%", left: 0, zIndex: 50, background: "#fff", border: "1px solid #cbd5e1", borderRadius: "8px", boxShadow: "0 10px 25px rgba(0,0,0,0.15)", minWidth: 190, padding: "0.25rem 0" }} onMouseLeave={() => setShowCaseMenu(false)}>
+                    {["sentence","lower","upper","capitalize","toggle"].map((k) => {
+                      const labels = { sentence: { l: "Sentence case.", d: "This is an example." }, lower: { l: "lowercase", d: "this is an example." }, upper: { l: "UPPERCASE", d: "THIS IS AN EXAMPLE." }, capitalize: { l: "Capitalize Each Word", d: "This Is An Example." }, toggle: { l: "tOGGLE cASE", d: "tHIS IS AN EXAMPLE." } };
+                      return (<div key={k} onClick={() => changeCase(k)} style={{ padding: "0.4rem 0.85rem", cursor: "pointer", fontSize: "0.8rem" }} onMouseEnter={(e) => e.currentTarget.style.background = "#eff6ff"} onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}><div style={{ fontWeight: 600 }}>{labels[k].l}</div><div style={{ color: "#888", fontSize: "0.72rem" }}>{labels[k].d}</div></div>);
+                    })}
+                  </div>
+                )}
+              </div>
+              <div style={{ position: "relative" }}>
+                <button type="button" className={`btn-icon btn-sm ${showHighlightSwatches ? "active" : ""}`} onClick={() => { setShowHighlightSwatches(!showHighlightSwatches); setShowColorSwatches(false); }} title="Highlight">
+                  <div style={{ position: "relative", display: "flex" }}><LuHighlighter size={15} /><div style={{ width: 10, height: 3, background: "#ffff00", position: "absolute", bottom: 0, left: "50%", transform: "translateX(-50%)", borderRadius: 2 }} /></div>
+                </button>
+                {showHighlightSwatches && (
+                  <div style={{ position: "absolute", top: "100%", left: 0, zIndex: 50, background: "#fff", border: "1px solid #cbd5e1", borderRadius: "8px", padding: "0.5rem", boxShadow: "0 10px 25px rgba(0,0,0,0.15)", display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: "3px", width: 210 }} onMouseLeave={() => setShowHighlightSwatches(false)}>
+                    {["#ffff00","#33ff33","#33ffff","#ff66ff","#6699ff","#ff3333","#333366","#009999","#990099","#993300","#996600","#808080","#ffffff","none"].map((c) => (
+                      <div key={c} onClick={() => { applyHighlightColor(c === "none" ? "transparent" : c); setShowHighlightSwatches(false); }} style={{ width: 24, height: 24, background: c === "none" ? "linear-gradient(45deg, #fff 45%, #ccc 50%, #fff 55%)" : c, border: "1px solid #ddd", borderRadius: "3px", cursor: "pointer" }} title={c === "none" ? "No Color" : c} />
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div style={{ position: "relative" }}>
+                <button type="button" className={`btn-icon btn-sm ${showColorSwatches ? "active" : ""}`} onClick={() => { setShowColorSwatches(!showColorSwatches); setShowHighlightSwatches(false); }} title="Font Color">
+                  <div style={{ position: "relative", display: "flex" }}><LuPalette size={15} /><div style={{ width: 10, height: 3, background: "#cc0000", position: "absolute", bottom: 0, left: "50%", transform: "translateX(-50%)", borderRadius: 2 }} /></div>
+                </button>
+                {showColorSwatches && (
+                  <div style={{ position: "absolute", top: "100%", left: 0, zIndex: 50, background: "#fff", border: "1px solid #cbd5e1", borderRadius: "8px", padding: "0.5rem", boxShadow: "0 10px 25px rgba(0,0,0,0.15)", display: "grid", gridTemplateColumns: "repeat(8, 1fr)", gap: "3px", width: 240 }} onMouseLeave={() => setShowColorSwatches(false)}>
+                    {["#000000","#333333","#555555","#777777","#999999","#bbbbbb","#dddddd","#ffffff","#cc0000","#ff6600","#ffcc00","#33cc33","#0099ff","#3333cc","#9900ff","#ff00ff","#990000","#cc6600","#999900","#339933","#0066cc","#333399","#660066","#cc3399","#ff9999","#ff9966","#99cc33","#33cccc","#99ccff","#cc66ff","#ff99cc","#eeeeee"].map((c) => (
+                      <div key={c} onClick={() => { applyTextColor(c); setShowColorSwatches(false); }} style={{ width: 24, height: 24, background: c, border: c === "#ffffff" ? "1px solid #ddd" : "1px solid transparent", borderRadius: "3px", cursor: "pointer" }} title={c} />
+                    ))}
+                    <div style={{ gridColumn: "1 / -1", borderTop: "1px solid #e5e7eb", marginTop: "4px", paddingTop: "4px" }}><label style={{ display: "flex", alignItems: "center", gap: "0.3rem", fontSize: "0.72rem", cursor: "pointer", color: "#64748b" }}><LuPalette size={12} /> More Colors...<input type="color" onChange={(e) => { applyTextColor(e.target.value); setShowColorSwatches(false); }} style={{ width: 0, height: 0, opacity: 0, position: "absolute" }} /></label></div>
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* PARAGRAPH GROUP */}
@@ -1304,7 +1565,9 @@ function WordRibbonToolbar({ activeTab, setActiveTab, zoomLevel, setZoomLevel, i
               <button type="button" className="btn-icon btn-sm" onClick={() => editor.dispatchCommand(INDENT_CONTENT_COMMAND, undefined)} title="Increase Indent">
                 <LuIndentIncrease size={15} />
               </button>
-
+              <button type="button" className={`btn-icon btn-sm ${showParagraphMarks ? "active" : ""}`} onClick={() => setShowParagraphMarks(!showParagraphMarks)} title="Show/Hide ¶">
+                <LuPilcrow size={15} />
+              </button>
               <button type="button" className="btn-icon btn-sm" onClick={() => formatAlign("left")} title="Align Left">
                 <LuAlignLeft size={15} />
               </button>
@@ -1317,13 +1580,30 @@ function WordRibbonToolbar({ activeTab, setActiveTab, zoomLevel, setZoomLevel, i
               <button type="button" className="btn-icon btn-sm" onClick={() => formatAlign("justify")} title="Align Justify">
                 <LuAlignJustify size={15} />
               </button>
+              <button type="button" className="btn-icon btn-sm" onClick={toggleTextDirection} title="Text Direction (LTR ↔ RTL)">
+                <span style={{ fontSize: "13px", fontWeight: 700 }}>⇄</span>
+              </button>
 
               <select onChange={(e) => applyLineSpacing(e.target.value)} className="form-select" defaultValue="1.5" style={{ fontSize: "0.78rem", padding: "0.2rem 0.3rem", borderRadius: "4px", border: "1px solid #cbd5e1" }}>
                 <option value="1.0">1.0</option>
                 <option value="1.15">1.15</option>
                 <option value="1.5">1.5</option>
                 <option value="2.0">2.0</option>
+                <option value="2.5">2.5</option>
+                <option value="3.0">3.0</option>
               </select>
+              <div style={{ position: "relative" }}>
+                <button type="button" className={`btn-icon btn-sm ${showBorders ? "active" : ""}`} onClick={() => setShowBorders(!showBorders)} title="Borders">
+                  <span style={{ border: "2px solid #334155", padding: "0 4px", fontSize: "11px", fontWeight: 700, borderRadius: "2px", lineHeight: "16px" }}>田</span>
+                </button>
+                {showBorders && (
+                  <div style={{ position: "absolute", top: "100%", left: 0, zIndex: 50, background: "#fff", border: "1px solid #cbd5e1", borderRadius: "8px", boxShadow: "0 10px 25px rgba(0,0,0,0.15)", padding: "0.5rem", display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "4px", width: 160 }} onMouseLeave={() => setShowBorders(false)}>
+                    {[{ v: "bottom", t: "Bottom\n━━━" },{ v: "top", t: "Top\n━━━" },{ v: "all", t: "All\n▣" },{ v: "outside", t: "Outside\n▯" },{ v: "none", t: "None\n✕" }].map(({ v, t }) => (
+                      <button key={v} type="button" onClick={() => applyParagraphBorder(v)} style={{ padding: "0.35rem 0.5rem", fontSize: "0.7rem", background: "#fff", border: "1px solid #e5e7eb", borderRadius: "4px", cursor: "pointer", textAlign: "center", whiteSpace: "pre-line", lineHeight: 1.3 }}>{t}</button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* STYLES GROUP */}
@@ -1350,6 +1630,11 @@ function WordRibbonToolbar({ activeTab, setActiveTab, zoomLevel, setZoomLevel, i
                 <option value="code">Code Block</option>
               </select>
             </div>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.25rem" }}>
+              <button type="button" onClick={() => setShowFindReplace(!showFindReplace)} style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem", padding: "0.3rem 0.65rem", fontSize: "0.78rem", fontWeight: "600", background: showFindReplace ? "#fef3c7" : "#ffffff", border: `1px solid ${showFindReplace ? "#f59e0b" : "#cbd5e1"}`, borderRadius: "5px", cursor: "pointer", color: showFindReplace ? "#92400e" : "#334155" }} title="Find & Replace (Ctrl+F)">
+                <LuSearch size={14} /> Find
+              </button>
+            </div>
           </>
         )}
 
@@ -1368,6 +1653,30 @@ function WordRibbonToolbar({ activeTab, setActiveTab, zoomLevel, setZoomLevel, i
             <button type="button" className="btn btn-secondary btn-sm" onClick={insertHorizontalRule} style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}>
               <LuMinus size={15} /> Line
             </button>
+            <button type="button" className="btn btn-secondary btn-sm" onClick={() => { editor.update(() => { const s = $getSelection(); if ($isRangeSelection(s)) { const p = new DOMParser(); const d = p.parseFromString('<br style="page-break-after:always;" />', "text/html"); $insertNodes($generateNodesFromDOM(editor, d)); } }); }} style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}>
+              <LuFileText size={15} /> Page Break
+            </button>
+            <div style={{ width: "1px", height: "20px", background: "#cbd5e1" }} />
+            <button type="button" className="btn btn-secondary btn-sm" onClick={insertDropCap} style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}>
+              <span style={{ fontWeight: 700, fontSize: "15px" }}>A</span><span style={{ fontSize: "10px" }}>a</span> Drop Cap
+            </button>
+            <div style={{ position: "relative" }}>
+              <button type="button" className={`btn btn-secondary btn-sm ${showSymbols ? "active" : ""}`} onClick={() => setShowSymbols(!showSymbols)} style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}>Ω Symbol</button>
+              {showSymbols && (
+                <div style={{ position: "absolute", top: "100%", left: 0, zIndex: 50, background: "#fff", border: "1px solid #cbd5e1", borderRadius: "8px", boxShadow: "0 10px 25px rgba(0,0,0,0.15)", padding: "0.6rem", display: "grid", gridTemplateColumns: "repeat(10, 1fr)", gap: "3px", width: 320 }} onMouseLeave={() => setShowSymbols(false)}>
+                  {["©","®","™","€","£","¥","¢","°","±","×","÷","≈","≠","≤","≥","∞","√","∑","∫","∂","∆","←","→","↑","↓","↔","♥","★","☆","♦","♣","♠","•","◦","‣","‹","›","«","»","—","–","‾","…","¶","§","†","‡","↵"].map((s) => (
+                    <div key={s} onClick={() => insertSymbol(s)} style={{ width: 26, height: 26, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.85rem", cursor: "pointer", borderRadius: "3px", border: "1px solid transparent" }} onMouseEnter={(e) => { e.currentTarget.style.background = "#eff6ff"; e.currentTarget.style.borderColor = "#93c5fd"; }} onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.borderColor = "transparent"; }}>{s}</div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div style={{ width: "1px", height: "20px", background: "#cbd5e1" }} />
+            <button type="button" className="btn btn-secondary btn-sm" onClick={insertDateTime} style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}>
+              📅 Date & Time
+            </button>
+            <button type="button" className={`btn btn-secondary btn-sm ${showHeaderFooter ? "active" : ""}`} onClick={() => setShowHeaderFooter(!showHeaderFooter)} style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}>
+              📄 Header/Footer
+            </button>
           </div>
         )}
 
@@ -1384,6 +1693,84 @@ function WordRibbonToolbar({ activeTab, setActiveTab, zoomLevel, setZoomLevel, i
                 <option value={1.0}>100% (A4 Standard)</option>
                 <option value={1.25}>125%</option>
                 <option value={1.5}>150%</option>
+              </select>
+            </div>
+          </div>
+        )}
+
+        {activeTab === "layout" && (
+          <div style={{ display: "flex", alignItems: "center", gap: "1rem", flexWrap: "wrap" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", paddingRight: "0.85rem", borderRight: "1px solid #cbd5e1" }}>
+              <span style={{ fontSize: "0.8rem", color: "#64748b", fontWeight: 600 }}>Columns:</span>
+              {[{ cols: 1, label: "One" },{ cols: 2, label: "Two" },{ cols: 3, label: "Three" }].map(({ cols, label }) => (
+                <button key={cols} type="button" className="btn btn-secondary btn-sm" style={{ fontSize: "0.78rem" }}>{label}</button>
+              ))}
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", paddingRight: "0.85rem", borderRight: "1px solid #cbd5e1" }}>
+              <span style={{ fontSize: "0.8rem", color: "#64748b", fontWeight: 600 }}>Margins:</span>
+              {[{ v: "1in", label: "Normal" },{ v: "0.5in", label: "Narrow" },{ v: "2in", label: "Wide" }].map(({ v, label }) => (
+                <button key={v} type="button" className="btn btn-secondary btn-sm" style={{ fontSize: "0.78rem" }}>{label}</button>
+              ))}
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
+              <span style={{ fontSize: "0.8rem", color: "#64748b", fontWeight: 600 }}>Paper:</span>
+              <select className="form-select" defaultValue="A4" style={{ fontSize: "0.78rem", padding: "0.2rem 0.4rem", borderRadius: "4px", border: "1px solid #cbd5e1" }}>
+                <option>A4 (210x297mm)</option><option>Letter (8.5x11in)</option><option>Legal (8.5x14in)</option>
+              </select>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
+              <span style={{ fontSize: "0.8rem", color: "#64748b", fontWeight: 600 }}>Spacing:</span>
+              <select className="form-select" defaultValue="0" style={{ fontSize: "0.78rem", padding: "0.2rem 0.4rem", borderRadius: "4px", border: "1px solid #cbd5e1", width: 90 }} onChange={(e) => {
+                const v = e.target.value;
+                editor.update(() => {
+                  const sel = $getSelection();
+                  if ($isRangeSelection(sel)) {
+                    let block = sel.anchor.getNode();
+                    while (block && block.__type !== "paragraph" && block.__type !== "heading") { block = block.getParent?.() || null; if (!block) break; }
+                    if (block) { const w = block.getWritable(); w.__style = (w.__style || "").replace(/margin-top:[^;]*;?/g, "").replace(/margin-bottom:[^;]*;?/g, "").trim(); if (v !== "0") w.__style += `;margin-top:${v}pt;margin-bottom:${v}pt`; }
+                  }
+                });
+              }}>
+                <option value="0">0 pt</option><option value="6">6 pt</option><option value="12">12 pt</option><option value="18">18 pt</option><option value="24">24 pt</option>
+              </select>
+            </div>
+          </div>
+        )}
+
+        {activeTab === "design" && (
+          <div style={{ display: "flex", alignItems: "center", gap: "1rem", flexWrap: "wrap" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", paddingRight: "0.85rem", borderRight: "1px solid #cbd5e1" }}>
+              <span style={{ fontSize: "0.8rem", color: "#64748b", fontWeight: 600 }}>Page Color:</span>
+              {["#ffffff","#fef3c7","#fce7f3","#e0f2fe","#dcfce7","#f3e8ff","#fef2f2","#f0fdf4","#f8fafc","#e2e8f0"].map((c) => (
+                <div key={c} onClick={() => { const el = document.querySelector(".word-a4-sheet"); if (el) el.style.background = c; }}
+                  style={{ width: 22, height: 22, borderRadius: "4px", border: "1px solid #d1d5db", background: c, cursor: "pointer" }} />
+              ))}
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", paddingRight: "0.85rem", borderRight: "1px solid #cbd5e1" }}>
+              <span style={{ fontSize: "0.8rem", color: "#64748b", fontWeight: 600 }}>Watermark:</span>
+              {["None","DRAFT","CONFIDENTIAL","DO NOT COPY","SAMPLE"].map((w) => (
+                <button key={w} type="button" className="btn btn-secondary btn-sm" style={{ fontSize: "0.78rem" }} onClick={() => {
+                  const sheet = document.querySelector(".word-a4-sheet");
+                  if (!sheet) return;
+                  const old = sheet.querySelector(".watermark-overlay");
+                  if (old) old.remove();
+                  if (w === "None") return;
+                  const wm = document.createElement("div");
+                  wm.className = "watermark-overlay";
+                  wm.style.cssText = "position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:0;opacity:0.08;font-size:5rem;font-weight:900;color:#000;transform:rotate(-30deg);user-select:none";
+                  wm.textContent = w;
+                  sheet.style.position = "relative";
+                  sheet.appendChild(wm);
+                }}>{w}</button>
+              ))}
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
+              <span style={{ fontSize: "0.8rem", color: "#64748b", fontWeight: 600 }}>Page Border:</span>
+              <select className="form-select" defaultValue="none" style={{ fontSize: "0.78rem", padding: "0.2rem 0.4rem", borderRadius: "4px", border: "1px solid #cbd5e1" }} onChange={(e) => {
+                const sheet = document.querySelector(".word-a4-sheet");
+                if (sheet) sheet.style.border = e.target.value === "none" ? "none" : e.target.value;
+              }}>
+                <option value="none">None</option><option value="1px solid #000">Box</option><option value="3px double #1e40af">Blue Double</option><option value="2px solid #dc2626">Red Line</option>
               </select>
             </div>
           </div>
@@ -1521,8 +1908,13 @@ function WordRibbonToolbar({ activeTab, setActiveTab, zoomLevel, setZoomLevel, i
                 style={{ display: "inline-flex", alignItems: "center", gap: "0.3rem", fontSize: "0.78rem", padding: "0.25rem 0.6rem", background: "#ffffff", border: "1px solid #cbd5e1", borderRadius: "5px", cursor: "pointer", fontWeight: "500", color: "#334155" }}
                 title="Unmerge Cell (បំបែកក្រឡ)"
               >
-                <LuSplit size={14} /> Unmerge Cell
-              </button>
+                 <LuSplit size={14} /> Unmerge Cell
+               </button>
+               <div style={{ width: "1px", height: "18px", background: "#cbd5e1", margin: "0 2px" }} />
+               <span style={{ fontSize: "0.75rem", color: "#64748b", fontWeight: 600 }}>V-Align:</span>
+               {[{ a: "top", i: "⊤" },{ a: "middle", i: "⊟" },{ a: "bottom", i: "⊥" }].map(({ a, i }) => (
+                 <button key={a} type="button" onClick={() => applyCellAlignment(a)} style={{ fontSize: "0.78rem", padding: "0.2rem 0.45rem", background: "#fff", border: "1px solid #cbd5e1", borderRadius: "5px", cursor: "pointer", fontWeight: "500", color: "#334155", minWidth: 26 }}>{i}</button>
+               ))}
 
               <label
                 style={{
@@ -1583,6 +1975,18 @@ function WordRibbonToolbar({ activeTab, setActiveTab, zoomLevel, setZoomLevel, i
           </div>
         )}
       </div>
+
+      {showFindReplace && (
+        <div style={{ background: "#fef3c7", borderTop: "2px solid #f59e0b", padding: "0.55rem 1rem", display: "flex", alignItems: "center", gap: "0.6rem", flexWrap: "wrap" }}>
+          <input placeholder="Find..." value={findText} onChange={(e) => setFindText(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") handleFindNext(); }} style={{ width: 200, padding: "0.25rem 0.5rem", fontSize: "0.82rem", border: "1px solid #d97706", borderRadius: "4px" }} autoFocus />
+          <button type="button" className="btn btn-sm" style={{ background: "#fff", border: "1px solid #d1d5db", fontSize: "0.78rem" }} onClick={handleFindNext}>Find Next</button>
+          <input placeholder="Replace..." value={replaceText} onChange={(e) => setReplaceText(e.target.value)} style={{ width: 200, padding: "0.25rem 0.5rem", fontSize: "0.82rem", border: "1px solid #d1d5db", borderRadius: "4px" }} />
+          <button type="button" className="btn btn-sm" style={{ background: "#fff", border: "1px solid #d1d5db", fontSize: "0.78rem" }} onClick={handleReplaceOne}>Replace</button>
+          <button type="button" className="btn btn-sm" style={{ background: "#fff", border: "1px solid #d1d5db", fontSize: "0.78rem" }} onClick={handleReplaceAll}>Replace All</button>
+          <div style={{ flex: 1 }} />
+          <button type="button" className="btn-icon btn-sm" onClick={() => setShowFindReplace(false)} style={{ border: "none", color: "#92400e" }}><LuX size={14} /></button>
+        </div>
+      )}
     </div>
   );
 }
@@ -1597,7 +2001,11 @@ export default function TextEditor({
   const [activeTab, setActiveTab] = useState("home");
   const [zoomLevel, setZoomLevel] = useState(1.0);
   const [stats, setStats] = useState({ words: 0, chars: 0 });
+  const [pageCount, setPageCount] = useState(1);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [showHeaderFooter, setShowHeaderFooter] = useState(false);
+  const [headerText, setHeaderText] = useState("");
+  const [footerText, setFooterText] = useState("");
 
   // Esc key listener to exit full screen mode
   useEffect(() => {
@@ -1678,9 +2086,24 @@ export default function TextEditor({
           isFullscreen={isFullscreen}
           setIsFullscreen={setIsFullscreen}
           readOnly={readOnly}
+          showHeaderFooter={showHeaderFooter}
+          setShowHeaderFooter={setShowHeaderFooter}
+          headerText={headerText}
+          setHeaderText={setHeaderText}
+          footerText={footerText}
+          setFooterText={setFooterText}
         />
 
         {/* A4 FLOATING CANVAS SHEET */}
+        {showHeaderFooter && (
+          <div style={{ background: "#e2e8f0", padding: "0.5rem 1rem", display: "flex", gap: "0.75rem", alignItems: "center", borderBottom: "1px solid #cbd5e1" }}>
+            <span style={{ fontSize: "0.8rem", fontWeight: 600, color: "#475569" }}>Header:</span>
+            <input value={headerText} onChange={(e) => setHeaderText(e.target.value)} placeholder="Header text..." style={{ flex: 1, padding: "0.25rem 0.5rem", fontSize: "0.82rem", border: "1px solid #cbd5e1", borderRadius: "4px" }} />
+            <span style={{ fontSize: "0.8rem", fontWeight: 600, color: "#475569" }}>Footer:</span>
+            <input value={footerText} onChange={(e) => setFooterText(e.target.value)} placeholder="Footer text..." style={{ flex: 1, padding: "0.25rem 0.5rem", fontSize: "0.82rem", border: "1px solid #cbd5e1", borderRadius: "4px" }} />
+            <button type="button" className="btn btn-secondary btn-sm" onClick={() => { setHeaderText(""); setFooterText(""); }}>Clear</button>
+          </div>
+        )}
         <div
           className="word-paper-canvas"
           style={{
@@ -1697,9 +2120,10 @@ export default function TextEditor({
             className="word-a4-sheet"
             style={{
               width: "100%",
-              maxWidth: "816px",
-              minHeight: "1056px",
+              maxWidth: "794px",
+              minHeight: `${1123 * pageCount}px`,
               background: "#ffffff",
+              position: "relative",
               boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)",
               borderRadius: "2px",
               padding: "3rem 3.5rem",
@@ -1707,8 +2131,15 @@ export default function TextEditor({
               zoom: zoomLevel,
             }}
           >
+            {Array.from({ length: Math.max(0, pageCount - 1) }).map((_, i) => (
+              <div key={i} style={{ position: "absolute", left: 0, right: 0, top: `${1123 * (i + 1)}px`, textAlign: "center", pointerEvents: "none", zIndex: 1 }}>
+                <div style={{ position: "absolute", left: 0, right: 0, top: -1, height: 2, background: "#e2e8f0" }} />
+                <span style={{ background: "#f1f5f9", color: "#94a3b8", fontSize: "0.7rem", padding: "0 0.5rem", position: "relative", top: -8 }}>Page {i + 2}</span>
+              </div>
+            ))}
+            {showHeaderFooter && <div style={{ borderBottom: "1px solid #cbd5e1", paddingBottom: "0.5rem", marginBottom: "1rem", textAlign: "center", color: "#64748b", fontSize: "0.85rem" }}>{headerText || "Header"}</div>}
             <RichTextPlugin
-              contentEditable={<ContentEditable style={{ outline: "none", minHeight: "950px" }} />}
+              contentEditable={<ContentEditable style={{ outline: "none", minHeight: "800px" }} />}
               placeholder={
                 <div style={{ position: "absolute", top: "3rem", left: "3.5rem", color: "#94a3b8", pointerEvents: "none" }}>
                   {placeholder}
@@ -1723,14 +2154,15 @@ export default function TextEditor({
             <DragDropPasteImagePlugin />
             <FloatingSelectionToolbarPlugin />
             <HtmlInitialLoaderPlugin initialHtml={value} />
-            <HtmlOnChangePlugin onChange={onChange} setStats={setStats} />
+            <HtmlOnChangePlugin onChange={onChange} setStats={setStats} setPageCount={setPageCount} />
+            {showHeaderFooter && <div style={{ borderTop: "1px solid #cbd5e1", paddingTop: "0.5rem", marginTop: "1rem", textAlign: "center", color: "#64748b", fontSize: "0.85rem" }}>{footerText || "Footer"}</div>}
           </div>
         </div>
 
         {/* MS WORD BOTTOM STATUS BAR */}
         <div style={{ background: "#f8fafc", borderTop: "1px solid #cbd5e1", padding: "0.35rem 1rem", fontSize: "0.75rem", color: "#64748b", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div style={{ display: "flex", gap: "1.25rem" }}>
-            <span>Page 1 of 1</span>
+            <span>Page 1 of {pageCount}</span>
             <span>Words: {stats.words}</span>
             <span>Characters: {stats.chars}</span>
           </div>

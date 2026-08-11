@@ -15,16 +15,16 @@ import {
   LuUser,
 } from "react-icons/lu";
 import { useAuth } from "../hooks/useAuth";
+import { useModules } from "../hooks/useModules";
 import { canAccess, FEATURES } from "../utils/permissions";
 
 const mainNavItems = [
-  { to: "/", icon: LuLayoutDashboard, label: "ទំព័រដើម", end: true, feature: FEATURES.dashboard },
-  { to: "/membership", icon: LuUsers, label: "សមាជិក", feature: FEATURES.members },
-  // { to: "/voters", icon: LuUserCheck, label: "អ្នកបោះឆ្នោត", feature: FEATURES.voters },
-  { to: "/files", icon: LuFolderOpen, label: "ឯកសារ", feature: FEATURES.files },
-  { to: "/records", icon: LuFileText, label: "កំណត់ត្រា", feature: FEATURES.records },
-  { to: "/reports", icon: LuScrollText, label: "របាយការណ៍", feature: FEATURES.reports },
-  { to: "/performance", icon: LuTrendingUp, label: "លទ្ធផលការងារ", feature: FEATURES.performance },
+  { to: "/", icon: LuLayoutDashboard, label: "ទំព័រដើម", end: true, feature: FEATURES.dashboard, module: "dashboard" },
+  { to: "/membership", icon: LuUsers, label: "សមាជិក", feature: FEATURES.members, module: "membership" },
+  { to: "/files", icon: LuFolderOpen, label: "ឯកសារ", feature: FEATURES.files, module: "files" },
+  { to: "/records", icon: LuFileText, label: "កំណត់ត្រា", feature: FEATURES.records, module: "records" },
+  { to: "/reports", icon: LuScrollText, label: "របាយការណ៍", feature: FEATURES.reports, module: "reports" },
+  { to: "/performance", icon: LuTrendingUp, label: "លទ្ធផលការងារ", feature: FEATURES.performance, module: "performance" },
 ];
 
 const settingsNavItem = {
@@ -32,10 +32,12 @@ const settingsNavItem = {
   icon: LuSettings,
   label: "ការកំណត់",
   feature: FEATURES.settings,
+  module: "settings",
 };
 
 export default function Layout() {
   const { user, loading, logout } = useAuth();
+  const { isEnabled } = useModules();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -44,8 +46,10 @@ export default function Layout() {
     navigate("/login");
   };
 
-  const filteredMainNav = mainNavItems.filter((item) => canAccess(user, item.feature));
-  const showSettings = canAccess(user, settingsNavItem.feature);
+  const filteredMainNav = mainNavItems.filter(
+    (item) => canAccess(user, item.feature) && isEnabled(item.module)
+  );
+  const showSettings = canAccess(user, settingsNavItem.feature) && isEnabled(settingsNavItem.module);
 
   const roleLabel = user?.roles?.length
     ? user.roles.join(", ")

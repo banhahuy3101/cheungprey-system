@@ -1,688 +1,524 @@
-# Configuration Workflow System — Requirements Document
+# Module Configuration & Approval Workflow — Requirements Document
 
 **Project:** ប្រព័ន្ធគ្រប់គ្រងស្រុកជើងព្រៃ (Cheung Prey District Management System)
-**Version:** 1.0
+**Version:** 2.0
 **Last updated:** August 2026
 **Audience:** Developers, QA
-**Feature:** `configuration_workflow` (new)
+**Feature:** `configuration_workflow` + `module_management`
 
 ---
 
 ## 1. Overview
 
-### 1.1 Problem
+### 1.1 Two Systems, One Page
 
-The system has 12 modules (feature flags). Several modules require sequential configuration before they become usable:
+This document covers two integrated systems controlled from a single admin page at `/settings/modules`:
 
-| Module | Prerequisite Config Steps |
-|--------|--------------------------|
-| `performance` | 1. Define Domains → 2. Define Sub-Domains → 3. Define Indicators → 4. Set Reporting Periods |
-| `finances` | 1. Seed Chart of Accounts → 2. Create Budgets → 3. Configure Approval Rules |
-| `reports` | 1. Upload DOCX/HTML Templates → 2. Map Placeholders → 3. Test Fill → 4. Publish Templates |
-| `users` | 1. Define Custom Roles → 2. Set Feature Permissions → 3. Invite Users |
+| System | Purpose | Key Concepts |
+|--------|---------|-------------|
+| **Module Management** | Enable/disable + configure modules | Toggle, approval on/off, step chain |
+| **Approval Workflow** | Multi-step review before items go live | Steps → Approvers → Accept/Reject |
 
-Currently, there is no guided process. Admins must know the correct order and manually navigate between settings pages. New administrators often miss steps, resulting in broken modules.
+### 1.2 Problem
 
-### 1.2 Solution
+Currently, the system has 12 modules but no centralized place to:
+- Turn modules on/off
+- Configure whether items need approval
+- Define WHO approves and HOW MANY steps
 
-A **Configuration Workflow System** that:
+Admins hardcode flows. Non-admin users have no visibility into approval status. Finance module had to be manually ripped out of frontend because there's no toggle.
 
-1. Lets technical admins define ordered configuration steps per module from a new settings page
-2. Tracks completion status of each step based on verification criteria
-3. Assigns a readiness state to each module: `not_configured` → `in_progress` → `configured` → `active`
-4. Provides a dashboard widget showing module readiness at a glance
+### 1.3 Solution
+
+A **Module Settings** page (`/settings/modules`) where super_admin/admin can:
+
+| Action | Example |
+|--------|---------|
+| Enable/disable modules | Turn off Finance → hidden from sidebar, routes return 404 |
+| Set approval requirement | Membership → approval ON, Reports → approval OFF |
+| Define approval chain | Membership: Step 1=commune_chief → Step 2=district_chief |
+| View pending queue per step | 5 items waiting at Step 1, 3 at Step 2 |
 
 ---
 
-## 2. Architecture
+## 2. Data Model
 
-### 2.1 Data Model
+### 2.1 Module Configuration
 
 ```sql
--- Step templates define named, reusable configuration actions
-CREATE TABLE config_workflow_steps (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    module_key TEXT NOT NULL,               -- e.g. "finances", "performance"
-    sort_order INT NOT NULL DEFAULT 0,
-    title_kh TEXT NOT NULL,                 -- e.g. "បង្កើតគណនី Chart of Accounts"
-    title_en TEXT NOT NULL,
-    description_kh TEXT,
-    description_en TEXT,
-    verification_type TEXT NOT NULL DEFAULT 'manual'
-        CHECK (verification_type IN ('manual', 'sql_check', 'api_check', 'count_check')),
-    verification_rule JSONB,                -- config for auto-verification (see 2.2)
-    action_label_kh TEXT,                   -- e.g. "បើកទំព័រ CoA"
-    action_label_en TEXT,
-    action_url TEXT,                        -- link to the relevant settings page
-    is_required BOOLEAN NOT NULL DEFAULT true,
-    is_active BOOLEAN NOT NULL DEFAULT true,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW(),
-    UNIQUE (module_key, sort_order)
+CREATE TABLE module_configs (
+    module_key    TEXT PRIMARY KEY,              -- 'membership', 'finance', 'reports', etc.
+    enabled       BOOLEAN NOT NULL DEFAULT true,
+    need_approval BOOLEAN NOT NULL DEFAULT false,
+    settings      JSONB DEFAULT '{}',            -- module-specific settings
+    created_at    TIMESTAMPTZ DEFAULT NOW(),
+    updated_at    TIMESTAMPTZ DEFAULT NOW()
+);
+```
+
+### 2.2 Approval Workflow Steps
+
+```sql
+CREATE TABLE workflow_steps (
+    id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    module_key    TEXT NOT NULL,                 -- FK → module_configs
+    step_order    INT NOT NULL,                  -- 1, 2, 3...
+    approver_role TEXT NOT NULL,                 -- 'commune_chief', 'district_chief', 'admin'
+    can_reject    BOOLEAN NOT NULL DEFAULT true,
+    created_at    TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE (module_key, step_order)
+);
+```
+
+### 2.3 Approval Records (per item)
+
+```sql
+CREATE TABLE workflow_approvals (
+    id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    module_key    TEXT NOT NULL,                 -- 'membership', 'reports'
+    item_id       UUID NOT NULL,                 -- the member.id, report.id etc.
+    step_order    INT NOT NULL DEFAULT 1,
+    status        TEXT NOT NULL DEFAULT 'pending'
+                  CHECK (status IN ('pending', 'approved', 'rejected')),
+    approved_by   UUID REFERENCES profiles(id),
+    approved_at   TIMESTAMPTZ,
+    notes         TEXT,                          -- reason for approval/rejection
+    created_at    TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE (module_key, item_id, step_order)
 );
 
--- Tracks progress per step for a given zone + module
-CREATE TABLE config_workflow_progress (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    step_id UUID NOT NULL REFERENCES config_workflow_steps(id) ON DELETE CASCADE,
-    zone_code VARCHAR(8),                   -- NULL = global (non-zone-scoped modules)
-    status TEXT NOT NULL DEFAULT 'pending'
-        CHECK (status IN ('pending', 'in_progress', 'completed', 'skipped')),
-    completed_by UUID REFERENCES auth.users(id),
-    completed_at TIMESTAMPTZ,
-    verified_at TIMESTAMPTZ,
-    notes TEXT,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW(),
-    UNIQUE (step_id, zone_code)
-);
+CREATE INDEX idx_wf_approvals_pending ON workflow_approvals(module_key, step_order, status);
+CREATE INDEX idx_wf_approvals_item ON workflow_approvals(module_key, item_id);
+```
 
--- Module-level readiness state
+### 2.4 Module Lifecycle State
+
+```sql
+-- Tracks overall module readiness (unchanged from v1)
 CREATE TABLE config_workflow_module_state (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    module_key TEXT NOT NULL,
-    zone_code VARCHAR(8),                   -- NULL = global
-    state TEXT NOT NULL DEFAULT 'not_configured'
-        CHECK (state IN ('not_configured', 'in_progress', 'configured', 'active')),
-    activated_by UUID REFERENCES auth.users(id),
-    activated_at TIMESTAMPTZ,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    module_key    TEXT NOT NULL,
+    zone_code     VARCHAR(8),                    -- NULL = global
+    state         TEXT NOT NULL DEFAULT 'not_configured'
+                  CHECK (state IN ('not_configured', 'in_progress', 'configured', 'active')),
+    activated_by  UUID REFERENCES profiles(id),
+    activated_at  TIMESTAMPTZ,
+    created_at    TIMESTAMPTZ DEFAULT NOW(),
+    updated_at    TIMESTAMPTZ DEFAULT NOW(),
     UNIQUE (module_key, zone_code)
 );
 ```
 
-### 2.2 Verification Types
-
-| Type | Description | `verification_rule` Example |
-|------|-------------|---------------------------|
-| `manual` | Admin manually marks as complete | `{}` |
-| `sql_check` | Run a SQL query; step is completed if result meets condition | `{"query": "SELECT COUNT(*) FROM chart_of_accounts", "condition": "> 0"}` |
-| `api_check` | Call an API endpoint; step is completed if response status is 2xx | `{"url": "/api/fms/coa", "method": "GET", "condition": "status_ok"}` |
-| `count_check` | Check record count from existing API; step is completed if count meets threshold | `{"endpoint": "/api/performance/domains", "condition": ">= 1"}` |
-
 ---
 
-## 3. Module Workflow States
+## 3. Module State Machine (Combined)
+
+A module can be in one of two independent dimensions:
+
+### 3.1 Operational State (Module Management)
+
+```
+         ┌──────────┐
+    ┌───→│ enabled  │────┐
+    │    └──────────┘    │  (admin toggles)
+    │                    │
+    │    ┌──────────┐    │
+    └────│ disabled │←───┘
+         └──────────┘
+```
+
+**Rules:**
+- `disabled`: Module hidden from sidebar. API routes return 503 (Service Unavailable).
+- `enabled`: Module visible. API routes work normally.
+
+### 3.2 Setup State (Configuration Workflow)
 
 ```
 ┌─────────────────┐
-│  not_configured  │  ← No steps completed
+│  not_configured  │  ← 0% steps done
 └────────┬────────┘
-         │ (first step marked in_progress)
+         │ (first step completed)
          ▼
 ┌─────────────────┐
-│   in_progress    │  ← At least one step started, not all complete
+│   in_progress    │  ← 1-99% steps done
 └────────┬────────┘
-         │ (all required steps completed)
+         │ (100% required steps completed)
          ▼
 ┌─────────────────┐
-│   configured     │  ← All required steps verified complete
+│   configured     │  ← All steps done, awaiting admin activation
 └────────┬────────┘
-         │ (admin explicitly activates)
+         │ (admin clicks "Activate")
          ▼
 ┌─────────────────┐
-│     active       │  ← Module is live and ready for end users
+│     active       │  ← Live + operational
 └─────────────────┘
 ```
 
-### 3.1 State Transition Rules
+### 3.3 Approval State (per item)
 
-| Rule ID | Rule |
-|---------|------|
-| TR-01 | `not_configured` → `in_progress`: automatic when any step is marked `in_progress` |
-| TR-02 | `in_progress` → `configured`: automatic when all `is_required=true` steps are `completed` |
-| TR-03 | `configured` → `active`: manual by admin with `technical` feature |
-| TR-04 | `active` → `configured`: manual if a module needs reconfiguration |
-| TR-05 | `configured` → `not_configured`: manual reset (clears all progress) |
-| TR-06 | Any state → `in_progress`: if a previously completed step is unchecked |
-| TR-07 | Module state is per zone for zone-scoped modules (`finances`, `performance`, `reports`, `members`, `voters`); global for system-wide modules (`users`, `technical`) |
+When `module_configs.need_approval = true`:
 
----
+```
+Item created → status = "Pending"
+  │
+  ├─ Step 1 (pending) → approver reviews
+  │     ├─ approve → Step 2 (pending)
+  │     └─ reject  → status = "Suspended" / "Rejected"  [workflow ends]
+  │
+  ├─ Step 2 (pending) → approver reviews
+  │     ├─ approve → ...continue...
+  │     └─ reject  → status = "Suspended" [workflow ends]
+  │
+  └─ Step N (last step) → approver reviews
+        ├─ approve → status = "Active" [workflow complete, item is live]
+        └─ reject  → status = "Suspended" [workflow ends]
+```
 
-## 4. API Endpoints
+### 3.4 State Interaction Matrix
 
-### 4.1 Step Template CRUD
-
-| Method | Path | Description | Feature |
-|--------|------|-------------|---------|
-| `GET` | `/api/config-workflow/steps?module=X` | List steps for a module | `technical` |
-| `POST` | `/api/config-workflow/steps` | Create a new step | `technical` |
-| `PUT` | `/api/config-workflow/steps/:id` | Update a step | `technical` |
-| `DELETE` | `/api/config-workflow/steps/:id` | Delete a step | `technical` |
-| `PUT` | `/api/config-workflow/steps/reorder` | Reorder steps (batch sort_order) | `technical` |
-
-### 4.2 Progress Tracking
-
-| Method | Path | Description | Feature |
-|--------|------|-------------|---------|
-| `GET` | `/api/config-workflow/progress?module=X&zone_code=Y` | Get progress for a module+zone | `technical` |
-| `PUT` | `/api/config-workflow/progress/:step_id` | Update a step's status (manual verify) | `technical` |
-| `POST` | `/api/config-workflow/progress/verify-all` | Run auto-verification for all steps in a module+zone | `technical` |
-| `POST` | `/api/config-workflow/progress/reset` | Reset all progress for a module+zone | `technical` |
-
-### 4.3 Module State
-
-| Method | Path | Description | Feature |
-|--------|------|-------------|---------|
-| `GET` | `/api/config-workflow/module-states` | List all module states (for dashboard) | `dashboard` |
-| `GET` | `/api/config-workflow/module-states/:module_key` | Get state for a specific module | `technical` |
-| `PUT` | `/api/config-workflow/module-states/:module_key/activate` | Set module to `active` | `technical` |
-| `PUT` | `/api/config-workflow/module-states/:module_key/deactivate` | Set module to `configured` | `technical` |
-| `PUT` | `/api/config-workflow/module-states/:module_key/reset` | Reset to `not_configured` | `technical` |
-
-### 4.4 Seed / Bootstrap
-
-| Method | Path | Description | Feature |
-|--------|------|-------------|---------|
-| `POST` | `/api/config-workflow/seed-defaults` | Seed default step templates for all modules | `technical` |
+| Module Enabled | Setup State | need_approval | What happens on create |
+|:---:|:---:|:---:|---|
+| ✅ | active | ❌ | Item created with status="Active" |
+| ✅ | active | ✅ | Item created with status="Pending", flows through steps |
+| ✅ | configured | ❌ | Warning banner: "Module not activated yet" |
+| ❌ | any | any | Module hidden, routes return 503 |
 
 ---
 
-## 5. Default Step Templates
+## 4. Business Requirements
 
-On `seed-defaults`, the following steps are created:
+### 4.1 Module Management
 
-### 5.1 Finances Module
+| ID | Requirement | Priority |
+|----|-------------|----------|
+| **BR-MOD-01** | Admin shall view all modules on one page with enable/disable toggle, approval toggle, and step configuration. | P0 |
+| **BR-MOD-02** | Disabling a module shall hide it from sidebar navigation for all users. | P0 |
+| **BR-MOD-03** | Disabling a module shall make its API routes return 503 for non-super_admin users. | P0 |
+| **BR-MOD-04** | Enabling a module after being disabled shall restore all functionality. | P0 |
+| **BR-MOD-05** | Modules: `dashboard` and `settings` are always enabled (cannot be toggled). | P0 |
 
-| Order | Title (KH) | Title (EN) | Action URL | Verification |
-|-------|-----------|------------|------------|-------------|
-| 1 | បង្កើតគណនី Chart of Accounts | Create Chart of Accounts | `/finances/coa` | `count_check` — coa count >= 1 |
-| 2 | កំណត់ថវិកាប្រចាំឆ្នាំ | Set Annual Budgets | `/finances/budgets` | `count_check` — budget count >= 1 |
-| 3 | កំណត់អ្នកអនុម័ត | Configure Approvers | `/settings/role-permissions` | `manual` |
-| 4 | ដំណើរការម៉ូឌុលហិរញ្ញវត្ថុ | Activate Finance Module | — | `manual` |
+### 4.2 Approval Workflow Configuration
 
-### 5.2 Performance Module
+| ID | Requirement | Priority |
+|----|-------------|----------|
+| **BR-APR-01** | Admin shall define 1..N approval steps per module with role per step. | P0 |
+| **BR-APR-02** | Each step shall have a `can_reject` flag (default: true). When false, approver can only approve or return for revision. | P1 |
+| **BR-APR-03** | Steps are executed in order. Step N+1 is not accessible until Step N is approved. | P0 |
+| **BR-APR-04** | Rejection at any step ends the workflow. Item status becomes "Suspended" with rejection notes. | P0 |
+| **BR-APR-05** | Admin can reorder, add, or remove steps. Existing in-flight items keep their current step. | P1 |
+| **BR-APR-06** | If `need_approval` is toggled OFF, all pending items are auto-approved (status → Active). | P1 |
 
-| Order | Title (KH) | Title (EN) | Action URL | Verification |
-|-------|-----------|------------|------------|-------------|
-| 1 | កំណត់ដែន (Domain) | Define Domains | `/settings/performance` | `count_check` — domain count >= 1 |
-| 2 | កំណត់ចំណុចរង (Sub-Domain) | Define Sub-Domains | `/settings/performance` | `count_check` — sub-domain count >= 1 |
-| 3 | កំណត់សូចនាករ (Indicator) | Define Indicators | `/settings/performance` | `count_check` — indicator count >= 1 |
-| 4 | កំណត់រយៈពេលរបាយការណ៍ | Set Reporting Periods | `/settings/performance_period` | `count_check` — period count >= 1 |
-| 5 | ដំណើរការម៉ូឌុល Performance | Activate Performance Module | — | `manual` |
+### 4.3 Approval Actions
 
-### 5.3 Reports Module
+| ID | Requirement | Priority |
+|----|-------------|----------|
+| **BR-ACT-01** | Approver sees pending items filtered to their role and zone scope. | P0 |
+| **BR-ACT-02** | Approve: advances item to next step (or to Active if last step). Records who, when, notes. | P0 |
+| **BR-ACT-03** | Reject: ends workflow with reason. Item status → Suspended. Records who, when, reason. | P0 |
+| **BR-ACT-04** | User who submitted the item sees its approval progress (current step, history). | P1 |
+| **BR-ACT-05** | Self-approval is blocked: approver cannot approve an item they created. | P1 |
+| **BR-ACT-06** | A super_admin or admin can override any step (skip, force approve/reject). | P1 |
 
-| Order | Title (KH) | Title (EN) | Action URL | Verification |
-|-------|-----------|------------|------------|-------------|
-| 1 | បញ្ចូលគំរូរបាយការណ៍ (.docx/.html) | Upload Report Templates | `/settings/report-templates` | `count_check` — template count >= 1 |
-| 2 | ផ្ទៀងផ្ទាត់ Placeholder ក្នុងគំរូ | Verify Template Placeholders | `/settings/report-templates` | `manual` |
-| 3 | សាកល្បងបំពេញគំរូ | Test Fill Template | `/reports/create-template` | `manual` |
-| 4 | ដំណើរការម៉ូឌុលរបាយការណ៍ | Activate Reports Module | — | `manual` |
+### 4.4 Approval Queue
 
-### 5.4 Users & Roles Module
-
-| Order | Title (KH) | Title (EN) | Action URL | Verification |
-|-------|-----------|------------|------------|-------------|
-| 1 | កំណត់តួនាទីផ្ទាល់ខ្លួន (បើចាំបាច់) | Define Custom Roles | `/settings/role-permissions` | `manual` |
-| 2 | កំណត់សិទ្ធិតាមតួនាទី | Set Role Permissions | `/settings/role-permissions` | `manual` |
-| 3 | កំណត់ពាក្យសម្ងាត់ដើម | Set Default Password | `/settings/technical/system` | `manual` |
-| 4 | អញ្ជើញអ្នកប្រើប្រាស់ | Invite Users | `/settings/users` | `count_check` — user count >= 2 |
-| 5 | ដំណើរការម៉ូឌុលអ្នកប្រើប្រាស់ | Activate Users Module | — | `manual` |
-
-### 5.5 Members Module
-
-| Order | Title (KH) | Title (EN) | Action URL | Verification |
-|-------|-----------|------------|------------|-------------|
-| 1 | ផ្ទៀងផ្ទាត់ទិន្នន័យភូមិសាស្ត្រ | Verify Geographic Zones | `/members` | `count_check` — zone count >= 1 |
-| 2 | បង្កើតសមាជិកគំរូ | Create Sample Members | `/members/create` | `count_check` — member count >= 1 |
-| 3 | ដំណើរការម៉ូឌុលសមាជិក | Activate Members Module | — | `manual` |
-
-### 5.6 Voters Module
-
-| Order | Title (KH) | Title (EN) | Action URL | Verification |
-|-------|-----------|------------|------------|-------------|
-| 1 | បញ្ចូលទិន្នន័យអ្នកបោះឆ្នោតគំរូ | Add Sample Voter Data | `/voters` | `count_check` — voter count >= 1 |
-| 2 | ដំណើរការម៉ូឌុលអ្នកបោះឆ្នោត | Activate Voters Module | — | `manual` |
-
-### 5.7 Files Module
-
-| Order | Title (KH) | Title (EN) | Action URL | Verification |
-|-------|-----------|------------|------------|-------------|
-| 1 | បញ្ចូលឯកសារគំរូ | Upload Sample Files | `/files` | `count_check` — file count >= 1 |
-| 2 | ដំណើរការម៉ូឌុលឯកសារ | Activate Files Module | — | `manual` |
-
-### 5.8 Records Module
-
-| Order | Title (KH) | Title (EN) | Action URL | Verification |
-|-------|-----------|------------|------------|-------------|
-| 1 | បង្កើតកំណត់ត្រាគំរូ | Create Sample Record | `/records` | `count_check` — record count >= 1 |
-| 2 | ដំណើរការម៉ូឌុលកំណត់ត្រា | Activate Records Module | — | `manual` |
-
-> **Note:** `dashboard`, `settings` modules are always active (no configuration needed). `performance_admin` is automatically active when `performance` is active. `technical` is auto-active for super_admin/admin.
+| ID | Requirement | Priority |
+|----|-------------|----------|
+| **BR-QUE-01** | Approver sees a queue of items waiting at THEIR step, scoped to THEIR zone. | P0 |
+| **BR-QUE-02** | Queue shows: item type, name, created date, current step, creator. | P0 |
+| **BR-QUE-03** | Badge count on sidebar icon showing pending items for the current user. | P1 |
 
 ---
 
-## 6. Frontend Pages
+## 5. Approval Workflow — User Stories
 
-### 6.1 Settings Page — Configuration Workflow
+### 5.1 Membership (3 steps)
 
-**Route:** `/settings/configuration-workflow`
+| Step | Approver | Can Reject? | Action |
+|------|----------|:----------:|--------|
+| 1 | `commune_chief` | ✅ | Reviews member in their commune |
+| 2 | `district_chief` | ✅ | Reviews member in their district |
+| 3 | `admin` / `super_admin` | ✅ | Final approval → Member goes Active |
+
+**Story:** Commune clerk creates member → Member = Pending → Commune chief reviews, approves → District chief reviews, approves → Admin final approves → Member = Active.
+
+### 5.2 Reports (1 step)
+
+| Step | Approver | Can Reject? | Action |
+|------|----------|:----------:|--------|
+| 1 | `district_chief` | ✅ | Reviews and approves monthly report |
+
+**Story:** Commune clerk submits monthly report → Report = Pending → District chief reviews → Approve → Report published.
+
+### 5.3 No Approval (Direct)
+
+If `need_approval = false`, items are created directly as Active. No workflow steps run.
+
+---
+
+## 6. API Endpoints
+
+### 6.1 Module Management
+
+| Method | Path | Description | Feature |
+|--------|------|-------------|---------|
+| `GET` | `/api/modules` | List all modules with config | `technical` |
+| `PUT` | `/api/modules/:key` | Update module config (enable, need_approval, settings) | `technical` |
+
+### 6.2 Workflow Steps CRUD
+
+| Method | Path | Description | Feature |
+|--------|------|-------------|---------|
+| `GET` | `/api/modules/:key/steps` | List steps for a module | `technical` |
+| `POST` | `/api/modules/:key/steps` | Add a step | `technical` |
+| `PUT` | `/api/modules/:key/steps/:id` | Update a step (role, can_reject) | `technical` |
+| `DELETE` | `/api/modules/:key/steps/:id` | Remove a step | `technical` |
+| `PUT` | `/api/modules/:key/steps/reorder` | Batch reorder steps | `technical` |
+
+### 6.3 Approval Actions
+
+| Method | Path | Description | Feature |
+|--------|------|-------------|---------|
+| `GET` | `/api/approvals/queue` | Items pending at user's step | `members` / `reports` etc. |
+| `POST` | `/api/approvals/:id/approve` | Approve current step | Role-based |
+| `POST` | `/api/approvals/:id/reject` | Reject with reason | Role-based |
+| `GET` | `/api/approvals/:module/:itemId` | Get approval history for an item | Module feature |
+| `POST` | `/api/approvals/:id/override` | Admin override (force approve/reject) | `membership_admin` |
+
+### 6.4 Module State (unchanged from v1)
+
+| Method | Path | Description | Feature |
+|--------|------|-------------|---------|
+| `GET` | `/api/config-workflow/steps?module=X` | Config steps for module | `technical` |
+| `POST` | `/api/config-workflow/seed-defaults` | Seed default config steps | `technical` |
+
+---
+
+## 7. Frontend — Module Settings Page
+
+**Route:** `/settings/modules`
 **Feature:** `technical`
 
-A new card in the Settings hub:
-
-| Icon | Title | Description | Path |
-|------|-------|-------------|------|
-| `LuWorkflow` | កំណត់រចនាសម្ព័ន្ធ Workflow | កំណត់ជំហានតំឡើងម៉ូឌុល និងតាមដានដំណើរការ | `/settings/configuration-workflow` |
-
-### 6.2 Configuration Workflow Page Layout
+### 7.1 Layout
 
 ```
-┌─────────────────────────────────────────────────┐
-│ ← ត្រឡប់    កំណត់រចនាសម្ព័ន្ធ Workflow          │
-├─────────────────────────────────────────────────┤
-│                                                 │
-│  Module Selector: [Finances ▾]  Zone: [All ▾]   │
-│                                                 │
-│  ┌─ Module State ─────────────────────────────┐ │
-│  │  Status: ● In Progress                      │ │
-│  │  Progress: 2 / 4 steps completed            │ │
-│  │  [████████░░░░░░░░] 50%                      │ │
-│  │                                             │ │
-│  │  [Activate Module] [Reset] [Seed Defaults]  │ │
-│  └─────────────────────────────────────────────┘ │
-│                                                 │
-│  ┌─ Steps ────────────────────────────────────┐ │
-│  │                                            │ │
-│  │  ✓ 1. បង្កើតគណនី Chart of Accounts      │ │
-│  │     Verified by auto-check │ 2 Aug 2026    │ │
-│  │     [Re-verify] [Edit Step]                │ │
-│  │                                            │ │
-│  │  ✓ 2. កំណត់ថវិកាប្រចាំឆ្នាំ            │ │
-│  │     Marked complete by Admin A │ 3 Aug     │ │
-│  │     [Re-verify] [Edit Step]                │ │
-│  │                                            │ │
-│  │  ○ 3. កំណត់អ្នកអនុម័ត                    │ │
-│  │     [បើកទំព័រសិទ្ធិតួនាទី →]           │ │
-│  │     [Mark Complete]                        │ │
-│  │                                            │ │
-│  │  ○ 4. ដំណើរការម៉ូឌុលហិរញ្ញវត្ថុ        │ │
-│  │     (Auto after all steps complete)        │ │
-│  │                                            │ │
-│  │  [+ Add Step]                              │ │
-│  └────────────────────────────────────────────┘ │
-└─────────────────────────────────────────────────┘
+┌─ Module Settings ────────────────────────────────────────────┐
+│                                                               │
+│  ┌─ សមាជិក (Membership) ────────────────────────────────────┐ │
+│  │  Operational: [Enabled ☑]                                 │ │
+│  │  Setup State:  ● Active  (3 of 3 steps done)              │ │
+│  │                                                           │ │
+│  │  Approval Workflow: [☑ Required]                          │ │
+│  │                                                           │ │
+│  │  Steps:                                                   │ │
+│  │    Step 1: [commune_chief  ▼]  Can Reject: [☑]  [✕]     │ │
+│  │    Step 2: [district_chief ▼]  Can Reject: [☑]  [✕]     │ │
+│  │    Step 3: [admin          ▼]  Can Reject: [☑]  [✕]     │ │
+│  │    [+ Add Step]                                           │ │
+│  │                                     [Save] [Reset to Default] │
+│  └───────────────────────────────────────────────────────────┘ │
+│                                                               │
+│  ┌─ របាយការណ៍ (Reports) ──────────────────────────────────┐ │
+│  │  Operational: [Enabled ☑]                                 │ │
+│  │  Setup State:  ○ Configured  (4 of 4 steps done)          │ │
+│  │  Approval: [☐ Not Required]  (items created directly)     │ │
+│  │                                     [Activate] [Save]     │ │
+│  └───────────────────────────────────────────────────────────┘ │
+│                                                               │
+│  ┌─ ហិរញ្ញវត្ថុ (Finance) ─────────────────────────────────┐ │
+│  │  Operational: [Disabled ☐]                                │ │
+│  │  Module hidden from all users. Routes return 503.         │ │
+│  └───────────────────────────────────────────────────────────┘ │
+│                                                               │
+│  ┌─ តារាងគ្រប់គ្រង (Dashboard) ───────────────────────────┐ │
+│  │  Operational: [Enabled]  (cannot disable)                 │ │
+│  └───────────────────────────────────────────────────────────┘ │
+└───────────────────────────────────────────────────────────────┘
 ```
 
-### 6.3 Step Edit Modal
+### 7.2 Approval Queue Widget (Sidebar)
 
 ```
-┌─ Edit Step ───────────────────────────────────┐
-│                                                │
-│  Title (KH): [បង្កើតគណនី Chart of Accounts   ] │
-│  Title (EN): [Create Chart of Accounts        ] │
-│  Description (KH): [បង្កើតគណនីយ៉ាងហោច ១    ] │
-│  Sort Order: [1]                               │
-│  Required: [✓]                                 │
-│                                                │
-│  Verification Type: [Count Check ▾]            │
-│  ───────────────────────────────────────       │
-│  Endpoint: [/api/fms/coa             ]         │
-│  Condition: [>= 1                    ]         │
-│                                                │
-│  Action Label (KH): [បើកទំព័រ CoA          ] │
-│  Action URL: [/finances/coa           ]         │
-│                                                │
-│  [Save] [Cancel]                               │
-└────────────────────────────────────────────────┘
-```
-
-### 6.4 Dashboard Widget
-
-A new widget on the home dashboard (shown to users with `technical` or `users` feature):
-
-```
-┌─ Module Readiness ────────────────────────────┐
-│                                                │
-│  ● Finances       ████████░░ 75% Configured    │
-│  ● Performance    ██████████ 100% Active       │
-│  ○ Reports        ░░░░░░░░░░ 0% Not Started    │
-│  ● Members        ██░░░░░░░░ 25% In Progress   │
-│  ● Voters         ██████████ 100% Active       │
-│  ○ Files          ░░░░░░░░░░ 0% Not Started    │
-│  ○ Records        ░░░░░░░░░░ 0% Not Started    │
-│  ● Users & Roles  ██████████ 100% Active       │
-│                                                │
-└────────────────────────────────────────────────┘
+┌─ Sidebar ──────────────────────────┐
+│                                     │
+│  សមាជិក                      [3]   │  ← badge: 3 pending at my step
+│  របាយការណ៍                  [1]   │  ← badge: 1 pending at my step
+│  ...                                │
+└─────────────────────────────────────┘
 ```
 
 ---
 
-## 7. Backend Implementation Notes
-
-### 7.1 New Feature Flag
-
-Add `configuration_workflow` to feature enums:
-
-```go
-// backend/internal/models/permissions.go
-FeatureConfigurationWorkflow Feature = "configuration_workflow"
-```
-
-However — since this overlaps heavily with `technical`, consider using the existing `technical` feature instead. No new feature flag needed; the workflow settings page is gated by `technical`.
-
-### 7.2 New Files
-
-| Layer | File | Purpose |
-|-------|------|---------|
-| Models | `internal/models/config_workflow.go` | Step, Progress, ModuleState structs |
-| Repository | `internal/repository/config_workflow_repo.go` | CRUD + verification queries |
-| Handler | `internal/handlers/config_workflow.go` | HTTP handlers |
-| Migration | `migrations/023_config_workflow.sql` | DDL |
-
-### 7.3 Route Registration
-
-```go
-// cmd/api/main.go
-configWorkflow := api.Group("/api/config-workflow")
-configWorkflow.Use(auth.JWTMiddlewareWithAccess(supabaseClient))
-configWorkflow.Use(auth.RequireFeature(models.FeatureTechnical))
-{
-    // Steps
-    configWorkflow.GET("/steps", configHandler.ListSteps)
-    configWorkflow.POST("/steps", configHandler.CreateStep)
-    configWorkflow.PUT("/steps/:id", configHandler.UpdateStep)
-    configWorkflow.DELETE("/steps/:id", configHandler.DeleteStep)
-    configWorkflow.PUT("/steps/reorder", configHandler.ReorderSteps)
-
-    // Progress
-    configWorkflow.GET("/progress", configHandler.GetProgress)
-    configWorkflow.PUT("/progress/:stepId", configHandler.UpdateProgress)
-    configWorkflow.POST("/progress/verify-all", configHandler.VerifyAll)
-    configWorkflow.POST("/progress/reset", configHandler.ResetProgress)
-
-    // Module State
-    configWorkflow.GET("/module-states", configHandler.ListModuleStates)
-    configWorkflow.GET("/module-states/:moduleKey", configHandler.GetModuleState)
-    configWorkflow.PUT("/module-states/:moduleKey/activate", configHandler.ActivateModule)
-    configWorkflow.PUT("/module-states/:moduleKey/deactivate", configHandler.DeactivateModule)
-    configWorkflow.PUT("/module-states/:moduleKey/reset", configHandler.ResetModule)
-
-    // Seed
-    configWorkflow.POST("/seed-defaults", configHandler.SeedDefaults)
-}
-```
-
-The `/api/config-workflow/module-states` (GET, list all) should be accessible with `dashboard` feature (not `technical`) so the dashboard widget can read it:
-
-```go
-// Separate route group for dashboard
-dashboardGroup := api.Group("/api/config-workflow")
-dashboardGroup.Use(auth.JWTMiddlewareWithAccess(supabaseClient))
-dashboardGroup.Use(auth.RequireFeature(models.FeatureDashboard))
-{
-    dashboardGroup.GET("/module-states", configHandler.ListModuleStates)
-}
-```
-
-### 7.4 Auto-Verification Logic
-
-```go
-func (r *ConfigWorkflowRepo) RunVerification(step *models.ConfigWorkflowStep, zoneCode string) (bool, error) {
-    switch step.VerificationType {
-    case "manual":
-        return false, nil // manual steps never auto-verify
-
-    case "count_check":
-        rule := step.VerificationRule
-        endpoint := rule["endpoint"].(string)
-        condition := rule["condition"].(string) // e.g. ">= 1"
-        count, err := r.fetchCount(endpoint, zoneCode)
-        if err != nil {
-            return false, err
-        }
-        return evaluateCondition(count, condition), nil
-
-    case "sql_check":
-        // Run the SQL query defined in verification_rule
-        // Compare result against condition
-        ...
-
-    case "api_check":
-        // Call the endpoint, check response status
-        ...
-    }
-    return false, nil
-}
-```
-
-### 7.5 Startup Task
-
-On server startup, check if any steps exist. If table is empty, seed default step templates:
-
-```go
-// cmd/api/main.go
-func SeedDefaultConfigWorkflowSteps(supabaseClient *supabase.Client) {
-    count, _ := supabaseClient.From("config_workflow_steps").Select("*", "exact").Single()
-    if count == 0 {
-        // Insert default steps for all modules
-    }
-}
-```
-
-### 7.6 Module Activation Guard (Optional — Phase 2)
-
-When a module is `not_configured` or `configured` (not `active`), consider showing a banner on the module's pages:
-
-> "ម៉ូឌុលនេះមិនទាន់ដំណើរការពេញលេញនៅឡើយទេ។ សូមបញ្ចប់ការកំណត់រចនាសម្ព័ន្ធ។"
-> (This module is not yet fully activated. Please complete configuration.)
-
-This can be implemented as middleware that checks the module state before allowing access to the module's routes. **Deferred to Phase 2** to avoid disrupting existing functionality.
-
----
-
-## 8. Frontend Implementation Notes
-
-### 8.1 New Files
+## 8. Frontend — File Inventory
 
 | File | Purpose |
 |------|---------|
-| `src/pages/settings/ConfigurationWorkflow.jsx` | Main workflow admin page |
-| `src/components/ConfigurationWorkflow/StepList.jsx` | Step list with progress indicators |
-| `src/components/ConfigurationWorkflow/StepEditModal.jsx` | Step create/edit modal |
-| `src/components/ConfigurationWorkflow/ModuleStateCard.jsx` | Module state summary card |
-| `src/components/ConfigurationWorkflow/ModuleReadinessWidget.jsx` | Dashboard widget |
-| `src/api/configurationWorkflow.js` | API client |
+| `src/pages/settings/ModuleSettings.jsx` | Main module management page |
+| `src/components/modules/ModuleCard.jsx` | Per-module card with toggles + step editor |
+| `src/components/modules/StepEditor.jsx` | Step list with drag-reorder |
+| `src/components/modules/ApprovalQueue.jsx` | Pending items queue for approver |
+| `src/api/modules.js` | API client for module management |
+| `src/api/approvals.js` | API client for approval actions |
 
-### 8.2 API Client
+---
 
-```js
-// src/api/configurationWorkflow.js
-import api from './client';
+## 9. Backend — File Inventory
 
-export const configWorkflowAPI = {
-  listSteps: (moduleKey) => api.get('/config-workflow/steps', { params: { module: moduleKey } }),
-  createStep: (data) => api.post('/config-workflow/steps', data),
-  updateStep: (id, data) => api.put(`/config-workflow/steps/${id}`, data),
-  deleteStep: (id) => api.delete(`/config-workflow/steps/${id}`),
-  reorderSteps: (data) => api.put('/config-workflow/steps/reorder', data),
+| Layer | File | Purpose |
+|-------|------|---------|
+| Models | `internal/models/module_config.go` | ModuleConfig, WorkflowStep, WorkflowApproval structs |
+| Repository | `internal/repository/module_config_repo.go` | CRUD for module configs, steps, approvals |
+| Handler | `internal/handlers/module_config.go` | HTTP handlers |
+| Middleware | `pkg/middleware/module_enabled.go` | Check module enabled before routes |
+| Migration | `supabase/migrations/XXX_module_config.sql` | DDL |
+| Seed | `internal/handlers/module_config.go` → SeedDefaults | Default config for all modules |
 
-  getProgress: (moduleKey, zoneCode) =>
-    api.get('/config-workflow/progress', { params: { module: moduleKey, zone_code: zoneCode } }),
-  updateProgress: (stepId, data) => api.put(`/config-workflow/progress/${stepId}`, data),
-  verifyAll: (moduleKey, zoneCode) =>
-    api.post('/config-workflow/progress/verify-all', { module: moduleKey, zone_code: zoneCode }),
-  resetProgress: (moduleKey, zoneCode) =>
-    api.post('/config-workflow/progress/reset', { module: moduleKey, zone_code: zoneCode }),
+---
 
-  listModuleStates: () => api.get('/config-workflow/module-states'),
-  getModuleState: (moduleKey) => api.get(`/config-workflow/module-states/${moduleKey}`),
-  activateModule: (moduleKey, zoneCode) =>
-    api.put(`/config-workflow/module-states/${moduleKey}/activate`, { zone_code: zoneCode }),
-  deactivateModule: (moduleKey, zoneCode) =>
-    api.put(`/config-workflow/module-states/${moduleKey}/deactivate`, { zone_code: zoneCode }),
-  resetModule: (moduleKey, zoneCode) =>
-    api.put(`/config-workflow/module-states/${moduleKey}/reset`, { zone_code: zoneCode }),
+## 10. Module Enabled Middleware
 
-  seedDefaults: () => api.post('/config-workflow/seed-defaults'),
-};
+```go
+func RequireModuleEnabled(moduleKey string) gin.HandlerFunc {
+    return func(c *gin.Context) {
+        cfg, err := repo.GetModuleConfig(moduleKey)
+        if err != nil || !cfg.Enabled {
+            utils.JSON(c, 503, gin.H{"error": "Module disabled"})
+            c.Abort()
+            return
+        }
+        c.Next()
+    }
+}
 ```
 
-### 8.3 Settings.jsx Integration
-
-Add a 7th card to the existing Settings page:
-
-```jsx
-{ key: FEATURES.technical, icon: LuWorkflow, title: "កំណត់រចនាសម្ព័ន្ធ Workflow",
-  desc: "កំណត់ជំហានតំឡើងម៉ូឌុល និងតាមដានដំណើរការ",
-  path: "/settings/configuration-workflow" },
+Route wiring example:
+```go
+membership := protected.Group("/membership")
+membership.Use(middleware.RequireModuleEnabled("membership"))
+membership.Use(auth.RequireFeature(models.FeatureMembers))
+// ... routes
 ```
 
 ---
 
-## 9. Database Migration
+## 11. Default Module Configuration
+
+| Module | Enabled | need_approval | Steps |
+|--------|:------:|:------------:|-------|
+| `dashboard` | ✅ | ❌ | — (always-on) |
+| `settings` | ✅ | ❌ | — (always-on) |
+| `membership` | ✅ | ✅ | 1=commune_chief, 2=district_chief |
+| `voters` | ✅ | ❌ | — |
+| `finances` | ❌ | ✅ | 1=district_chief |
+| `files` | ✅ | ❌ | — |
+| `records` | ✅ | ❌ | — |
+| `reports` | ✅ | ✅ | 1=district_chief |
+| `performance` | ✅ | ❌ | — |
+
+---
+
+## 12. Migration
 
 ```sql
--- 023_config_workflow.sql
 BEGIN;
 
-CREATE TABLE config_workflow_steps (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    module_key TEXT NOT NULL,
-    sort_order INT NOT NULL DEFAULT 0,
-    title_kh TEXT NOT NULL,
-    title_en TEXT NOT NULL,
-    description_kh TEXT,
-    description_en TEXT,
-    verification_type TEXT NOT NULL DEFAULT 'manual'
-        CHECK (verification_type IN ('manual', 'sql_check', 'api_check', 'count_check')),
-    verification_rule JSONB,
-    action_label_kh TEXT,
-    action_label_en TEXT,
-    action_url TEXT,
-    is_required BOOLEAN NOT NULL DEFAULT true,
-    is_active BOOLEAN NOT NULL DEFAULT true,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW(),
-    UNIQUE (module_key, sort_order)
+CREATE TABLE module_configs (
+    module_key    TEXT PRIMARY KEY,
+    enabled       BOOLEAN NOT NULL DEFAULT true,
+    need_approval BOOLEAN NOT NULL DEFAULT false,
+    settings      JSONB DEFAULT '{}',
+    created_at    TIMESTAMPTZ DEFAULT NOW(),
+    updated_at    TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE TABLE config_workflow_progress (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    step_id UUID NOT NULL REFERENCES config_workflow_steps(id) ON DELETE CASCADE,
-    zone_code VARCHAR(8),
-    status TEXT NOT NULL DEFAULT 'pending'
-        CHECK (status IN ('pending', 'in_progress', 'completed', 'skipped')),
-    completed_by UUID REFERENCES auth.users(id),
-    completed_at TIMESTAMPTZ,
-    verified_at TIMESTAMPTZ,
-    notes TEXT,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW(),
-    UNIQUE (step_id, zone_code)
+CREATE TABLE workflow_steps (
+    id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    module_key    TEXT NOT NULL REFERENCES module_configs(module_key) ON DELETE CASCADE,
+    step_order    INT NOT NULL,
+    approver_role TEXT NOT NULL,
+    can_reject    BOOLEAN NOT NULL DEFAULT true,
+    created_at    TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE (module_key, step_order)
 );
 
-CREATE TABLE config_workflow_module_state (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    module_key TEXT NOT NULL,
-    zone_code VARCHAR(8),
-    state TEXT NOT NULL DEFAULT 'not_configured'
-        CHECK (state IN ('not_configured', 'in_progress', 'configured', 'active')),
-    activated_by UUID REFERENCES auth.users(id),
-    activated_at TIMESTAMPTZ,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW(),
-    UNIQUE (module_key, zone_code)
+CREATE TABLE workflow_approvals (
+    id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    module_key    TEXT NOT NULL,
+    item_id       UUID NOT NULL,
+    step_order    INT NOT NULL DEFAULT 1,
+    status        TEXT NOT NULL DEFAULT 'pending'
+                  CHECK (status IN ('pending', 'approved', 'rejected')),
+    approved_by   UUID REFERENCES profiles(id),
+    approved_at   TIMESTAMPTZ,
+    notes         TEXT,
+    created_at    TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE (module_key, item_id, step_order)
 );
 
-CREATE INDEX idx_cw_steps_module ON config_workflow_steps(module_key, sort_order);
-CREATE INDEX idx_cw_progress_step ON config_workflow_progress(step_id, zone_code);
-CREATE INDEX idx_cw_progress_status ON config_workflow_progress(status);
-CREATE INDEX idx_cw_module_state_module ON config_workflow_module_state(module_key);
-CREATE INDEX idx_cw_module_state_state ON config_workflow_module_state(state);
+CREATE INDEX idx_wf_approvals_pending ON workflow_approvals(module_key, step_order, status);
+CREATE INDEX idx_wf_approvals_item ON workflow_approvals(module_key, item_id);
+
+-- Seed default module configs
+INSERT INTO module_configs (module_key, enabled, need_approval) VALUES
+    ('dashboard', true, false),
+    ('settings', true, false),
+    ('membership', true, true),
+    ('voters', true, false),
+    ('finances', false, true),
+    ('files', true, false),
+    ('records', true, false),
+    ('reports', true, true),
+    ('performance', true, false)
+ON CONFLICT (module_key) DO NOTHING;
+
+-- Seed default workflow steps (membership)
+INSERT INTO workflow_steps (module_key, step_order, approver_role, can_reject) VALUES
+    ('membership', 1, 'commune_chief', true),
+    ('membership', 2, 'district_chief', true)
+ON CONFLICT (module_key, step_order) DO NOTHING;
+
+-- Seed default workflow steps (reports)
+INSERT INTO workflow_steps (module_key, step_order, approver_role, can_reject) VALUES
+    ('reports', 1, 'district_chief', true)
+ON CONFLICT (module_key, step_order) DO NOTHING;
 
 COMMIT;
 ```
 
 ---
 
-## 10. Test Cases
-
-### 10.1 Step Template Management
-
-| # | Scenario | Expected Result |
-|---|----------|-----------------|
-| T-01 | Seed default steps via API | 4 steps created for finances, 5 for performance, etc. |
-| T-02 | Create custom step | Step appears with correct sort order |
-| T-03 | Update step title | Title updated, reflected in progress list |
-| T-04 | Delete step | Step removed; existing progress records cascade-deleted |
-| T-05 | Reorder steps | `sort_order` updated for all steps in batch |
-| T-06 | Duplicate sort_order | Server returns 409 conflict |
-
-### 10.2 Progress Tracking
-
-| # | Scenario | Expected Result |
-|---|----------|-----------------|
-| T-07 | Manual complete a step | Status = completed, completed_by + completed_at set |
-| T-08 | Auto-verify count_check (coa >= 1) | If CoA exists, step auto-completes |
-| T-09 | Auto-verify count_check (coa = 0) | Step remains pending |
-| T-10 | Mark step in_progress | Module state auto-transitions to in_progress |
-| T-11 | Complete all required steps | Module state auto-transitions to configured |
-| T-12 | Uncheck a completed step | Module state returns to in_progress |
-| T-13 | Skip a non-required step | Does not block module configured transition |
-
-### 10.3 Module State
-
-| # | Scenario | Expected Result |
-|---|----------|-----------------|
-| T-14 | Activate from configured | State = active, activated_by + activated_at set |
-| T-15 | Activate from not_configured | Error: "All required steps must be completed first" |
-| T-16 | Deactivate from active | State = configured |
-| T-17 | Reset module | All progress cleared, state = not_configured |
-| T-18 | List all module states | Returns states for all modules |
-
-### 10.4 Dashboard Widget
-
-| # | Scenario | Expected Result |
-|---|----------|-----------------|
-| T-19 | No modules configured | All show "Not Started" with 0% |
-| T-20 | Finance at 75% | Shows progress bar at 75%, "In Progress" |
-| T-21 | Performance active | Shows 100% progress bar, "Active" badge |
-| T-22 | Non-technical user | Widget shows but cannot click through |
-
-### 10.5 Zone-Scoped Modules
-
-| # | Scenario | Expected Result |
-|---|----------|-----------------|
-| T-23 | Finances configured for zone A but not zone B | Zone A = active, Zone B = not_configured |
-| T-24 | Progress tracked separately per zone | Each zone has independent step completion |
-| T-25 | Users module (global) ignores zone_code | Single state for entire system |
-
----
-
-## 11. Acceptance Criteria Summary
+## 13. Acceptance Criteria
 
 | ID | Criteria |
 |----|----------|
-| CW-01 | Technical admins can view, create, edit, delete, and reorder configuration steps per module from `/settings/configuration-workflow`. |
-| CW-02 | Default step templates are seedable for all 8 configurable modules via one-click `Seed Defaults` button. |
-| CW-03 | Each step supports manual verification (admin clicks "Mark Complete") and automatic verification (`count_check`, `sql_check`, `api_check`). |
-| CW-04 | Module state automatically transitions: `not_configured` → `in_progress` → `configured` as steps are completed. |
-| CW-05 | Admin must explicitly activate a module from `configured` → `active`. |
-| CW-06 | Progress is tracked per zone for zone-scoped modules (`finances`, `performance`, `reports`, `members`, `voters`, `files`, `records`); globally for system modules (`users`). |
-| CW-07 | A "Module Readiness" widget on the dashboard shows progress bars and states for all modules. |
-| CW-08 | Step action buttons link directly to the relevant settings page (e.g., "បើកទំព័រ CoA" → `/finances/coa`). |
-| CW-09 | All API endpoints are protected by `technical` feature (except module state listing which requires `dashboard`). |
-| CW-10 | Module reset clears all progress and returns state to `not_configured`. |
+| **AC-01** | Admin can enable/disable any module from `/settings/modules`. Dashboard + Settings cannot be disabled. |
+| **AC-02** | Disabled modules are hidden from sidebar. API routes return 503. |
+| **AC-03** | Admin can set `need_approval` per module. |
+| **AC-04** | Admin can define 1..N approval steps per module with approver role per step. |
+| **AC-05** | When approval is ON, created items go to status="Pending" and enter workflow. |
+| **AC-06** | When approval is OFF, created items go directly to status="Active". |
+| **AC-07** | Approver sees pending items filtered to their role and zone. |
+| **AC-08** | Approve advances to next step or sets Active if last step. |
+| **AC-09** | Reject ends workflow with reason in approval history. |
+| **AC-10** | Approval history is viewable per item showing all steps + outcomes. |
+| **AC-11** | Sidebar shows badge count of pending items for the current user's role. |
 
 ---
 
-## 12. Out of Scope (Future Phases)
+## 14. Out of Scope (Future)
 
 | Item | Reason |
 |------|--------|
-| Module activation guard (blocking access to non-active modules) | Would disrupt existing workflows; needs phased rollout |
-| Email/push notifications on step completion | Requires notification infrastructure not yet built |
-| Multi-language step templates (beyond KH/EN) | Only Khmer and English are required |
-| Dependency chains between modules (e.g., "finances requires users to be configured first") | Adds complexity; can be handled manually |
-| Automatic module activation after configured | Keeps explicit admin control |
+| Item revision (reject → resubmit by creator) | Adds complexity; Phase 2 |
+| Email/push notifications on approval | No notification infra yet |
+| Timeout/auto-approve after N days | Phase 2 |
+| Conditional steps (if amount > $1000, add extra step) | Phase 3 |
+| Delegation (temporarily assign approval to someone else) | Phase 2 |
 
 ---
 
-## 13. Document History
+## 15. Document History
 
 | Version | Date | Changes |
 |---------|------|---------|
-| 1.0 | Aug 2026 | Initial requirements document |
+| 1.0 | Aug 2026 | Initial: configuration workflow steps, module setup wizard |
+| 2.0 | Aug 2026 | Merged: module management (enable/disable) + multi-step approval workflow |

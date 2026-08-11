@@ -124,39 +124,101 @@ func MergePermissions(rolePerms map[UserRole]PermissionSet, roles []UserRole) Pe
 }
 
 func DefaultPermissionsForRole(role UserRole) PermissionSet {
-	all := func(on bool) PermissionSet {
+	// all features on
+	allOn := func() PermissionSet {
 		p := make(PermissionSet, len(AllFeatures))
 		for _, f := range AllFeatures {
-			p[f] = on
+			p[f] = true
 		}
 		return p
 	}
-	staff := func() PermissionSet {
-		p := all(false)
-		p[FeatureDashboard] = true
-		p[FeatureMembers] = true
-		p[FeatureVoters] = true
-		p[FeatureFinances] = true
-		p[FeatureFiles] = true
-		p[FeatureRecords] = true
-		p[FeatureReports] = true
-		p[FeaturePerformance] = true
-		p[FeatureSettings] = true
-		p[FeatureMembershipWrite] = true
-		p[FeatureMembershipDues] = true
-		p[FeatureMembershipAdmin] = true
-		p[FeatureMembershipCards] = true
-		p[FeatureMembershipDelete] = true
+	// all features off
+	none := func() PermissionSet {
+		return make(PermissionSet, len(AllFeatures))
+	}
+	// set specific features to true
+	set := func(p PermissionSet, features ...Feature) PermissionSet {
+		for _, f := range features {
+			p[f] = true
+		}
+		return p
+	}
+	// copy a permission set
+	copy := func(src PermissionSet) PermissionSet {
+		p := make(PermissionSet, len(AllFeatures))
+		for k, v := range src {
+			p[k] = v
+		}
 		return p
 	}
 
+	// ----- ROLE-BASED PERMISSIONS -----
+
+	// recorder: view members, files, voters + basic write
+	recorderPerms := set(none(),
+		FeatureDashboard,
+		FeatureMembers,
+		FeatureVoters,
+		FeatureFiles,
+		FeatureSettings,
+		FeatureMembershipWrite,
+		FeatureMembershipDues,
+	)
+
+	// village_chief: recorder + records + cards
+	villageChiefPerms := set(copy(recorderPerms),
+		FeatureRecords,
+		FeatureMembershipCards,
+	)
+
+	// commune_clerk: village_chief + reports + performance + finances
+	communeClerkPerms := set(copy(villageChiefPerms),
+		FeatureReports,
+		FeaturePerformance,
+		FeatureFinances,
+	)
+
+	// commune_chief: commune_clerk + admin powers
+	communeChiefPerms := set(copy(communeClerkPerms),
+		FeaturePerformanceAdmin,
+		FeatureMembershipAdmin,
+	)
+
+	// district_chief: commune_chief + user management + technical + delete
+	districtChiefPerms := set(copy(communeChiefPerms),
+		FeatureUsers,
+		FeatureTechnical,
+		FeatureMembershipDelete,
+	)
+
+	// province_chief: same as district_chief
+	provinceChiefPerms := copy(districtChiefPerms)
+
+	// admin: everything except maybe some destructive ops (but currently all)
+	adminPerms := allOn()
+
+	// super_admin: everything
+	superAdminPerms := allOn()
+
 	switch role {
-	case RoleSuperAdmin, RoleAdmin:
-		return all(true)
-	case RoleDistrictChief, RoleCommuneChief, RoleCommuneClerk, RoleVillageChief, RoleRecorder:
-		return staff()
+	case RoleSuperAdmin:
+		return superAdminPerms
+	case RoleAdmin:
+		return adminPerms
+	case RoleProvinceChief:
+		return provinceChiefPerms
+	case RoleDistrictChief:
+		return districtChiefPerms
+	case RoleCommuneChief:
+		return communeChiefPerms
+	case RoleCommuneClerk:
+		return communeClerkPerms
+	case RoleVillageChief:
+		return villageChiefPerms
+	case RoleRecorder:
+		return recorderPerms
 	default:
-		p := all(false)
+		p := none()
 		p[FeatureDashboard] = true
 		p[FeatureSettings] = true
 		return p

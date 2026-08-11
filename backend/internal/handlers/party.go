@@ -105,6 +105,14 @@ func (h *PartyHandler) GetZones(c *gin.Context) {
 	utils.JSON(c, http.StatusOK, zones)
 }
 
+func (h *PartyHandler) GetZoneCounts(c *gin.Context) {
+	counts, err := h.repo.CountZonesByType()
+	if err != nil {
+		utils.InternalError(c, "Failed to count zones")
+		return
+	}
+	utils.JSON(c, http.StatusOK, counts)
+}
 func (h *PartyHandler) GetStructures(c *gin.Context) {
 	structures, err := h.repo.ListPartyStructures()
 	if err != nil {
@@ -134,7 +142,7 @@ func (h *PartyHandler) CreateMember(c *gin.Context) {
 		RegisteredVillageCode: req.RegisteredVillageCode,
 		PartyRole:             "Member",
 		JoinDate:              req.JoinDate,
-		Status:                "Active",
+		Status:                "Pending",
 	}
 	if req.NationalID != "" {
 		member.NationalID = &req.NationalID
@@ -165,9 +173,38 @@ func (h *PartyHandler) CreateMember(c *gin.Context) {
 	}
 	member.ExemptFromDues = req.ExemptFromDues
 
+	cfg, _ := h.repo.GetModuleConfig("membership")
+	if cfg != nil && cfg.NeedApproval {
+		member.Status = "Pending"
+	} else {
+		member.Status = "Active"
+	}
+
 	if err := h.repo.CreateMember(member); err != nil {
 		utils.InternalError(c, "Failed to create member")
 		return
+	}
+
+	if member.Status == "Pending" {
+		steps, _ := h.repo.ListWorkflowSteps("membership")
+		for _, step := range steps {
+			approval := &models.WorkflowApproval{
+				ID:        uuid.New(),
+				ModuleKey: "membership",
+				ItemID:    member.ID,
+				StepOrder: step.StepOrder,
+				Status:    "pending",
+			}
+			_ = h.repo.CreateWorkflowApproval(approval)
+		}
+	} else {
+		_ = h.repo.CreateWorkflowApproval(&models.WorkflowApproval{
+			ID:        uuid.New(),
+			ModuleKey: "membership",
+			ItemID:    member.ID,
+			StepOrder: 1,
+			Status:    "approved",
+		})
 	}
 
 	utils.JSON(c, http.StatusCreated, member)

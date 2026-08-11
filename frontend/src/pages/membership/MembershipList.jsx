@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
-import { LuSearch, LuPencil, LuEye, LuBanknote, LuActivity, LuCreditCard, LuChevronDown, LuChevronUp } from "react-icons/lu";
+import { LuSearch, LuPencil, LuEye, LuBanknote, LuActivity, LuCreditCard, LuChevronDown, LuChevronUp, LuCheck, LuX } from "react-icons/lu";
 import { useNavigate } from "react-router-dom";
-import { membershipAPI } from "../../api/membership";
+import { membershipAPI, approvalsAPI } from "../../api/membership";
 import Select from "../../components/Select";
 import EmptyState from "../../components/EmptyState";
 import { SkeletonTable, SkeletonGrid } from "../../components/Skeleton";
@@ -13,6 +13,7 @@ export default function MembershipList({
   roleFilter, setRoleFilter,
   genderFilter, setGenderFilter,
   page, setPage, total, loading,
+  canApprove, onRefresh,
 }) {
   const navigate = useNavigate();
   const [stats, setStats] = useState(null);
@@ -45,6 +46,26 @@ export default function MembershipList({
   const statusLabel = (s) => {
     const map = { Pending: "រង់ចាំ", Active: "សកម្ម", Suspended: "ផ្អាក", Resigned: "លាឈប់", Expelled: "បណ្តេញ", Deceased: "មរណភាព" };
     return map[s] || s;
+  };
+
+  const approveMember = async (id) => {
+    try {
+      await membershipAPI.approve(id);
+      onRefresh?.();
+    } catch (e) {
+      alert(e.response?.data?.error || "Failed");
+    }
+  };
+
+  const rejectMember = async (m) => {
+    const reason = window.prompt(`Reject ${m.last_name_kh} ${m.first_name_kh}\nReason:`);
+    if (!reason) return;
+    try {
+      await membershipAPI.reject(m.id, { reason });
+      onRefresh?.();
+    } catch (e) {
+      alert(e.response?.data?.error || "Failed");
+    }
   };
 
   const filterPills = [
@@ -136,10 +157,16 @@ export default function MembershipList({
           <button className="btn btn-secondary" style={{ fontSize: "0.8rem" }} onClick={() => setSelectedIds([])}>
             សម្អាត
           </button>
-          <button className="btn btn-secondary" style={{ fontSize: "0.8rem" }} onClick={() => {
+          <button className="btn btn-secondary" style={{ fontSize: "0.8rem" }} onClick={async () => {
             const ids = selectedIds.join(",");
-            const url = membershipAPI.export({ status: statusFilter, zone_code: zoneFilter });
-            window.open(`${import.meta.env.VITE_API_URL || "/api"}/membership/export?ids=${ids}`, "_blank");
+            try {
+              const res = await membershipAPI.export({ ids });
+              const data = res.data?.data || res.data;
+              const csv = jsonToCSV(data);
+              downloadFile(csv, `membership-export-${new Date().toISOString().slice(0,10)}.csv`, "text/csv");
+            } catch {
+              alert("ការនាំចេញបរាជ័យ");
+            }
           }}>
             នាំចេញ
           </button>
@@ -184,11 +211,31 @@ export default function MembershipList({
                   <td><span className={`badge ${statusBadge(m.status)}`}>{statusLabel(m.status)}</span></td>
                   <td>
                     <div className="actions">
+                      {canApprove && m.status === "Pending" && (
+                        <>
+                          <button
+                            className="btn-icon"
+                            style={{ color: "var(--success)" }}
+                            title="យល់ព្រម"
+                            onClick={() => approveMember(m.id)}
+                          ><LuCheck /></button>
+                          <button
+                            className="btn-icon"
+                            style={{ color: "var(--danger)" }}
+                            title="បដិសេធ"
+                            onClick={() => rejectMember(m)}
+                          ><LuX /></button>
+                        </>
+                      )}
                       <button className="btn-icon" onClick={() => navigate(`/membership/${m.id}`)} title="មើល"><LuEye /></button>
                       <button className="btn-icon" onClick={() => navigate(`/membership/${m.id}/edit`)} title="កែប្រែ"><LuPencil /></button>
-                      <button className="btn-icon" onClick={() => navigate(`/membership/${m.id}/dues`)} title="បង់រំលោះ"><LuBanknote /></button>
-                      <button className="btn-icon" onClick={() => navigate(`/membership/${m.id}/activity`)} title="សកម្មភាព"><LuActivity /></button>
-                      <button className="btn-icon" onClick={() => navigate(`/membership/${m.id}/cards`)} title="កាត"><LuCreditCard /></button>
+                      {m.status !== "Pending" && (
+                        <>
+                          <button className="btn-icon" onClick={() => navigate(`/membership/${m.id}/dues`)} title="បង់រំលោះ"><LuBanknote /></button>
+                          <button className="btn-icon" onClick={() => navigate(`/membership/${m.id}/activity`)} title="សកម្មភាព"><LuActivity /></button>
+                          <button className="btn-icon" onClick={() => navigate(`/membership/${m.id}/cards`)} title="កាត"><LuCreditCard /></button>
+                        </>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -216,6 +263,28 @@ function StatCard({ value, label, color }) {
       <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>{label}</div>
     </div>
   );
+}
+
+function jsonToCSV(arr) {
+  if (!arr || arr.length === 0) return "";
+  const headers = Object.keys(arr[0]);
+  const rows = arr.map(row =>
+    headers.map(h => {
+      const v = row[h] != null ? String(row[h]) : "";
+      return v.includes(",") || v.includes('"') ? `"${v.replace(/"/g, '""')}"` : v;
+    }).join(",")
+  );
+  return [headers.join(","), ...rows].join("\n");
+}
+
+function downloadFile(content, filename, mime) {
+  const blob = new Blob(["\uFEFF" + content], { type: `${mime};charset=utf-8` });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 function MemberHoverCard({ member, children }) {

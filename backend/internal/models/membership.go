@@ -117,7 +117,7 @@ type MemberCard struct {
 	MemberID       uuid.UUID  `json:"member_id"`
 	CardNo         string     `json:"card_no"`
 	CardStatus     string     `json:"card_status"`
-	IssuedAt       time.Time  `json:"issued_at"`
+	IssuedAt       *time.Time `json:"issued_at,omitempty"`
 	DeliveredAt    *time.Time `json:"delivered_at,omitempty"`
 	ExpiredAt      *time.Time `json:"expired_at,omitempty"`
 	ReplacedReason *string    `json:"replaced_reason,omitempty"`
@@ -193,4 +193,12 @@ type BulkStatusResult struct {
 type BulkStatusError struct {
 	MemberID uuid.UUID `json:"member_id"`
 	Error    string    `json:"error"`
+}
+
+type ApproveRequest struct {
+	Notes string `json:"notes,omitempty"`
+}
+
+type RejectRequest struct {
+	Reason string `json:"reason" binding:"required"`
 }

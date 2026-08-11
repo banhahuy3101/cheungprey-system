@@ -3,6 +3,7 @@ package handlers
 import (
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -495,7 +496,7 @@ func (h *MembershipHandler) ListCards(c *gin.Context) {
 
 	cards, err := h.repo.ListCards(id)
 	if err != nil {
-		utils.InternalError(c, "Failed to fetch cards")
+		utils.InternalError(c, fmt.Sprintf("Failed to fetch cards: %v", err))
 		return
 	}
 	if cards == nil {
@@ -524,12 +525,13 @@ func (h *MembershipHandler) IssueCard(c *gin.Context) {
 		return
 	}
 
+	now := time.Now()
 	card := &models.MemberCard{
 		ID:         uuid.New(),
 		MemberID:   id,
 		CardNo:     req.CardNo,
 		CardStatus: "Issued",
-		IssuedAt:   time.Now(),
+		IssuedAt:   &now,
 	}
 
 	if err := h.repo.IssueCard(card); err != nil {
@@ -691,7 +693,7 @@ func (h *MembershipHandler) BulkImport(c *gin.Context) {
 			m.PartyRole = "Member"
 		}
 		if m.Status == "" {
-			m.Status = "Active"
+			m.Status = "Pending"
 		}
 		if m.MembershipType == nil {
 			t := "Full"
@@ -799,11 +801,118 @@ func (h *MembershipHandler) BulkStatusChange(c *gin.Context) {
 	utils.JSON(c, http.StatusOK, result)
 }
 
+// --- Approval Workflow ---
+
+func (h *MembershipHandler) ApproveMember(c *gin.Context) {
+	memberID, userID, _ := h.resolveApprovalContext(c)
+	if memberID == uuid.Nil {
+		return
+	}
+
+	var req models.ApproveRequest
+	c.ShouldBindJSON(&req)
+
+	if err := h.repo.UpdateMember(memberID, map[string]any{"status": "Active"}); err != nil {
+		utils.InternalError(c, "Failed to approve member")
+		return
+	}
+
+	history := &models.MemberStatusHistory{
+		ID:        uuid.New(),
+		MemberID:  memberID,
+		OldStatus: "Pending",
+		NewStatus: "Active",
+	}
+	if req.Notes != "" {
+		history.Reason = &req.Notes
+	}
+	if userID != uuid.Nil {
+		history.ChangedBy = &userID
+	}
+	_ = h.repo.CreateStatusHistory(history)
+
+	utils.JSON(c, http.StatusOK, gin.H{"success": true, "message": "Member approved"})
+}
+
+func (h *MembershipHandler) RejectMember(c *gin.Context) {
+	memberID, userID, _ := h.resolveApprovalContext(c)
+	if memberID == uuid.Nil {
+		return
+	}
+
+	var req models.RejectRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, err.Error())
+		return
+	}
+
+	if err := h.repo.UpdateMember(memberID, map[string]any{"status": "Suspended"}); err != nil {
+		utils.InternalError(c, "Failed to reject member")
+		return
+	}
+
+	history := &models.MemberStatusHistory{
+		ID:        uuid.New(),
+		MemberID:  memberID,
+		OldStatus: "Pending",
+		NewStatus: "Suspended",
+		Reason:    &req.Reason,
+	}
+	if userID != uuid.Nil {
+		history.ChangedBy = &userID
+	}
+	_ = h.repo.CreateStatusHistory(history)
+
+	utils.JSON(c, http.StatusOK, gin.H{"success": true, "message": "Member rejected"})
+}
+
+func (h *MembershipHandler) resolveApprovalContext(c *gin.Context) (uuid.UUID, uuid.UUID, *models.Member) {
+	memberID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		utils.BadRequest(c, "Invalid member ID")
+		return uuid.Nil, uuid.Nil, nil
+	}
+
+	userID, _ := auth.GetUserID(c)
+	member, err := h.repo.GetMemberByID(memberID)
+	if err != nil || member == nil {
+		utils.JSON(c, http.StatusNotFound, gin.H{"error": "Member not found"})
+		return uuid.Nil, userID, nil
+	}
+	if member.Status != "Pending" {
+		utils.BadRequest(c, "Member is not pending approval")
+		return uuid.Nil, userID, member
+	}
+
+	role, _ := auth.GetUserRole(c)
+	perms, _ := auth.GetPermissions(c)
+	isAdmin := perms != nil && perms[models.FeatureMembershipAdmin]
+	isDistrictOrHigher := role == models.RoleSuperAdmin || role == models.RoleAdmin || role == models.RoleDistrictChief
+	if !isAdmin && !isDistrictOrHigher {
+		utils.Forbidden(c, "Insufficient permissions")
+		return uuid.Nil, userID, member
+	}
+
+	return memberID, userID, member
+}
+
 // --- Export ---
 
 func (h *MembershipHandler) Export(c *gin.Context) {
 	status := c.Query("status")
 	zoneCode := c.Query("zone_code")
+	idsParam := c.Query("ids")
+
+	var idSet map[string]bool
+	if idsParam != "" {
+		idSet = make(map[string]bool)
+		for _, id := range strings.Split(idsParam, ",") {
+			id = strings.TrimSpace(id)
+			if id != "" {
+				idSet[id] = true
+			}
+		}
+	}
 
 	members, err := h.repo.ListMembers(status)
 	if err != nil {
@@ -813,6 +922,9 @@ func (h *MembershipHandler) Export(c *gin.Context) {
 
 	var filtered []models.Member
 	for _, m := range members {
+		if idSet != nil && !idSet[m.ID.String()] {
+			continue
+		}
 		if zoneCode != "" && len(m.RegisteredVillageCode) >= len(zoneCode) &&
 			m.RegisteredVillageCode[:len(zoneCode)] != zoneCode {
 			continue
