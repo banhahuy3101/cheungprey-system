@@ -41,7 +41,7 @@ func (r *Repository) ListDues(memberID uuid.UUID) ([]models.MemberDue, error) {
 	_, err := r.AdminClient.From("member_dues").
 		Select("*", "exact", false).
 		Eq("member_id", memberID.String()).
-		Order("payment_date.desc", nil).
+		Order("payment_date", &postgrest.OrderOpts{Ascending: false}).
 		ExecuteTo(&dues)
 	if err != nil {
 		return nil, fmt.Errorf("list dues: %w", err)
@@ -83,7 +83,7 @@ func (r *Repository) ListStatusHistory(memberID uuid.UUID) ([]models.MemberStatu
 	_, err := r.AdminClient.From("member_status_history").
 		Select("*", "exact", false).
 		Eq("member_id", memberID.String()).
-		Order("changed_at.desc", nil).
+		Order("changed_at", &postgrest.OrderOpts{Ascending: false}).
 		ExecuteTo(&history)
 	if err != nil {
 		return nil, fmt.Errorf("list status history: %w", err)
@@ -105,7 +105,7 @@ func (r *Repository) ListActivity(memberID uuid.UUID) ([]models.MemberActivity, 
 	_, err := r.AdminClient.From("member_activity").
 		Select("*", "exact", false).
 		Eq("member_id", memberID.String()).
-		Order("activity_date.desc", nil).
+		Order("activity_date", &postgrest.OrderOpts{Ascending: false}).
 		ExecuteTo(&activities)
 	if err != nil {
 		return nil, fmt.Errorf("list activity: %w", err)
@@ -127,7 +127,7 @@ func (r *Repository) ListPositions(memberID uuid.UUID) ([]models.MemberPosition,
 	_, err := r.AdminClient.From("member_positions").
 		Select("*", "exact", false).
 		Eq("member_id", memberID.String()).
-		Order("start_date.desc", nil).
+		Order("start_date", &postgrest.OrderOpts{Ascending: false}).
 		ExecuteTo(&positions)
 	if err != nil {
 		return nil, fmt.Errorf("list positions: %w", err)
@@ -158,7 +158,7 @@ func (r *Repository) ListCards(memberID uuid.UUID) ([]models.MemberCard, error) 
 	_, err := r.AdminClient.From("member_cards").
 		Select("*", "exact", false).
 		Eq("member_id", memberID.String()).
-		Order("issued_at.desc", nil).
+		Order("issued_at", &postgrest.OrderOpts{Ascending: false}).
 		ExecuteTo(&cards)
 	if err != nil {
 		return nil, fmt.Errorf("list cards: %w", err)
