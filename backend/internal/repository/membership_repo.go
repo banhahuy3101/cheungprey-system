@@ -210,8 +210,8 @@ func (r *Repository) ListMembersFiltered(f models.MemberFilter) ([]models.Member
 		q = q.Gte("date_of_birth", targetYear)
 	}
 
-	sortBy := "created_at"
-	if f.SortBy != "" {
+	sortBy := "join_date"
+	if f.SortBy != "" && f.SortBy != "created_at" {
 		sortBy = f.SortBy
 	}
 	sortOrder := "desc"

@@ -10,7 +10,9 @@ ADD COLUMN IF NOT EXISTS membership_type VARCHAR(30) DEFAULT 'Full' CHECK (membe
 ADD COLUMN IF NOT EXISTS membership_tier VARCHAR(20) DEFAULT 'Basic' CHECK (membership_tier IN ('Basic', 'Silver', 'Gold', 'Platinum')),
 ADD COLUMN IF NOT EXISTS resignation_date DATE,
 ADD COLUMN IF NOT EXISTS expulsion_reason TEXT,
-ADD COLUMN IF NOT EXISTS exempt_from_dues BOOLEAN DEFAULT false;
+ADD COLUMN IF NOT EXISTS exempt_from_dues BOOLEAN DEFAULT false,
+ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW(),
+ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
 
 -- Drop old status constraint, add Pending + Resigned
 ALTER TABLE public.members DROP CONSTRAINT IF EXISTS members_status_check;

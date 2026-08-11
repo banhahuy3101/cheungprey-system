@@ -2,7 +2,6 @@ export const FEATURES = {
   dashboard: "dashboard",
   members: "members",
   voters: "voters",
-  finances: "finances",
   files: "files",
   records: "records",
   reports: "reports",
@@ -22,7 +21,6 @@ export const FEATURE_LABELS = {
   dashboard: "ទំព័រដើម",
   members: "សមាជិក",
   voters: "អ្នកបោះឆ្នោត",
-  finances: "ហិរញ្ញវត្ថុ",
   files: "ឯកសារ",
   records: "កំណត់ត្រា",
   reports: "របាយការណ៍",
@@ -42,10 +40,6 @@ export function canAccess(user, feature) {
   if (!user) return false;
   if (user.permissions && feature in user.permissions) {
     return !!user.permissions[feature];
-  }
-  // legacy alias: fms permission maps to finances
-  if (feature === FEATURES.finances && user.permissions?.fms) {
-    return !!user.permissions.fms;
   }
   return false;
 }

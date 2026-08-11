@@ -237,25 +237,32 @@ export default function ReportForm({ mode = "create", reportId }) {
         {error && Object.keys(fieldErrors).length === 0 && <div className="alert alert-error report-form-msg" style={{ marginBottom: "1.25rem", borderRadius: "10px" }}>{error}</div>}
 
         {validationPopup && (
-          <div style={{
-            background: "#fef2f2", border: "1px solid #fecaca", borderRadius: "12px",
-            padding: "1.25rem 1.5rem", marginBottom: "1.25rem",
-            display: "flex", gap: "1rem", alignItems: "flex-start",
-          }}>
-            <span style={{ fontSize: "1.3rem", flexShrink: 0 }}>⚠️</span>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontWeight: "700", fontSize: "0.95rem", color: "#991b1b", marginBottom: "0.5rem" }}>សូមបំពេញព័ត៌មានឲ្យបានគ្រប់</div>
-              <ul style={{ margin: 0, paddingLeft: "1.25rem", fontSize: "0.88rem", color: "#7f1d1d", display: "flex", flexDirection: "column", gap: "0.3rem" }}>
+          <Modal
+            open={!!validationPopup}
+            onClose={() => setValidationPopup(null)}
+            title="⚠️ សូមបំពេញព័ត៌មានឲ្យបានគ្រប់"
+          >
+            <div style={{ display: "flex", flexDirection: "column", gap: "1rem", padding: "0.5rem 0" }}>
+              <div style={{ color: "#7f1d1d", fontSize: "0.9rem" }}>
+                សូមពិនិត្យ និងបំពេញព័ត៌មានដែលខ្វះចន្លោះខាងក្រោម៖
+              </div>
+              <ul style={{ margin: 0, paddingLeft: "1.25rem", fontSize: "0.9rem", color: "#991b1b", display: "flex", flexDirection: "column", gap: "0.4rem" }}>
                 {Object.entries(validationPopup).map(([k, v]) => (
-                  <li key={k} style={{ cursor: "pointer", textDecoration: "underline" }} onClick={() => setValidationPopup(null)}>{v}</li>
+                  <li key={k} style={{ fontWeight: "500" }}>{v}</li>
                 ))}
               </ul>
-              <button
-                onClick={() => setValidationPopup(null)}
-                style={{ marginTop: "0.75rem", padding: "0.3rem 1rem", borderRadius: "6px", border: "1px solid #fca5a5", background: "#fff", color: "#991b1b", fontSize: "0.8rem", cursor: "pointer", fontWeight: "500" }}
-              >បិទ</button>
+              <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "0.5rem" }}>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() => setValidationPopup(null)}
+                  style={{ minWidth: "90px" }}
+                >
+                  បិទ
+                </button>
+              </div>
             </div>
-          </div>
+          </Modal>
         )}
 
         {/* Side-by-Side Grid: Left Editor & Title (Flex 1) + Right Settings Sidebar (Card or Icon-Only) */}

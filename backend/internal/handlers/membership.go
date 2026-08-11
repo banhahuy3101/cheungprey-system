@@ -49,8 +49,11 @@ func (h *MembershipHandler) SearchMembers(c *gin.Context) {
 
 	members, err := h.repo.ListMembersFiltered(filter)
 	if err != nil {
-		utils.InternalError(c, "Failed to fetch members")
+		utils.InternalError(c, fmt.Sprintf("Failed to fetch members: %v", err))
 		return
+	}
+	if members == nil {
+		members = []models.Member{}
 	}
 
 	utils.JSON(c, http.StatusOK, members)

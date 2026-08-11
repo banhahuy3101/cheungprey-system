@@ -9,10 +9,6 @@ import Dashboard from "./pages/dashboard/Dashboard";
 import MembershipCreate from "./pages/membership/MembershipCreate";
 import Membership from "./pages/membership/Membership";
 import Voters from "./pages/voters/Voters";
-import FinancesDashboard from "./pages/finances/dashboard/page";
-import FinancesTransactions from "./pages/finances/transactions/page";
-import FinancesCoA from "./pages/finances/coa/page";
-import FinancesBudgets from "./pages/finances/budgets/page";
 import Files from "./pages/files/Files";
 import Records from "./pages/records/Records";
 import Reports from "./pages/reports/Reports";
@@ -69,19 +65,6 @@ function App() {
             <Route path="membership/:id/cards" element={<FeatureRoute feature={FEATURES.members}><Membership /></FeatureRoute>} />
 
             <Route path="voters" element={<FeatureRoute feature={FEATURES.voters}><Voters /></FeatureRoute>} />
-
-            <Route path="finances" element={<Navigate to="/finances/dashboard" replace />} />
-            <Route path="finances/dashboard" element={<FeatureRoute feature={FEATURES.finances}><FinancesDashboard /></FeatureRoute>} />
-            <Route path="finances/income" element={<FeatureRoute feature={FEATURES.finances}><FinancesTransactions type="income" /></FeatureRoute>} />
-            <Route path="finances/expense" element={<FeatureRoute feature={FEATURES.finances}><FinancesTransactions type="expense" /></FeatureRoute>} />
-            <Route path="finances/coa" element={<FeatureRoute feature={FEATURES.finances}><FinancesCoA /></FeatureRoute>} />
-            <Route path="finances/budgets" element={<FeatureRoute feature={FEATURES.finances}><FinancesBudgets /></FeatureRoute>} />
-            <Route path="fms/*" element={<Navigate to="/finances/dashboard" replace />} />
-            <Route path="fms/dashboard" element={<Navigate to="/finances/dashboard" replace />} />
-            <Route path="fms/transactions/income" element={<Navigate to="/finances/income" replace />} />
-            <Route path="fms/transactions/expense" element={<Navigate to="/finances/expense" replace />} />
-            <Route path="fms/coa" element={<Navigate to="/finances/coa" replace />} />
-            <Route path="fms/budgets" element={<Navigate to="/finances/budgets" replace />} />
 
             <Route path="files" element={<FeatureRoute feature={FEATURES.files}><Files /></FeatureRoute>} />
             <Route path="records" element={<FeatureRoute feature={FEATURES.records}><Records /></FeatureRoute>} />

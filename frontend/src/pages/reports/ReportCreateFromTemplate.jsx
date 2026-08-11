@@ -25,6 +25,7 @@ import { reportDocumentsAPI } from "../../api/reportDocuments";
 import { authAPI } from "../../api/auth";
 import ReportHero from "../../components/reports/ReportHero";
 import TextEditor from "../../components/TextEditor";
+import Modal from "../settings/Modal";
 import { useAuth } from "../../hooks/useAuth";
 
 function toKhmerDigits(str) {
@@ -77,6 +78,7 @@ export default function ReportCreateFromTemplate() {
   const [docTitle, setDocTitle] = useState("");
   const [docDescription, setDocDescription] = useState("");
   const [docCategory, setDocCategory] = useState("ផ្សេងៗ");
+  const [validationPopup, setValidationPopup] = useState(null);
 
   // Search & Filter state
   const [searchQuery, setSearchQuery] = useState("");
@@ -394,20 +396,14 @@ export default function ReportCreateFromTemplate() {
     const finalCat = docCategory.trim();
     const finalContent = filledHtml.trim();
 
-    if (!finalTitle) {
-      setMessage("សូមបញ្ចូលចំណងជើងរបាយការណ៍ (Report Title)");
-      return;
-    }
-    if (!finalDesc) {
-      setMessage("សូមបញ្ចូលការពិពណ៌នារបាយការណ៍ (Description)");
-      return;
-    }
-    if (!finalCat) {
-      setMessage("សូមបញ្ចូលប្រភេទរបាយការណ៍ (Category)");
-      return;
-    }
-    if (!finalContent) {
-      setMessage("សូមបញ្ចូលខ្លឹមសាររបាយការណ៍ (Rich Text Content)");
+    const errs = {};
+    if (!finalTitle) errs.title = "សូមបញ្ចូលចំណងជើងរបាយការណ៍";
+    if (!finalDesc) errs.description = "សូមបញ្ចូលការពិពណ៌នា";
+    if (!finalCat) errs.category = "សូមជ្រើសរើសប្រភេទរបាយការណ៍";
+    if (!finalContent) errs.content = "សូមបញ្ចូលខ្លឹមសាររបាយការណ៍";
+
+    if (Object.keys(errs).length > 0) {
+      setValidationPopup(errs);
       return;
     }
 
@@ -1056,6 +1052,35 @@ export default function ReportCreateFromTemplate() {
             />
           </div>
         </div>
+      )}
+
+      {validationPopup && (
+        <Modal
+          open={!!validationPopup}
+          onClose={() => setValidationPopup(null)}
+          title="⚠️ សូមបំពេញព័ត៌មានឲ្យបានគ្រប់"
+        >
+          <div style={{ display: "flex", flexDirection: "column", gap: "1rem", padding: "0.5rem 0" }}>
+            <div style={{ color: "#7f1d1d", fontSize: "0.9rem" }}>
+              សូមពិនិត្យ និងបំពេញព័ត៌មានដែលខ្វះចន្លោះខាងក្រោម៖
+            </div>
+            <ul style={{ margin: 0, paddingLeft: "1.25rem", fontSize: "0.9rem", color: "#991b1b", display: "flex", flexDirection: "column", gap: "0.4rem" }}>
+              {Object.entries(validationPopup).map(([k, v]) => (
+                <li key={k} style={{ fontWeight: "500" }}>{v}</li>
+              ))}
+            </ul>
+            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "0.5rem" }}>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => setValidationPopup(null)}
+                style={{ minWidth: "90px" }}
+              >
+                បិទ
+              </button>
+            </div>
+          </div>
+        </Modal>
       )}
     </div>
   );

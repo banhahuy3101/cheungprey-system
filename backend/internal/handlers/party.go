@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/base64"
+	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -176,8 +177,11 @@ func (h *PartyHandler) GetMembers(c *gin.Context) {
 	status := c.Query("status")
 	members, err := h.repo.ListMembers(status)
 	if err != nil {
-		utils.InternalError(c, "Failed to fetch members")
+		utils.InternalError(c, fmt.Sprintf("Failed to fetch members: %v", err))
 		return
+	}
+	if members == nil {
+		members = []models.Member{}
 	}
 	utils.JSON(c, http.StatusOK, members)
 }

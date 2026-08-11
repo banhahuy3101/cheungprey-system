@@ -7,8 +7,6 @@ import './style/components.css'
 import './style/editor.css'
 import './style/performance.css'
 import './style/profile.css'
-import './style/responsive.css'
-import './style/fms.css'
 import './style/reports.css'
 import App from './App.jsx'
 

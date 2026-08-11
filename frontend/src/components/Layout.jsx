@@ -1,11 +1,10 @@
-import { useState, useEffect } from "react";
-import { NavLink, Outlet, useNavigate, useLocation } from "react-router-dom";
+import { useState } from "react";
+import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import ErrorBoundary from "./ErrorBoundary";
 import {
   LuLayoutDashboard,
   LuUsers,
   LuUserCheck,
-  LuBanknote,
   LuFolderOpen,
   LuFileText,
   LuScrollText,
@@ -14,11 +13,6 @@ import {
   LuMenu,
   LuLogOut,
   LuUser,
-  LuChevronDown,
-  LuTrendingDown,
-  LuBookOpen,
-  LuChartLine,
-  LuListOrdered,
 } from "react-icons/lu";
 import { useAuth } from "../hooks/useAuth";
 import { canAccess, FEATURES } from "../utils/permissions";
@@ -40,26 +34,10 @@ const settingsNavItem = {
   feature: FEATURES.settings,
 };
 
-const financeSubItems = [
-  { to: "/finances/dashboard", icon: LuChartLine, label: "ផ្ទាំងគ្រប់គ្រង" },
-  { to: "/finances/income", icon: LuTrendingUp, label: "ចំណូល" },
-  { to: "/finances/expense", icon: LuTrendingDown, label: "ចំណាយ" },
-  { to: "/finances/coa", icon: LuListOrdered, label: "តារាងគណនី" },
-  { to: "/finances/budgets", icon: LuBookOpen, label: "ថវិកា" },
-];
-
 export default function Layout() {
   const { user, loading, logout } = useAuth();
   const navigate = useNavigate();
-  const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [financeOpen, setFinanceOpen] = useState(location.pathname.startsWith("/finances"));
-
-  useEffect(() => {
-    if (location.pathname.startsWith("/finances")) {
-      setFinanceOpen(true);
-    }
-  }, [location.pathname]);
 
   const handleLogout = () => {
     logout();
@@ -67,19 +45,11 @@ export default function Layout() {
   };
 
   const filteredMainNav = mainNavItems.filter((item) => canAccess(user, item.feature));
-  const showFinance = canAccess(user, FEATURES.finances);
   const showSettings = canAccess(user, settingsNavItem.feature);
 
   const roleLabel = user?.roles?.length
     ? user.roles.join(", ")
     : user?.role || "";
-
-  const toggleFinance = () => {
-    setFinanceOpen((open) => !open);
-    if (!location.pathname.startsWith("/finances")) {
-      navigate("/finances/dashboard");
-    }
-  };
 
   return (
     <div className="layout">
@@ -108,38 +78,6 @@ export default function Layout() {
               <span>{item.label}</span>
             </NavLink>
           ))}
-
-          {showFinance && (
-            <div className="nav-group">
-              <button
-                type="button"
-                className={`nav-link nav-group-toggle ${location.pathname.startsWith("/finances") ? "active" : ""}`}
-                onClick={toggleFinance}
-                aria-expanded={financeOpen}
-              >
-                <LuBanknote className="nav-icon" />
-                <span className="nav-group-label">ហិរញ្ញវត្ថុ</span>
-                <LuChevronDown className={`nav-chevron ${financeOpen ? "open" : ""}`} />
-              </button>
-              {financeOpen && (
-                <div className="nav-sub">
-                  {financeSubItems.map((sub) => (
-                    <NavLink
-                      key={sub.to}
-                      to={sub.to}
-                      className={({ isActive }) =>
-                        `nav-link nav-sublink ${isActive ? "active" : ""}`
-                      }
-                      onClick={() => setSidebarOpen(false)}
-                    >
-                      <sub.icon className="nav-icon" />
-                      <span>{sub.label}</span>
-                    </NavLink>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
 
           {showSettings && (
             <NavLink
