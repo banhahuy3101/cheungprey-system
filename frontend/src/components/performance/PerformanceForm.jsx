@@ -6,7 +6,7 @@ import { partyAPI } from "../../api/party";
 import { reportDocumentsAPI } from "../../api/reportDocuments";
 import Select from "../Select";
 import { formatPerformancePeriodLabel } from "../../utils/periodLabel";
-import { unwrapZone, zoneCodeOf } from "../../utils/zone";
+import { unwrapZone, zoneCodeOf, loadZoneHierarchy, resolveSelectedZone } from "../../utils/zone";
 
 const normalizeId = (id) => String(id || "").toLowerCase();
 
@@ -22,14 +22,17 @@ export default function PerformanceForm({ mode, zoneCode, periodId }) {
   const [provinces, setProvinces] = useState([]);
   const [districts, setDistricts] = useState([]);
   const [communes, setCommunes] = useState([]);
+  const [villages, setVillages] = useState([]);
   const [selectedProvince, setSelectedProvince] = useState("");
   const [selectedDistrict, setSelectedDistrict] = useState("");
-  const [selectedCommune, setSelectedCommune] = useState(zoneCode || "");
+  const [selectedCommune, setSelectedCommune] = useState("");
+  const [selectedVillage, setSelectedVillage] = useState("");
 
   // Separate input states for autocomplete (allow free typing)
   const [provinceInput, setProvinceInput] = useState("");
   const [districtInput, setDistrictInput] = useState("");
   const [communeInput, setCommuneInput] = useState("");
+  const [villageInput, setVillageInput] = useState("");
   const [periods, setPeriods] = useState([]);
   const [selectedPeriod, setSelectedPeriod] = useState(periodId || "");
   const [indicatorValues, setIndicatorValues] = useState({});
@@ -53,6 +56,9 @@ export default function PerformanceForm({ mode, zoneCode, periodId }) {
 
   const isView = mode === "view";
   const didLoad = useRef(false);
+
+  // Active target zone resolved across levels (village -> commune -> district -> province)
+  const targetZone = resolveSelectedZone(selectedVillage, selectedCommune, selectedDistrict, selectedProvince) || zoneCode;
 
   // Load everything once using single /domains/full endpoint (exactly once)
   useEffect(() => {
@@ -111,10 +117,17 @@ export default function PerformanceForm({ mode, zoneCode, periodId }) {
 
   // Load districts when province changes — DISABLED in view/edit mode
   useEffect(() => {
-    if (zoneCode) return; // force filter: do not run in view/edit
+    if (zoneCode) return;
     if (!selectedProvince) {
       setDistricts([]);
       setSelectedDistrict("");
+      setCommunes([]);
+      setSelectedCommune("");
+      setVillages([]);
+      setSelectedVillage("");
+      setDistrictInput("");
+      setCommuneInput("");
+      setVillageInput("");
       return;
     }
     (async () => {
@@ -128,10 +141,14 @@ export default function PerformanceForm({ mode, zoneCode, periodId }) {
 
   // Load communes when district changes — DISABLED in view/edit mode
   useEffect(() => {
-    if (zoneCode) return; // force filter: do not run in view/edit
+    if (zoneCode) return;
     if (!selectedDistrict) {
       setCommunes([]);
       setSelectedCommune("");
+      setVillages([]);
+      setSelectedVillage("");
+      setCommuneInput("");
+      setVillageInput("");
       return;
     }
     (async () => {
@@ -143,56 +160,54 @@ export default function PerformanceForm({ mode, zoneCode, periodId }) {
     })();
   }, [selectedDistrict, zoneCode]);
 
-  // Pre-select province → district → commune (view/edit mode)
+  // Load villages when commune changes — DISABLED in view/edit mode
+  useEffect(() => {
+    if (zoneCode) return;
+    if (!selectedCommune) {
+      setVillages([]);
+      setSelectedVillage("");
+      setVillageInput("");
+      return;
+    }
+    (async () => {
+      try {
+        const res = await partyAPI.getZones({ type: "Village", parent_code: selectedCommune });
+        const raw = res.data?.data?.zones || res.data?.data || res.data || [];
+        setVillages(Array.isArray(raw) ? raw : []);
+      } catch { /* empty */ }
+    })();
+  }, [selectedCommune, zoneCode]);
+
+  // Pre-select province → district → commune → village (view/edit mode)
   useEffect(() => {
     if (!zoneCode) return;
 
     (async () => {
       try {
-        const commune = unwrapZone(await partyAPI.getZones({ code: zoneCode }));
-        if (!commune) return;
+        const h = await loadZoneHierarchy(partyAPI, zoneCode);
+        if (!h) return;
 
-        const districtCode = commune.parent_code;
-        if (!districtCode) return;
+        if (h.provinces?.length) setProvinces(h.provinces);
+        if (h.districts?.length) setDistricts(h.districts);
+        if (h.communes?.length) setCommunes(h.communes);
+        if (h.villages?.length) setVillages(h.villages);
 
-        const district = unwrapZone(await partyAPI.getZones({ code: districtCode }));
-        if (!district) return;
+        setSelectedProvince(h.province || "");
+        setSelectedDistrict(h.district || "");
+        setSelectedCommune(h.commune || "");
+        setSelectedVillage(h.village || "");
 
-        const provinceCode = district.parent_code;
-        if (!provinceCode) return;
+        const pObj = h.provinces?.find((p) => zoneCodeOf(p) === h.province);
+        const dObj = h.districts?.find((d) => zoneCodeOf(d) === h.district);
+        const cObj = h.communes?.find((c) => zoneCodeOf(c) === h.commune);
+        const vObj = h.villages?.find((v) => zoneCodeOf(v) === h.village);
 
-        const [provinceRes, districtsRes, communesRes] = await Promise.all([
-          partyAPI.getZones({ code: provinceCode }),
-          partyAPI.getZones({ type: "District", parent_code: provinceCode }),
-          partyAPI.getZones({ type: "Commune", parent_code: districtCode }),
-        ]);
-
-        const province = unwrapZone(provinceRes);
-        const loadedDistricts = unwrapList(districtsRes);
-        const loadedCommunes = unwrapList(communesRes);
-
-        if (province) {
-          setProvinces((prev) => {
-            const code = zoneCodeOf(province);
-            if (prev.some((p) => zoneCodeOf(p) === code)) return prev;
-            return [...prev, province];
-          });
-        }
-
-        setDistricts(loadedDistricts);
-        setCommunes(loadedCommunes);
-        setSelectedProvince(provinceCode);
-        setSelectedDistrict(districtCode);
-        setSelectedCommune(zoneCode);
-        setProvinceInput(province?.name_kh || "");
-        setDistrictInput(district?.name_kh || "");
-        setCommuneInput(commune.name_kh || "");
+        setProvinceInput(pObj?.name_kh || "");
+        setDistrictInput(dObj?.name_kh || "");
+        setCommuneInput(cObj?.name_kh || "");
+        setVillageInput(vObj?.name_kh || "");
       } catch { /* empty */ }
     })();
-  }, [zoneCode]);
-
-  useEffect(() => {
-    if (zoneCode) setSelectedCommune(zoneCode);
   }, [zoneCode]);
 
   useEffect(() => {
@@ -202,7 +217,7 @@ export default function PerformanceForm({ mode, zoneCode, periodId }) {
   // Load existing values in edit/view mode
   useEffect(() => {
     if (mode === "create") return;
-    const loadZone = zoneCode || selectedCommune;
+    const loadZone = targetZone;
     const loadPeriod = periodId || selectedPeriod;
     if (!loadZone || !loadPeriod) return;
 
@@ -236,10 +251,10 @@ export default function PerformanceForm({ mode, zoneCode, periodId }) {
     return () => {
       cancelled = true;
     };
-  }, [mode, zoneCode, periodId, selectedCommune, selectedPeriod]);
+  }, [mode, zoneCode, periodId, targetZone, selectedPeriod]);
 
   const handleSave = async () => {
-    if (!selectedCommune) { setError("Please select commune."); return; }
+    if (!targetZone) { setError("សូមជ្រើសរើសទីតាំង។"); return; }
     if (!selectedPeriod) { setError("Please select period."); return; }
     setError(""); setSaving(true);
     try {
@@ -265,7 +280,7 @@ export default function PerformanceForm({ mode, zoneCode, periodId }) {
       }
 
       await performanceAPI.bulkCreateData({
-        zone_id: selectedCommune,
+        zone_id: targetZone,
         period_id: selectedPeriod,
         values,
       });
@@ -278,26 +293,29 @@ export default function PerformanceForm({ mode, zoneCode, periodId }) {
     }
   };
 
-  const reportZone = selectedCommune || zoneCode;
+  const reportZone = targetZone;
   const reportPeriod = selectedPeriod || periodId;
 
   const handleSaveToReport = async () => {
     if (!reportZone || !reportPeriod) {
-      setError("ជ្រើសរើសឃុំ/សង្កាត់ និងរយៈពេលមុនបង្កើតរបាយការណ៍");
+      setError("ជ្រើសរើសទីតាំង និងរយៈពេលមុនបង្កើតរបាយការណ៍");
       return;
     }
     setSavingToReport(true);
     setError("");
     try {
-      const communeObj = communes.find((c) => zoneCodeOf(c) === reportZone);
-      const communeName = communeObj?.name_kh || reportZone;
-      const provObj = provinces.find((p) => zoneCodeOf(p) === selectedProvince);
-      const provinceName = provObj?.name_kh || "";
+      const villageObj = villages.find((v) => zoneCodeOf(v) === selectedVillage);
+      const villageName = villageObj?.name_kh || "";
+      const communeObj = communes.find((c) => zoneCodeOf(c) === selectedCommune);
+      const communeName = communeObj?.name_kh || "";
       const distObj = districts.find((d) => zoneCodeOf(d) === selectedDistrict);
       const districtName = distObj?.name_kh || "";
+      const provObj = provinces.find((p) => zoneCodeOf(p) === selectedProvince);
+      const provinceName = provObj?.name_kh || "";
 
-      const title = `របាយការណ៍លទ្ធផលការងារ - ${communeName} (${periodRangeLabel || reportPeriod})`;
-      const description = [provinceName, districtName, communeName].filter(Boolean).join(" » ");
+      const locationTitle = villageName || communeName || districtName || provinceName || reportZone;
+      const title = `របាយការណ៍លទ្ធផលការងារ - ${locationTitle} (${periodRangeLabel || reportPeriod})`;
+      const description = [provinceName, districtName, communeName, villageName].filter(Boolean).join(" » ");
 
       // Build HTML content with full performance data table
       let tableRows = "";
@@ -331,9 +349,9 @@ export default function PerformanceForm({ mode, zoneCode, periodId }) {
       }
 
       const content = `<h2 style="text-align:center;">របាយការណ៍លទ្ធផលការងារ</h2>
-<p style="text-align:center;"><strong>${communeName}</strong></p>
+<p style="text-align:center;"><strong>${locationTitle}</strong></p>
 <p style="text-align:center;">រយៈពេល: ${periodRangeLabel || reportPeriod}</p>
-<p>ខេត្ត/រាជធានី: <strong>${provinceName || "—"}</strong> &nbsp; ស្រុក/ខណ្ឌ: <strong>${districtName || "—"}</strong> &nbsp; ឃុំ/សង្កាត់: <strong>${communeName}</strong></p>
+<p>ខេត្ត/រាជធានី: <strong>${provinceName || "—"}</strong> &nbsp; ស្រុក/ខណ្ឌ: <strong>${districtName || "—"}</strong> &nbsp; ឃុំ/សង្កាត់: <strong>${communeName || "—"}</strong> &nbsp; ភូមិ: <strong>${villageName || "—"}</strong></p>
 <br/>
 <table style="width:100%;border-collapse:collapse;border:1px solid #cbd5e1;">
 <thead><tr style="background:#1e40af;color:#fff;">
@@ -479,7 +497,7 @@ export default function PerformanceForm({ mode, zoneCode, periodId }) {
           )}
           {!isView && (
             <>
-              {selectedCommune && selectedPeriod && (
+              {targetZone && selectedPeriod && (
                 <button
                   className="btn btn-secondary"
                   onClick={handleCopyFromPrevious}
@@ -518,8 +536,10 @@ export default function PerformanceForm({ mode, zoneCode, periodId }) {
                   setSelectedProvince("");
                   setSelectedDistrict("");
                   setSelectedCommune("");
+                  setSelectedVillage("");
                   setDistrictInput("");
                   setCommuneInput("");
+                  setVillageInput("");
                 }
               }}
               disabled={isView || mode === "edit"}
@@ -548,7 +568,9 @@ export default function PerformanceForm({ mode, zoneCode, periodId }) {
                 } else {
                   setSelectedDistrict("");
                   setSelectedCommune("");
+                  setSelectedVillage("");
                   setCommuneInput("");
+                  setVillageInput("");
                 }
               }}
               disabled={isView || mode === "edit" || !provinceInput}
@@ -576,7 +598,13 @@ export default function PerformanceForm({ mode, zoneCode, periodId }) {
                 const match = communes.find(c => c.name_kh === val);
                 if (match) {
                   setSelectedCommune(match.zone_code || match.code);
+                  setSelectedVillage("");
+                  setVillageInput("");
                   setIndicatorValues({});
+                } else {
+                  setSelectedCommune("");
+                  setSelectedVillage("");
+                  setVillageInput("");
                 }
               }}
               disabled={isView || mode === "edit" || !districtInput}
@@ -588,6 +616,37 @@ export default function PerformanceForm({ mode, zoneCode, periodId }) {
               ))}
             </datalist>
           </div>
+
+          {/* Village Autocomplete */}
+          <div className="form-group">
+            <label>ភូមិ</label>
+            <input
+              type="text"
+              list="village-list"
+              value={villageInput}
+              onChange={(e) => {
+                const val = e.target.value;
+                setVillageInput(val);
+                const match = villages.find(v => v.name_kh === val);
+                if (match) {
+                  setSelectedVillage(match.zone_code || match.code);
+                  setIndicatorValues({});
+                } else {
+                  setSelectedVillage("");
+                }
+              }}
+              disabled={isView || mode === "edit" || !communeInput}
+              placeholder="-- ជ្រើសរើស --"
+            />
+            <datalist id="village-list">
+              {villages.map((v) => (
+                <option key={v.zone_code || v.code} value={v.name_kh} />
+              ))}
+            </datalist>
+          </div>
+        </div>
+
+        <div className="form-row" style={{ marginTop: "0.5rem" }}>
           <div className="form-group">
             <label>រយៈពេល *</label>
             {isView ? (

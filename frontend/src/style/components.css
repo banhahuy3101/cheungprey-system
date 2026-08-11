@@ -557,6 +557,11 @@
   color: #b45309;
 }
 
+.badge-info {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
 /* Progress bar */
 .progress-bar {
   display: flex;
@@ -961,5 +966,15 @@ td select {
   to {
     transform: rotate(360deg);
   }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+@keyframes slideIn {
+  from { opacity: 0; transform: translateX(100%); }
+  to { opacity: 1; transform: translateX(0); }
 }
 

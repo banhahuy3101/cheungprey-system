@@ -17,6 +17,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
+	"github.com/banhahuy/cheungprey-system/backend/internal/models"
 	"github.com/banhahuy/cheungprey-system/backend/pkg/utils"
 )
 
@@ -41,21 +42,20 @@ func (h *ReportTemplateHandler) Fill(c *gin.Context) {
 		return
 	}
 
+	missingKeys := validateRequiredKeys(tmpl.KeysMeta, payload)
+	if len(missingKeys) > 0 {
+		utils.BadRequest(c, "សូមបំពេញព័ត៌មានដែលត្រូវការ: "+strings.Join(missingKeys, ", "))
+		return
+	}
+
 	if tmpl.Format == "html" {
 		content := tmpl.Content
-		for k, v := range payload {
-			s, ok := v.(string)
-			if !ok {
-				continue
-			}
-			re := regexp.MustCompile(`\{\{\s*` + regexp.QuoteMeta(k) + `\s*\}\}`)
-			content = re.ReplaceAllString(content, s)
-		}
+		content = replaceEachBlocksInHTML(content, payload)
+		content = replaceSimplePlaceholdersInHTML(content, payload)
 		utils.JSON(c, http.StatusOK, gin.H{"format": "html", "content": content})
 		return
 	}
 
-	// DOCX: download + replace placeholders, upload filled docx to storage, return HTML content
 	data, err := h.repo.DownloadTemplateFile(tmpl.StoragePath)
 	if err != nil {
 		utils.InternalError(c, "Failed to download template")
@@ -64,14 +64,12 @@ func (h *ReportTemplateHandler) Fill(c *gin.Context) {
 
 	filled := replacePlaceholdersInDocx(data, payload)
 
-	// Upload filled DOCX to storage for later download
 	safeName := sanitizeFilename(tmpl.Name + ".docx")
 	storagePath := fmt.Sprintf("filled/%s/%s", uuid.New().String(), safeName)
 	if err := h.repo.UploadReportFile(filled, storagePath, "application/vnd.openxmlformats-officedocument.wordprocessingml.document"); err != nil {
 		log.Printf("Warning: failed to upload filled report to storage: %v", err)
 	}
 
-	// Extract HTML content for the report content field
 	htmlContent := extractDocxToHTML(filled)
 	if htmlContent == "" {
 		log.Printf("Warning: extractDocxToHTML returned empty content for template %s", id)
@@ -82,6 +80,100 @@ func (h *ReportTemplateHandler) Fill(c *gin.Context) {
 		"content":      htmlContent,
 		"storage_path": storagePath,
 	})
+}
+
+func validateRequiredKeys(keysMeta []models.ReportTemplateKey, payload map[string]any) []string {
+	required := make(map[string]string)
+	for _, km := range keysMeta {
+		if km.IsRequired {
+			required[km.KeyName] = km.DisplayLabel
+		}
+	}
+	if len(required) == 0 {
+		return nil
+	}
+	var missing []string
+	for keyName, label := range required {
+		val, ok := payload[keyName]
+		if !ok {
+			missing = append(missing, labelOrDefault(label, keyName))
+			continue
+		}
+		s, ok := val.(string)
+		if !ok || strings.TrimSpace(s) == "" {
+			missing = append(missing, labelOrDefault(label, keyName))
+		}
+	}
+	return missing
+}
+
+func labelOrDefault(label, key string) string {
+	if label != "" {
+		return label
+	}
+	return key
+}
+
+func replaceSimplePlaceholdersInHTML(content string, payload map[string]any) string {
+	for k, v := range payload {
+		s, ok := v.(string)
+		if !ok {
+			continue
+		}
+		re := regexp.MustCompile(`\{\{\s*` + regexp.QuoteMeta(k) + `\s*\}\}`)
+		content = re.ReplaceAllString(content, escapeHTML(s))
+	}
+	return content
+}
+
+func replaceEachBlocksInHTML(content string, payload map[string]any) string {
+	eachStartRe := regexp.MustCompile(`\{\{\s*#each\s+([\w.]+)\s*\}\}`)
+	eachEndMarker := "{{/each}}"
+
+	for {
+		m := eachStartRe.FindStringSubmatchIndex(content)
+		if m == nil {
+			break
+		}
+		arrayName := content[m[2]:m[3]]
+
+		endIdx := strings.Index(content[m[1]:], eachEndMarker)
+		if endIdx == -1 {
+			break
+		}
+		endIdx = m[1] + endIdx
+
+		blockContent := content[m[1]:endIdx]
+
+		arrVal, ok := payload[arrayName]
+		if !ok {
+			content = content[:m[0]] + content[endIdx+len(eachEndMarker):]
+			continue
+		}
+
+		arr, ok := arrVal.([]any)
+		if !ok {
+			content = content[:m[0]] + content[endIdx+len(eachEndMarker):]
+			continue
+		}
+
+		var expanded strings.Builder
+		for i, item := range arr {
+			itemMap, _ := item.(map[string]any)
+			row := blockContent
+			for k, v := range itemMap {
+				s, _ := v.(string)
+				re := regexp.MustCompile(`\{\{\s*` + regexp.QuoteMeta(k) + `\s*\}\}`)
+				row = re.ReplaceAllString(row, escapeHTML(s))
+			}
+			row = strings.ReplaceAll(row, "{{index}}", escapeHTML(strconv.Itoa(i+1)))
+			expanded.WriteString(row)
+		}
+
+		content = content[:m[0]] + expanded.String() + content[endIdx+len(eachEndMarker):]
+	}
+
+	return content
 }
 
 func extractDocxToHTML(data []byte) string {
@@ -475,7 +567,7 @@ func determineTag(style string) string {
 
 func fallbackExtractText(xmlData []byte) string {
 	xmlStr := string(xmlData)
-	reT := regexp.MustCompile(`<w:t[^>]*>([^<]*)</w:t>`)
+	reT := regexp.MustCompile(`(?s)<w:t(?:[\s][^>]*)?>([^<]*)</w:t>`)
 	matches := reT.FindAllStringSubmatch(xmlStr, -1)
 	var parts []string
 	for _, m := range matches {
@@ -520,7 +612,7 @@ func escapeHTML(s string) string {
 
 func extractKeysFromText(text string) []string {
 	seen := map[string]bool{}
-	var keys []string
+	keys := make([]string, 0)
 	for _, m := range placeholderRe.FindAllStringSubmatch(text, -1) {
 		k := m[1]
 		if !seen[k] {

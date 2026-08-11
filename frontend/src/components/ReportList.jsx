@@ -16,7 +16,7 @@ import {
 } from "react-icons/lu";
 import { useAuth } from "../hooks/useAuth";
 import { reportDocumentsAPI } from "../api/reportDocuments";
-import { reportSummaryLabel } from "../utils/reportForm";
+import { reportSummaryLabel, REPORT_CATEGORIES } from "../utils/reportForm";
 import ReportHero from "./reports/ReportHero";
 import Modal from "../pages/settings/Modal";
 import { useZoneCascade } from "../hooks/useZoneCascade";
@@ -31,14 +31,9 @@ function formatDate(iso) {
   });
 }
 
-const REPORT_CATEGORIES = [
+const CATEGORY_FILTERS = [
   { value: "", label: "ទាំងអស់" },
-  { value: "សន្តិសុខ", label: "សន្តិសុខ" },
-  { value: "សេដ្ឋកិច្ច", label: "សេដ្ឋកិច្ច" },
-  { value: "សង្គមកិច្ច", label: "សង្គមកិច្ច" },
-  { value: "ហិរញ្ញវត្ថុ", label: "ហិរញ្ញវត្ថុ" },
-  { value: "រដ្ឋបាល", label: "រដ្ឋបាល" },
-  { value: "ផ្សេងៗ", label: "ផ្សេងៗ" },
+  ...REPORT_CATEGORIES.map((c) => ({ value: c, label: c })),
 ];
 
 const CATEGORY_COLORS = {
@@ -70,11 +65,29 @@ export default function ReportList({ onView, onEdit, onCreate }) {
   const [trashPopup, setTrashPopup] = useState(false);
   const [trashRecords, setTrashRecords] = useState([]);
   const [trashLoading, setTrashLoading] = useState(false);
+  const [statusFilter, setStatusFilter] = useState("all");
+
+  const getZoneParams = () => {
+    const code = user?.zone_code || "";
+    if (code.length >= 6) {
+      const districtCode = code.slice(0, 4);
+      return {
+        userZone: districtCode,
+        initialZoneCode: districtCode,
+      };
+    }
+    return {
+      userZone: code,
+      initialZoneCode: code,
+    };
+  };
+
+  const { userZone, initialZoneCode } = getZoneParams();
 
   const zoneHook = useZoneCascade({
-    userZone: user?.zone_code || "",
+    userZone,
     isAdmin: user?.role === "admin" || user?.role === "super_admin",
-    initialZoneCode: user?.zone_code || "",
+    initialZoneCode,
     showVillage: false,
   });
 
@@ -84,7 +97,7 @@ export default function ReportList({ onView, onEdit, onCreate }) {
       const params = {};
       if (categoryFilter) params.category = categoryFilter;
       if (searchTerm) params.search = searchTerm;
-      const selectedZoneCode = zoneHook.resolvedZone?.zone_code;
+      const selectedZoneCode = zoneHook.resolvedZone;
       if (selectedZoneCode) {
         params.zone_code = selectedZoneCode;
       }
@@ -96,7 +109,7 @@ export default function ReportList({ onView, onEdit, onCreate }) {
     } finally {
       setLoading(false);
     }
-  }, [categoryFilter, searchTerm, zoneHook.resolvedZone?.zone_code]);
+  }, [categoryFilter, searchTerm, zoneHook.resolvedZone]);
 
   const fetchTrash = async () => {
     setTrashLoading(true);
@@ -132,6 +145,15 @@ export default function ReportList({ onView, onEdit, onCreate }) {
     });
     return { total, published, draft, categoryCounts };
   }, [records]);
+
+  const filteredRecords = useMemo(() => {
+    return records.filter((r) => {
+      if (statusFilter === "all") return true;
+      if (statusFilter === "published") return r.status === "published";
+      if (statusFilter === "draft") return r.status === "draft" || (!r.status && !r.deleted_at);
+      return true;
+    });
+  }, [records, statusFilter]);
 
   const handleDownload = async (record) => {
     setDownloadTarget(record);
@@ -222,286 +244,332 @@ export default function ReportList({ onView, onEdit, onCreate }) {
   };
 
   return (
-    <div className="page report-page">
-      <ReportHero
-        variant="list"
-        title="របាយការណ៍"
-        subtitle="ប្រព័ន្ធគ្រប់គ្រងរបាយការណ៍"
-        actions={
-          <>
-            <button type="button" className="btn btn-primary" onClick={() => setShowCreateModal(true)}>
-              <LuPlus /> បង្កើតរបាយការណ៍
-            </button>
-          </>
-        }
-      />
-
+    <div
+      className="page report-page"
+      style={{
+        maxWidth: "none",
+        width: "100%",
+        padding: "0.5rem 1rem",
+        margin: "0",
+        display: "flex",
+        flexDirection: "column",
+        gap: "0.75rem"
+      }}
+    >
       {message && (
-        <div className={`alert report-flash ${message.includes("មិនបាន") ? "alert-error" : "alert-success"}`}>
+        <div className={`alert report-flash ${message.includes("មិនបាន") ? "alert-error" : "alert-success"}`} style={{ margin: 0 }}>
           {message}
         </div>
       )}
 
-      <div className="card" style={{ padding: "1.25rem", marginBottom: "1.25rem" }}>
-        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "1.5rem" }}>
-          <div style={{ display: "flex", flexDirection: "column" }}>
-            <span style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginBottom: "0.25rem" }}>សរុប</span>
-            <span style={{ fontSize: "1.5rem", fontWeight: "700" }}>{stats.total}</span>
+      {/* Modern, Compact Unified Header & Filters Bar */}
+      <div
+        className="card"
+        style={{
+          padding: "0.75rem 1rem",
+          margin: 0,
+          background: "var(--surface)",
+          border: "1px solid var(--border)",
+          borderRadius: "12px",
+          boxShadow: "0 1px 3px rgba(0,0,0,0.02)",
+          display: "flex",
+          flexDirection: "column",
+          gap: "0.75rem"
+        }}
+      >
+        {/* Top Header Row */}
+        <div style={{ display: "flex", alignItems: "center", justifySpace: "space-between", justifyContent: "space-between", gap: "1rem", flexWrap: "wrap" }}>
+          <div>
+            <h1 style={{ fontSize: "1.2rem", fontWeight: "800", color: "var(--text)", margin: 0, display: "flex", alignItems: "center", gap: "0.5rem" }}>
+              <LuFileText style={{ color: "var(--primary)" }} /> របាយការណ៍
+            </h1>
+            <p style={{ fontSize: "0.78rem", color: "var(--text-muted)", margin: "0.1rem 0 0 0" }}>ប្រព័ន្ធគ្រប់គ្រង និងតាមដានរបាយការណ៍</p>
           </div>
-
-          <div style={{ width: "1px", height: "24px", background: "var(--border)" }} />
-
-          <div style={{ display: "flex", flexDirection: "column" }}>
-            <span style={{ fontSize: "0.85rem", color: "#166534", marginBottom: "0.25rem" }}>បានចេញ</span>
-            <span style={{ fontSize: "1.5rem", fontWeight: "700", color: "#166534" }}>{stats.published}</span>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+            <button
+              type="button"
+              className="btn btn-outline btn-sm"
+              onClick={openTrashPopup}
+              style={{ display: "inline-flex", alignItems: "center", gap: "0.25rem", minHeight: "2.1rem" }}
+            >
+              <LuTrash2 size={14} /> ធុងសំរាម
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary btn-sm"
+              onClick={() => setShowCreateModal(true)}
+              style={{ display: "inline-flex", alignItems: "center", gap: "0.25rem", minHeight: "2.1rem" }}
+            >
+              <LuPlus size={15} /> បង្កើតរបាយការណ៍
+            </button>
           </div>
-
-          <div style={{ width: "1px", height: "24px", background: "var(--border)" }} />
-
-          <div style={{ display: "flex", flexDirection: "column" }}>
-            <span style={{ fontSize: "0.85rem", color: "#92400e", marginBottom: "0.25rem" }}>ព្រាង</span>
-            <span style={{ fontSize: "1.5rem", fontWeight: "700", color: "#92400e" }}>{stats.draft}</span>
-          </div>
-
-          {Object.entries(stats.categoryCounts || {}).map(([cat, count]) => (
-            <Fragment key={cat}>
-              <div style={{ width: "1px", height: "24px", background: "var(--border)" }} />
-              <div style={{ display: "flex", flexDirection: "column" }}>
-                <span style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginBottom: "0.25rem" }}>{cat}</span>
-                <span style={{ fontSize: "1.5rem", fontWeight: "700" }}>{count}</span>
-              </div>
-            </Fragment>
-          ))}
         </div>
-      </div>
 
-      <div className="report-filter-bar" style={{ display: "flex", flexDirection: "column", gap: "1rem", marginBottom: "1rem" }}>
-        <div style={{ display: "flex", width: "100%", borderBottom: "1px solid var(--border)", paddingBottom: "1rem" }}>
-          <ZoneCascadeSelect hook={zoneHook} showVillage={false} />
-        </div>
-        <div style={{ display: "flex", gap: "0.75rem", alignItems: "center", width: "100%", flexWrap: "wrap" }}>
-          <div style={{ position: "relative", flex: 1, minWidth: "200px" }}>
-            {loading ? (
-              <div className="modal-loading-spinner" style={{
-                position: "absolute",
-                left: "0.875rem",
-                top: "50%",
-                transform: "translateY(-50%)",
-                width: "16px",
-                height: "16px",
-                borderWidth: "2px",
-                pointerEvents: "none"
-              }} />
-            ) : (
+        {/* Separator line */}
+        <div style={{ height: "1px", background: "var(--border)", width: "100%" }} />
+
+        {/* Toolbar Filter & Tabs Row */}
+        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: "0.75rem" }}>
+          {/* Left Side: Status tabs acting as filter & stats */}
+          <div style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "0.2rem",
+            background: "#f1f5f9",
+            padding: "0.2rem",
+            borderRadius: "8px",
+            border: "1px solid var(--border)"
+          }}>
+            <button
+              type="button"
+              onClick={() => setStatusFilter("all")}
+              style={{
+                padding: "0.35rem 0.65rem",
+                borderRadius: "6px",
+                fontSize: "0.8rem",
+                fontWeight: "600",
+                border: "none",
+                background: statusFilter === "all" ? "#ffffff" : "transparent",
+                color: statusFilter === "all" ? "var(--primary)" : "#64748b",
+                boxShadow: statusFilter === "all" ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
+                cursor: "pointer",
+                transition: "all 0.15s"
+              }}
+            >
+              ទាំងអស់ ({stats.total})
+            </button>
+            <button
+              type="button"
+              onClick={() => setStatusFilter("published")}
+              style={{
+                padding: "0.35rem 0.65rem",
+                borderRadius: "6px",
+                fontSize: "0.8rem",
+                fontWeight: "600",
+                border: "none",
+                background: statusFilter === "published" ? "#ffffff" : "transparent",
+                color: statusFilter === "published" ? "#166534" : "#64748b",
+                boxShadow: statusFilter === "published" ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
+                cursor: "pointer",
+                transition: "all 0.15s"
+              }}
+            >
+              បានចេញ ({stats.published})
+            </button>
+            <button
+              type="button"
+              onClick={() => setStatusFilter("draft")}
+              style={{
+                padding: "0.35rem 0.65rem",
+                borderRadius: "6px",
+                fontSize: "0.8rem",
+                fontWeight: "600",
+                border: "none",
+                background: statusFilter === "draft" ? "#ffffff" : "transparent",
+                color: statusFilter === "draft" ? "#92400e" : "#64748b",
+                boxShadow: statusFilter === "draft" ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
+                cursor: "pointer",
+                transition: "all 0.15s"
+              }}
+            >
+              ព្រាង ({stats.draft})
+            </button>
+          </div>
+
+          {/* Right Side: Inline Search, Category & Location selects */}
+          <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.5rem", flex: 1, justifyContent: "flex-end" }}>
+            {/* Search Input */}
+            <div style={{ position: "relative", width: "180px" }}>
               <LuSearch
                 style={{
                   position: "absolute",
-                  left: "0.875rem",
+                  left: "0.65rem",
                   top: "50%",
                   transform: "translateY(-50%)",
                   color: "#94a3b8",
-                  fontSize: "1.1rem",
+                  fontSize: "0.95rem",
                   pointerEvents: "none"
                 }}
               />
-            )}
-            <input
-              type="text"
-              placeholder="ស្វែងរក..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              style={{
-                width: "100%",
-                minHeight: "2.5rem",
-                padding: "0.625rem 0.875rem 0.625rem 2.25rem",
-                border: "1px solid var(--border)",
-                borderRadius: "10px",
-                fontSize: "0.9rem",
-                color: "var(--text)",
-                backgroundColor: "var(--surface)",
-                boxShadow: "0 1px 2px rgba(15, 23, 42, 0.04)",
-                outline: "none",
-                transition: "border-color var(--transition), box-shadow var(--transition)"
-              }}
-            />
-          </div>
+              <input
+                type="text"
+                placeholder="ស្វែងរក..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                style={{
+                  width: "100%",
+                  minHeight: "2.1rem",
+                  height: "2.1rem",
+                  padding: "0.3rem 0.5rem 0.3rem 1.85rem",
+                  border: "1px solid var(--border)",
+                  borderRadius: "8px",
+                  fontSize: "0.85rem",
+                  color: "var(--text)",
+                  outline: "none"
+                }}
+              />
+            </div>
 
-          <div style={{ position: "relative", minWidth: "160px" }}>
-            <select
-              value={categoryFilter}
-              onChange={(e) => setCategoryFilter(e.target.value)}
-              className="form-select"
-              style={{
-                width: "100%",
-                paddingRight: "2.5rem",
-                borderRadius: "10px",
-                border: "1px solid var(--border)",
-                backgroundColor: "var(--surface)",
-                minHeight: "2.5rem",
-                fontSize: "0.9rem",
-                color: "var(--text)",
-                cursor: "pointer",
-                boxShadow: "0 1px 2px rgba(15, 23, 42, 0.04)"
-              }}
-            >
-              {REPORT_CATEGORIES.map((c) => (
-                <option key={c.value} value={c.value}>{c.label}</option>
-              ))}
-            </select>
-          </div>
+            {/* Category Filter */}
+            <div style={{ position: "relative", width: "120px" }}>
+              <select
+                value={categoryFilter}
+                onChange={(e) => setCategoryFilter(e.target.value)}
+                style={{
+                  width: "100%",
+                  height: "2.1rem",
+                  minHeight: "2.1rem",
+                  borderRadius: "8px",
+                  border: "1px solid var(--border)",
+                  fontSize: "0.85rem",
+                  padding: "0 1.5rem 0 0.5rem",
+                  cursor: "pointer"
+                }}
+              >
+                {CATEGORY_FILTERS.map((c) => (
+                  <option key={c.value} value={c.value}>{c.label}</option>
+                ))}
+              </select>
+            </div>
 
-          <button
-            type="button"
-            className="btn btn-outline"
-            onClick={openTrashPopup}
-            style={{
-              minHeight: "2.5rem",
-              display: "flex",
-              alignItems: "center",
-              gap: "0.35rem",
-              borderRadius: "10px",
-              padding: "0.625rem 1.25rem",
-              fontSize: "0.9rem",
-              fontWeight: "500",
-              boxShadow: "0 1px 2px rgba(15, 23, 42, 0.04)"
-            }}
-          >
-            <LuTrash2 size={16} />
-            ធុងសំរាម
-          </button>
+            {/* Location selector */}
+            <div style={{ display: "flex", gap: "0.35rem", alignItems: "center" }}>
+              <ZoneCascadeSelect hook={zoneHook} showVillage={false} compact={true} />
+            </div>
+          </div>
         </div>
       </div>
 
-      {(records.length > 0 || loading) && (
-      <div className="card report-list-card" style={{ position: "relative" }}>
-        {loading && (
-          <div className="report-linear-loader">
-            <div className="report-linear-loader-fill" />
-          </div>
-        )}
-        <div className="table-responsive">
-          <table className="table report-table">
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>របាយការណ៍</th>
-                <th>ប្រភេទ</th>
-                <th>តំបន់</th>
-                <th>ស្ថានភាព</th>
-                <th>កែប្រែចុងក្រោយ</th>
-                <th>សកម្មភាព</th>
-              </tr>
-            </thead>
-            <tbody style={{ opacity: loading ? 0.6 : 1, transition: "opacity 0.2s" }}>
-              {loading ? (
-                Array.from({ length: 5 }).map((_, i) => (
-                  <tr key={`skeleton-${i}`}>
-                    <td><div className="skeleton-item" style={{ width: "24px" }} /></td>
-                    <td><div className="skeleton-item" style={{ width: "100%", maxWidth: "320px" }} /></td>
-                    <td><div className="skeleton-item" style={{ width: "64px" }} /></td>
-                    <td><div className="skeleton-item" style={{ width: "80px" }} /></td>
-                    <td><div className="skeleton-item" style={{ width: "70px" }} /></td>
-                    <td><div className="skeleton-item" style={{ width: "90px" }} /></td>
-                    <td>
-                      <div style={{ display: "flex", gap: "0.5rem" }}>
-                        <div className="skeleton-item" style={{ width: "24px", height: "24px", borderRadius: "4px" }} />
-                        <div className="skeleton-item" style={{ width: "24px", height: "24px", borderRadius: "4px" }} />
-                        <div className="skeleton-item" style={{ width: "24px", height: "24px", borderRadius: "4px" }} />
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              ) : (
-                records.map((r, idx) => (
-                  <tr key={r.id} style={r.deleted_at ? { opacity: 0.6 } : undefined}>
-                    <td>{idx + 1}</td>
-                    <td
-                      className="report-table-title"
-                      style={{ cursor: "pointer", color: "var(--primary)", fontWeight: "500" }}
-                      onClick={() => onView(r.id)}
-                    >
-                      {reportSummaryLabel(r)}
-                    </td>
-                    <td>
-                      {r.category && (
-                        <span
-                          style={{ color: CATEGORY_COLORS[r.category] || "#6b7280", fontWeight: "600", fontSize: "0.85rem" }}
-                        >
-                          {r.category}
+      {(filteredRecords.length > 0 || loading) && (
+        <div className="card report-list-card" style={{ position: "relative", margin: 0, padding: 0 }}>
+          {loading && (
+            <div className="report-linear-loader">
+              <div className="report-linear-loader-fill" />
+            </div>
+          )}
+          <div className="table-responsive">
+            <table className="table report-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>របាយការណ៍</th>
+                  <th>ប្រភេទ</th>
+                  <th>តំបន់</th>
+                  <th>ស្ថានភាព</th>
+                  <th>កែប្រែចុងក្រោយ</th>
+                  <th>សកម្មភាព</th>
+                </tr>
+              </thead>
+              <tbody style={{ opacity: loading ? 0.6 : 1, transition: "opacity 0.2s" }}>
+                {loading ? (
+                  Array.from({ length: 5 }).map((_, i) => (
+                    <tr key={`skeleton-${i}`}>
+                      <td><div className="skeleton-item" style={{ width: "24px" }} /></td>
+                      <td><div className="skeleton-item" style={{ width: "100%", maxWidth: "320px" }} /></td>
+                      <td><div className="skeleton-item" style={{ width: "64px" }} /></td>
+                      <td><div className="skeleton-item" style={{ width: "80px" }} /></td>
+                      <td><div className="skeleton-item" style={{ width: "70px" }} /></td>
+                      <td><div className="skeleton-item" style={{ width: "90px" }} /></td>
+                      <td>
+                        <div style={{ display: "flex", gap: "0.5rem" }}>
+                          <div className="skeleton-item" style={{ width: "24px", height: "24px", borderRadius: "4px" }} />
+                          <div className="skeleton-item" style={{ width: "24px", height: "24px", borderRadius: "4px" }} />
+                          <div className="skeleton-item" style={{ width: "24px", height: "24px", borderRadius: "4px" }} />
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  filteredRecords.map((r, idx) => (
+                    <tr key={r.id} style={r.deleted_at ? { opacity: 0.6 } : undefined}>
+                      <td>{idx + 1}</td>
+                      <td
+                        className="report-table-title"
+                        style={{ cursor: "pointer", color: "var(--primary)", fontWeight: "500" }}
+                        onClick={() => onView(r.id)}
+                      >
+                        {reportSummaryLabel(r)}
+                      </td>
+                      <td>
+                        {r.category && (
+                          <span
+                            style={{ color: CATEGORY_COLORS[r.category] || "#6b7280", fontWeight: "600", fontSize: "0.85rem" }}
+                          >
+                            {r.category}
+                          </span>
+                        )}
+                      </td>
+                      <td>{r.zone_name || "—"}</td>
+                      <td>
+                        <span className="report-status-badge report-status-badge-sm" data-status={r.status}>
+                          {r.status === "published" ? "បានចេញ"
+                            : r.status === "pending_review" ? "កំពុងពិនិត្យ"
+                              : r.status === "rejected" ? "បានបដិសេធ"
+                                : r.deleted_at ? "បានលុប"
+                                  : "ព្រាង"}
                         </span>
-                      )}
-                    </td>
-                    <td>{r.zone_name || "—"}</td>
-                    <td>
-                      <span className="report-status-badge report-status-badge-sm" data-status={r.status}>
-                        {r.status === "published" ? "បានចេញ"
-                          : r.status === "pending_review" ? "កំពុងពិនិត្យ"
-                            : r.status === "rejected" ? "បានបដិសេធ"
-                              : r.deleted_at ? "បានលុប"
-                                : "ព្រាង"}
-                      </span>
-                    </td>
-                    <td>{formatDate(r.updated_at)}</td>
-                    <td>
-                      <div className="actions">
-                        <button type="button" className="btn-icon" onClick={() => onView(r.id)} title="មើល">
-                          <LuEye />
-                        </button>
-                        {(r.status === "draft" || r.status === "rejected") && (
-                          <button type="button" className="btn-icon" onClick={() => onEdit(r.id)} title="កែប្រែ">
-                            <LuPencil />
+                      </td>
+                      <td>{formatDate(r.updated_at)}</td>
+                      <td>
+                        <div className="actions">
+                          <button type="button" className="btn-icon" onClick={() => onView(r.id)} title="មើល">
+                            <LuEye />
                           </button>
-                        )}
-                        {r.status === "pending_review" && (user?.role === "district_chief" || user?.role === "commune_chief" || user?.role === "admin" || user?.role === "super_admin") && (
-                          <button type="button" className="btn-icon" onClick={() => handleConfirm(r)} title="អនុម័ត">
-                            <LuCheck />
+                          {(r.status === "draft" || r.status === "rejected") && (
+                            <button type="button" className="btn-icon" onClick={() => onEdit(r.id)} title="កែប្រែ">
+                              <LuPencil />
+                            </button>
+                          )}
+                          {r.status === "pending_review" && (user?.role === "district_chief" || user?.role === "commune_chief" || user?.role === "admin" || user?.role === "super_admin") && (
+                            <button type="button" className="btn-icon" onClick={() => handleConfirm(r)} title="អនុម័ត">
+                              <LuCheck />
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            className="btn-icon"
+                            onClick={() => handleDownload(r)}
+                            disabled={downloadTarget?.id === r.id}
+                            title="ទាញយក PDF"
+                          >
+                            <LuDownload />
                           </button>
-                        )}
-                        <button
-                          type="button"
-                          className="btn-icon"
-                          onClick={() => handleDownload(r)}
-                          disabled={downloadTarget?.id === r.id}
-                          title="ទាញយក PDF"
-                        >
-                          <LuDownload />
-                        </button>
-                        {(r.status === "draft" || r.status === "rejected") && (
-                          <>
-                            <button
-                              type="button"
-                              className="btn-icon"
-                              onClick={() => {
-                                setDuplicateTarget(r);
-                                setDuplicateTitle(r.title + " (ច្បាប់ចម្លង)");
-                                setDuplicateDescription(r.description || "");
-                              }}
-                              title="ចម្លង"
-                            >
-                              <LuCopy />
-                            </button>
-                            <button
-                              type="button"
-                              className="btn-icon btn-danger"
-                              onClick={() => setDeleteTarget(r)}
-                              title="លុប"
-                            >
-                              <LuTrash2 />
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                          {(r.status === "draft" || r.status === "rejected") && (
+                            <>
+                              <button
+                                type="button"
+                                className="btn-icon"
+                                onClick={() => {
+                                  setDuplicateTarget(r);
+                                  setDuplicateTitle(r.title + " (ច្បាប់ចម្លង)");
+                                  setDuplicateDescription(r.description || "");
+                                }}
+                                title="ចម្លង"
+                              >
+                                <LuCopy />
+                              </button>
+                              <button
+                                type="button"
+                                className="btn-icon btn-danger"
+                                onClick={() => setDeleteTarget(r)}
+                                title="លុប"
+                              >
+                                <LuTrash2 />
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
       )}
 
-      {records.length === 0 && !loading && (
+      {filteredRecords.length === 0 && !loading && (
         <div className="card" style={{
           display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
           minHeight: "320px", textAlign: "center", padding: "3rem 1rem",

@@ -4,6 +4,53 @@ import { partyAPI } from "../../api/party";
 import { TWO_MINUTE_TIMEOUT } from "../../api/client";
 import { readFileAsBase64, mimeTypeForFile, base64ToBlob, openBlobFile } from "../../utils/file";
 
+function getFileExtension(fileRow) {
+  const name = fileRow.file_name || fileRow.filename || "";
+  const ext = name.includes(".") ? name.split(".").pop().toLowerCase() : "";
+  if (ext && ext.length <= 4) return ext;
+
+  const mime = fileRow.mime_type || "";
+  if (mime.includes("pdf")) return "pdf";
+  if (mime.includes("jpeg") || mime.includes("jpg")) return "jpeg";
+  if (mime.includes("png")) return "png";
+  if (mime.includes("gif")) return "gif";
+  if (mime.includes("webp")) return "webp";
+  if (mime.includes("word") || mime.includes("officedocument.wordprocessingml") || mime.includes("msword")) return "docx";
+  if (mime.includes("excel") || mime.includes("officedocument.spreadsheetml") || mime.includes("ms-excel")) return "xlsx";
+  if (mime.includes("powerpoint") || mime.includes("officedocument.presentationml")) return "pptx";
+  if (mime.includes("csv")) return "csv";
+  if (mime.includes("text") || mime.includes("plain")) return "txt";
+  if (mime.includes("zip") || mime.includes("x-zip") || mime.includes("compressed")) return "zip";
+
+  return mime ? mime.split("/").pop() : "-";
+}
+
+function getExtensionBadgeStyle(ext) {
+  const cleanExt = ext.toLowerCase();
+  switch (cleanExt) {
+    case "pdf":
+      return { background: "#fef2f2", color: "#991b1b", border: "1px solid #fee2e2" };
+    case "docx":
+    case "doc":
+      return { background: "#eff6ff", color: "#1e40af", border: "1px solid #dbeafe" };
+    case "xlsx":
+    case "xls":
+    case "csv":
+      return { background: "#f0fdf4", color: "#166534", border: "1px solid #dcfce7" };
+    case "jpg":
+    case "jpeg":
+    case "png":
+    case "gif":
+    case "webp":
+      return { background: "#faf5ff", color: "#6b21a8", border: "1px solid #f3e8ff" };
+    case "zip":
+    case "rar":
+      return { background: "#fffbeb", color: "#92400e", border: "1px solid #fef3c7" };
+    default:
+      return { background: "#f8fafc", color: "#475569", border: "1px solid #e2e8f0" };
+  }
+}
+
 export default function Files() {
   const [files, setFiles] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -152,7 +199,22 @@ export default function Files() {
                       </td>
                       <td>{f.description || "-"}</td>
                       <td>{f.file_size ? `${(f.file_size / 1024).toFixed(1)} KB` : "-"}</td>
-                      <td>{f.mime_type || "-"}</td>
+                      <td>
+                        <span
+                          style={{
+                            padding: "0.25rem 0.55rem",
+                            borderRadius: "6px",
+                            fontSize: "0.78rem",
+                            fontWeight: "700",
+                            letterSpacing: "0.05em",
+                            display: "inline-block",
+                            boxShadow: "0 1px 2px rgba(0,0,0,0.02)",
+                            ...getExtensionBadgeStyle(getFileExtension(f))
+                          }}
+                        >
+                          {getFileExtension(f).toUpperCase()}
+                        </span>
+                      </td>
                       <td>{f.created_at?.slice(0, 10) || "-"}</td>
                       <td>
                         <div className="actions">

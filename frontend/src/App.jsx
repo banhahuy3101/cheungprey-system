@@ -1,11 +1,13 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { ToastProvider } from "./components/Toast";
 import AuthProvider from "./components/AuthProvider";
 import ProtectedRoute from "./components/ProtectedRoute";
 import Layout from "./components/Layout";
 import Login from "./pages/auth/Login";
 import Register from "./pages/auth/Register";
 import Dashboard from "./pages/dashboard/Dashboard";
-import Members from "./pages/members/Members";
+import MembershipCreate from "./pages/membership/MembershipCreate";
+import Membership from "./pages/membership/Membership";
 import Voters from "./pages/voters/Voters";
 import FinancesDashboard from "./pages/finances/dashboard/page";
 import FinancesTransactions from "./pages/finances/transactions/page";
@@ -23,7 +25,9 @@ import SettingsRolePermissions from "./pages/SettingsRolePermissions";
 import SettingsTechnical from "./pages/settings/SettingsTechnical";
 import SettingsSystem from "./pages/settings/SettingsSystem";
 import SettingsReportTemplates from "./pages/settings/SettingsReportTemplates";
+import SettingsReportTemplateCreate from "./pages/settings/SettingsReportTemplateCreate";
 import SettingsReportTemplateDetail from "./pages/settings/SettingsReportTemplateDetail";
+import SettingsReportTemplateEdit from "./pages/settings/SettingsReportTemplateEdit";
 import ReportCreateFromTemplate from "./pages/reports/ReportCreateFromTemplate";
 import Admin from "./pages/admin/Admin";
 import Profile from "./pages/profile/Profile";
@@ -36,6 +40,7 @@ function FeatureRoute({ feature, children }) {
 function App() {
   return (
     <BrowserRouter>
+      <ToastProvider>
       <AuthProvider>
         <Routes>
           <Route path="/login" element={<Login />} />
@@ -51,11 +56,18 @@ function App() {
             <Route path="profile" element={<Profile />} />
             <Route index element={<Dashboard />} />
 
-            <Route path="members" element={<FeatureRoute feature={FEATURES.members}><Members /></FeatureRoute>} />
-            <Route path="members/create" element={<FeatureRoute feature={FEATURES.members}><Members /></FeatureRoute>} />
-            <Route path="members/org" element={<FeatureRoute feature={FEATURES.members}><Members /></FeatureRoute>} />
-            <Route path="members/:id/edit" element={<FeatureRoute feature={FEATURES.members}><Members /></FeatureRoute>} />
-            <Route path="members/:id" element={<FeatureRoute feature={FEATURES.members}><Members /></FeatureRoute>} />
+            <Route path="membership" element={<FeatureRoute feature={FEATURES.members}><Membership /></FeatureRoute>} />
+            <Route path="membership/create" element={<FeatureRoute feature={FEATURES.members}><MembershipCreate /></FeatureRoute>} />
+            <Route path="membership/import" element={<FeatureRoute feature={FEATURES.membership_write}><Membership /></FeatureRoute>} />
+            <Route path="membership/stats" element={<FeatureRoute feature={FEATURES.members}><Membership /></FeatureRoute>} />
+            <Route path="membership/:id" element={<FeatureRoute feature={FEATURES.members}><Membership /></FeatureRoute>} />
+            <Route path="membership/:id/edit" element={<FeatureRoute feature={FEATURES.members}><Membership /></FeatureRoute>} />
+            <Route path="membership/:id/demographics" element={<FeatureRoute feature={FEATURES.members}><Membership /></FeatureRoute>} />
+            <Route path="membership/:id/dues" element={<FeatureRoute feature={FEATURES.members}><Membership /></FeatureRoute>} />
+            <Route path="membership/:id/activity" element={<FeatureRoute feature={FEATURES.members}><Membership /></FeatureRoute>} />
+            <Route path="membership/:id/positions" element={<FeatureRoute feature={FEATURES.members}><Membership /></FeatureRoute>} />
+            <Route path="membership/:id/cards" element={<FeatureRoute feature={FEATURES.members}><Membership /></FeatureRoute>} />
+
             <Route path="voters" element={<FeatureRoute feature={FEATURES.voters}><Voters /></FeatureRoute>} />
 
             <Route path="finances" element={<Navigate to="/finances/dashboard" replace />} />
@@ -93,6 +105,8 @@ function App() {
             <Route path="settings/performance_period/:id/edit" element={<ProtectedRoute feature={FEATURES.performance_admin}><SettingsPeriodForm /></ProtectedRoute>} />
             <Route path="settings/performance" element={<ProtectedRoute feature={FEATURES.performance_admin}><SettingsPerformance /></ProtectedRoute>} />
             <Route path="settings/report-templates" element={<ProtectedRoute feature={FEATURES.reports}><SettingsReportTemplates /></ProtectedRoute>} />
+            <Route path="settings/report-templates/new" element={<ProtectedRoute feature={FEATURES.reports}><SettingsReportTemplateCreate /></ProtectedRoute>} />
+            <Route path="settings/report-templates/:id/edit" element={<ProtectedRoute feature={FEATURES.reports}><SettingsReportTemplateEdit /></ProtectedRoute>} />
             <Route path="settings/report-templates/:id" element={<ProtectedRoute feature={FEATURES.reports}><SettingsReportTemplateDetail /></ProtectedRoute>} />
             <Route path="admin" element={<ProtectedRoute adminOnly><Admin /></ProtectedRoute>} />
           </Route>
@@ -100,6 +114,7 @@ function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </AuthProvider>
+      </ToastProvider>
     </BrowserRouter>
   );
 }

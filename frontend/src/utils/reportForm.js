@@ -49,3 +49,12 @@ export function stripHtml(html) {
 export function isEmptyContent(html) {
   return stripHtml(html) === "";
 }
+
+export const REPORT_CATEGORIES = [
+  "សន្តិសុខ",
+  "សេដ្ឋកិច្ច",
+  "សង្គមកិច្ច",
+  "ហិរញ្ញវត្ថុ",
+  "រដ្ឋបាល",
+  "ផ្សេងៗ",
+];

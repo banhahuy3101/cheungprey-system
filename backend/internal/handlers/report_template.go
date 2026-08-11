@@ -210,8 +210,13 @@ func (h *ReportTemplateHandler) GetByID(c *gin.Context) {
 		return
 	}
 
-	// Auto-extract Word document HTML content for DOCX templates if content is empty
-	if tmpl.Format == "docx" && (tmpl.Content == "" || len(tmpl.Content) < 10) && tmpl.StoragePath != "" {
+	// Auto-extract Word document HTML content for DOCX templates if content is empty or contains raw/escaped XML markers from the previous parser bug
+	needsHeal := tmpl.Content == "" || len(tmpl.Content) < 10 ||
+		strings.Contains(tmpl.Content, "w:val=") ||
+		strings.Contains(tmpl.Content, "<w:") ||
+		strings.Contains(tmpl.Content, "&lt;w:") ||
+		strings.Contains(tmpl.Content, "w:space=")
+	if tmpl.Format == "docx" && needsHeal && tmpl.StoragePath != "" {
 		data, err := h.repo.DownloadTemplateFile(tmpl.StoragePath)
 		if err == nil && len(data) > 0 {
 			htmlContent, keys := extractDocxContentHTML(data)
@@ -223,6 +228,13 @@ func (h *ReportTemplateHandler) GetByID(c *gin.Context) {
 				_ = h.repo.UpdateReportTemplate(tmpl)
 			}
 		}
+	}
+
+	keysMeta, err := h.repo.ListReportTemplateKeys(tmpl.ID)
+	if err == nil {
+		tmpl.KeysMeta = keysMeta
+	} else {
+		tmpl.KeysMeta = []models.ReportTemplateKey{}
 	}
 
 	utils.JSON(c, http.StatusOK, tmpl)
@@ -281,7 +293,9 @@ func (h *ReportTemplateHandler) Update(c *gin.Context) {
 				return
 			}
 
-			tmpl.Keys = extractDocxKeys(data)
+			htmlContent, keys := extractDocxContentHTML(data)
+			tmpl.Content = htmlContent
+			tmpl.Keys = keys
 
 			contentType := file.Header.Get("Content-Type")
 			if contentType == "" {
@@ -447,7 +461,7 @@ var keyRe = regexp.MustCompile(`\{\{\s*([\w.]+)\s*\}\}`)
 
 func extractKeys(text string) []string {
 	seen := map[string]bool{}
-	var keys []string
+	keys := make([]string, 0)
 	for _, m := range keyRe.FindAllStringSubmatch(text, -1) {
 		k := m[1]
 		if !seen[k] {
@@ -475,38 +489,85 @@ func extractDocxContentHTML(data []byte) (string, []string) {
 			if err != nil {
 				return "", nil
 			}
-			rawXML := string(contentBytes)
+
+			// Use XML tokenizer to correctly extract only w:t text content
+			var paragraphs []string
+			var currentParagraph strings.Builder
+			inParagraph := false
+			inText := false
+
+			decoder := xml.NewDecoder(bytes.NewReader(contentBytes))
+			decoder.Strict = false
+
+			for {
+				token, err := decoder.Token()
+				if err != nil {
+					break
+				}
+				switch t := token.(type) {
+				case xml.StartElement:
+					// local() of the tag
+					localName := t.Name.Local
+					switch localName {
+					case "p":
+						if t.Name.Space == "http://schemas.openxmlformats.org/wordprocessingml/2006/main" ||
+							t.Name.Space == "" {
+							inParagraph = true
+							currentParagraph.Reset()
+						}
+					case "t":
+						if t.Name.Space == "http://schemas.openxmlformats.org/wordprocessingml/2006/main" ||
+							t.Name.Space == "" {
+							inText = true
+						}
+					}
+				case xml.EndElement:
+					localName := t.Name.Local
+					switch localName {
+					case "t":
+						inText = false
+					case "p":
+						if inParagraph {
+							inParagraph = false
+							pStr := strings.TrimSpace(currentParagraph.String())
+							if pStr != "" {
+								paragraphs = append(paragraphs, pStr)
+							}
+						}
+					}
+				case xml.CharData:
+					if inText && inParagraph {
+						currentParagraph.Write(t)
+					}
+				}
+			}
+
+			// If XML tokenizer got nothing, fall back to regex
+			if len(paragraphs) == 0 {
+				pRe := regexp.MustCompile(`(?s)<w:p(?:[\s][^>]*)?>(.*?)</w:p>`)
+				tRe := regexp.MustCompile(`(?s)<w:t(?:[\s][^>]*)?>(.*?)</w:t>`)
+				rawXML := string(contentBytes)
+				for _, pm := range pRe.FindAllStringSubmatch(rawXML, -1) {
+					var pText strings.Builder
+					for _, tm := range tRe.FindAllStringSubmatch(pm[1], -1) {
+						pText.WriteString(tm[1])
+					}
+					pStr := strings.TrimSpace(pText.String())
+					if pStr != "" {
+						paragraphs = append(paragraphs, pStr)
+					}
+				}
+			}
 
 			var htmlBuf strings.Builder
 			var plainTextBuf strings.Builder
-
-			pRe := regexp.MustCompile(`(?s)<w:p[^>]*>(.*?)</w:p>`)
-			tRe := regexp.MustCompile(`<w:t[^>]*>(.*?)</w:t>`)
-
-			pMatches := pRe.FindAllStringSubmatch(rawXML, -1)
-			if len(pMatches) == 0 {
-				tMatches := tRe.FindAllStringSubmatch(rawXML, -1)
-				var line strings.Builder
-				for _, tm := range tMatches {
-					line.WriteString(tm[1])
-				}
-				text := line.String()
-				keys := extractKeys(text)
-				return "<p style=\"margin-bottom:0.75rem; line-height:1.6;\">" + html.EscapeString(text) + "</p>", keys
-			}
-
-			for _, pm := range pMatches {
-				pInner := pm[1]
-				tMatches := tRe.FindAllStringSubmatch(pInner, -1)
-				var pText strings.Builder
-				for _, tm := range tMatches {
-					pText.WriteString(tm[1])
-				}
-				pStr := strings.TrimSpace(pText.String())
-				if pStr != "" {
-					htmlBuf.WriteString("<p style=\"margin-bottom:0.75rem; line-height:1.6;\">" + html.EscapeString(pStr) + "</p>\n")
-					plainTextBuf.WriteString(pStr + "\n")
-				}
+			for _, pStr := range paragraphs {
+				// Wrap template keys in styled code badges
+				styled := templateKeyRe.ReplaceAllStringFunc(pStr, func(match string) string {
+					return match // keep as-is in plain text
+				})
+				htmlBuf.WriteString(`<p style="margin-bottom:0.75rem; line-height:1.8; font-family:'Khmer OS', 'Noto Sans Khmer', sans-serif;">` + html.EscapeString(styled) + "</p>\n")
+				plainTextBuf.WriteString(pStr + "\n")
 			}
 
 			fullText := plainTextBuf.String()
@@ -517,10 +578,7 @@ func extractDocxContentHTML(data []byte) (string, []string) {
 	return "", nil
 }
 
-func extractDocxKeys(data []byte) []string {
-	_, keys := extractDocxContentHTML(data)
-	return keys
-}
+var templateKeyRe = regexp.MustCompile(`\{\{\s*[\w.]+\s*\}\}`)
 
 func (h *ReportTemplateHandler) AddKey(c *gin.Context) {
 	id, err := uuid.Parse(c.Param("id"))
@@ -530,8 +588,12 @@ func (h *ReportTemplateHandler) AddKey(c *gin.Context) {
 	}
 
 	var req struct {
-		Key   string `json:"key" binding:"required"`
-		Label string `json:"label"`
+		Key          string `json:"key" binding:"required"`
+		Label        string `json:"label"`
+		Category     string `json:"category"`
+		FieldType    string `json:"field_type"`
+		DefaultValue string `json:"default_value"`
+		IsRequired   bool   `json:"is_required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "Key is required")
@@ -544,33 +606,151 @@ func (h *ReportTemplateHandler) AddKey(c *gin.Context) {
 		return
 	}
 
+	exists := false
 	for _, k := range tmpl.Keys {
 		if k == req.Key {
-			utils.Error(c, http.StatusConflict, "Key already exists")
+			exists = true
+			break
+		}
+	}
+
+	if !exists {
+		tmpl.Keys = append(tmpl.Keys, req.Key)
+		tmpl.UpdatedAt = time.Now()
+		if err := h.repo.UpdateReportTemplate(tmpl); err != nil {
+			utils.InternalError(c, "Failed to update keys")
 			return
 		}
 	}
 
-	tmpl.Keys = append(tmpl.Keys, req.Key)
-	tmpl.UpdatedAt = time.Now()
-
-	if err := h.repo.UpdateReportTemplate(tmpl); err != nil {
-		utils.InternalError(c, "Failed to update keys")
-		return
+	category := req.Category
+	if category == "" {
+		category = "general"
+	}
+	fieldType := req.FieldType
+	if fieldType == "" {
+		fieldType = "text"
 	}
 
-	// Insert structured key into report_template_keys table
+	// Insert or update structured key into report_template_keys table
 	keyItem := &models.ReportTemplateKey{
 		ID:           uuid.New(),
 		TemplateID:   tmpl.ID,
 		KeyName:      req.Key,
 		DisplayLabel: req.Label,
+		Category:     category,
+		FieldType:    fieldType,
+		DefaultValue: req.DefaultValue,
+		IsRequired:   req.IsRequired,
 		CreatedAt:    time.Now(),
 		UpdatedAt:    time.Now(),
 	}
-	_ = h.repo.CreateReportTemplateKey(keyItem)
+	_ = h.repo.UpsertReportTemplateKey(keyItem)
 
 	utils.JSON(c, http.StatusOK, tmpl)
+}
+
+func (h *ReportTemplateHandler) CreateReportFromTemplate(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		utils.BadRequest(c, "Invalid template ID")
+		return
+	}
+
+	userID, err := auth.GetUserID(c)
+	if err != nil {
+		utils.Unauthorized(c, "Authentication required")
+		return
+	}
+
+	var req struct {
+		Title            string         `json:"title" binding:"required"`
+		Description      string         `json:"description"`
+		Category         string         `json:"category"`
+		RequireSignature *bool          `json:"require_signature"`
+		Values           map[string]any `json:"values"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, "Title and values are required")
+		return
+	}
+
+	tmpl, err := h.repo.GetReportTemplateByID(id)
+	if err != nil || tmpl == nil {
+		utils.Error(c, http.StatusNotFound, "Template not found")
+		return
+	}
+
+	missingKeys := validateRequiredKeys(tmpl.KeysMeta, req.Values)
+	if len(missingKeys) > 0 {
+		utils.BadRequest(c, "សូមបំពេញព័ត៌មានដែលត្រូវការ: "+strings.Join(missingKeys, ", "))
+		return
+	}
+
+	var filledContent string
+	if tmpl.Format == "html" {
+		content := tmpl.Content
+		content = replaceEachBlocksInHTML(content, req.Values)
+		content = replaceSimplePlaceholdersInHTML(content, req.Values)
+		filledContent = content
+	} else {
+		data, err := h.repo.DownloadTemplateFile(tmpl.StoragePath)
+		if err != nil {
+			utils.InternalError(c, "Failed to download template file")
+			return
+		}
+		filledDocx := replacePlaceholdersInDocx(data, req.Values)
+		filledContent = extractDocxToHTML(filledDocx)
+		if filledContent == "" {
+			utils.InternalError(c, "Failed to generate report content from template")
+			return
+		}
+
+		safeName := sanitizeFilename(req.Title + ".docx")
+		storagePath := fmt.Sprintf("filled/%s/%s", uuid.New().String(), safeName)
+		_ = h.repo.UploadReportFile(filledDocx, storagePath, "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+	}
+
+	zoneCode := ""
+	profile, err := auth.GetProfile(c)
+	if err == nil && profile != nil && profile.ZoneCode != nil {
+		zoneCode = *profile.ZoneCode
+	}
+
+	category := req.Category
+	if category == "" {
+		category = tmpl.Category
+	}
+	if category == "" {
+		category = "ផ្សេងៗ"
+	}
+
+	reqSig := true
+	if req.RequireSignature != nil {
+		reqSig = *req.RequireSignature
+	}
+
+	now := time.Now()
+	doc := &models.ReportDocument{
+		ID:               uuid.New(),
+		Title:            req.Title,
+		Description:      req.Description,
+		Content:          filledContent,
+		Category:         category,
+		ZoneCode:         zoneCode,
+		Status:           "draft",
+		RequireSignature: reqSig,
+		CreatedBy:        userID,
+		CreatedAt:        now,
+		UpdatedAt:        now,
+	}
+
+	if err := h.repo.CreateReportDocument(doc); err != nil {
+		utils.InternalError(c, "Failed to save report: "+err.Error())
+		return
+	}
+
+	utils.JSON(c, http.StatusCreated, doc)
 }
 
 func (h *ReportTemplateHandler) DownloadFilled(c *gin.Context) {

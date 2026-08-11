@@ -29,6 +29,7 @@ Get Supabase values from **Project Settings → API**:
 
 ```bash
 lsof -ti:8080 | xargs kill -9 2>/dev/null; sleep 1; echo "port 8080 freed"
+cd backend
 go run ./cmd/api
 ```
 

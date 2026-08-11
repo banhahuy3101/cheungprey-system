@@ -25,7 +25,7 @@ import { canAccess, FEATURES } from "../utils/permissions";
 
 const mainNavItems = [
   { to: "/", icon: LuLayoutDashboard, label: "ទំព័រដើម", end: true, feature: FEATURES.dashboard },
-  { to: "/members", icon: LuUsers, label: "សមាជិក", feature: FEATURES.members },
+  { to: "/membership", icon: LuUsers, label: "សមាជិក", feature: FEATURES.members },
   // { to: "/voters", icon: LuUserCheck, label: "អ្នកបោះឆ្នោត", feature: FEATURES.voters },
   { to: "/files", icon: LuFolderOpen, label: "ឯកសារ", feature: FEATURES.files },
   { to: "/records", icon: LuFileText, label: "កំណត់ត្រា", feature: FEATURES.records },

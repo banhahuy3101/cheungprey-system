@@ -8,4 +8,4 @@ backend/bin/
 backend/app
 backend/api
 .DS_Store
-.DS_Store
+backend/scripts/

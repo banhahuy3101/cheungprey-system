@@ -63,6 +63,7 @@ func main() {
 	performanceHandler := handlers.NewPerformanceHandler(repo, reportService)
 	fmsHandler := handlers.NewFMSHandler(repo)
 	reportTemplateHandler := handlers.NewReportTemplateHandler(repo)
+	membershipHandler := handlers.NewMembershipHandler(repo)
 
 	r := gin.Default()
 	r.Use(middleware.CORS())
@@ -161,6 +162,58 @@ func main() {
 				}
 			}
 
+			membership := protected.Group("/membership")
+			membership.Use(auth.RequireFeature(models.FeatureMembers))
+			{
+				membership.GET("", membershipHandler.SearchMembers)
+				membership.GET("/stats", membershipHandler.GetStats)
+				membership.GET("/export", membershipHandler.Export)
+
+				membership.GET("/:id/profile", membershipHandler.GetProfile)
+				membership.GET("/:id/demographics", membershipHandler.GetDemographics)
+				membership.PUT("/:id/demographics", membershipHandler.UpdateDemographics)
+				membership.GET("/:id/history", membershipHandler.GetStatusHistory)
+				membership.GET("/:id/activity", membershipHandler.ListActivity)
+				membership.GET("/:id/dues", membershipHandler.ListDues)
+				membership.GET("/:id/positions", membershipHandler.ListPositions)
+				membership.GET("/:id/cards", membershipHandler.ListCards)
+				membership.POST("/:id/check-in", membershipHandler.CheckIn)
+
+				write := membership.Group("")
+				write.Use(auth.RequireFeature(models.FeatureMembershipWrite))
+				{
+					write.POST("/:id/activity", membershipHandler.RecordActivity)
+					write.POST("/:id/positions", membershipHandler.AssignPosition)
+					write.POST("/import", membershipHandler.BulkImport)
+				}
+
+				dues := membership.Group("")
+				dues.Use(auth.RequireFeature(models.FeatureMembershipDues))
+				{
+					dues.POST("/:id/dues", membershipHandler.RecordDue)
+				}
+
+				admin := membership.Group("")
+				admin.Use(auth.RequireFeature(models.FeatureMembershipAdmin))
+				{
+					admin.POST("/:id/status", membershipHandler.ChangeStatus)
+					admin.POST("/status/bulk", membershipHandler.BulkStatusChange)
+				}
+
+				delete := membership.Group("")
+				delete.Use(auth.RequireFeature(models.FeatureMembershipDelete))
+				{
+					delete.DELETE("/:id", partyHandler.DeleteMember)
+				}
+
+				cards := membership.Group("")
+				cards.Use(auth.RequireFeature(models.FeatureMembershipCards))
+				{
+					cards.POST("/:id/cards", membershipHandler.IssueCard)
+					cards.PUT("/cards/:id", membershipHandler.UpdateCard)
+				}
+			}
+
 			reports := protected.Group("/reports")
 			reports.Use(auth.RequireFeature(models.FeatureReports))
 			{
@@ -198,6 +251,7 @@ func main() {
 				reportTemplates.GET("/filled", reportTemplateHandler.DownloadFilled)
 				reportTemplates.DELETE("/:id", reportTemplateHandler.Delete)
 				reportTemplates.POST("/:id/fill", reportTemplateHandler.Fill)
+				reportTemplates.POST("/:id/create-report", reportTemplateHandler.CreateReportFromTemplate)
 				reportTemplates.POST("/:id/keys", reportTemplateHandler.AddKey)
 			}
 

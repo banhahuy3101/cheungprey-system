@@ -14,5 +14,7 @@ export const reportTemplatesAPI = {
     client.post(`/report-templates/${id}/keys`, typeof key === "object" ? key : { key, label }),
   fill: (id, values) =>
     client.post(`/report-templates/${id}/fill`, values),
+  createReportFromTemplate: (id, data) =>
+    client.post(`/report-templates/${id}/create-report`, data),
   downloadFilled: (path) => client.get("/report-templates/filled", { params: { path }, responseType: "blob" }),
 };

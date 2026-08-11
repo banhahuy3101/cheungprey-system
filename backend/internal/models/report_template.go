@@ -17,10 +17,11 @@ type ReportTemplate struct {
 	FileSize    int64     `json:"file_size"`
 	StoragePath string    `json:"storage_path"`
 	Content     string    `json:"content,omitempty"`
-	Keys        []string  `json:"keys"`
-	CreatedBy   uuid.UUID `json:"created_by"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
+	Keys        []string            `json:"keys"`
+	KeysMeta    []ReportTemplateKey `json:"keys_meta"`
+	CreatedBy   uuid.UUID           `json:"created_by"`
+	CreatedAt   time.Time           `json:"created_at"`
+	UpdatedAt   time.Time           `json:"updated_at"`
 }
 
 type CreateReportTemplateRequest struct {

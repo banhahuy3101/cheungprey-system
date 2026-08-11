@@ -86,6 +86,9 @@ func (h *PartyHandler) GetZones(c *gin.Context) {
 			utils.InternalError(c, "Failed to fetch zones")
 			return
 		}
+		if zones == nil {
+			zones = []models.GeographicZone{}
+		}
 		utils.JSON(c, http.StatusOK, zones)
 		return
 	}
@@ -94,6 +97,9 @@ func (h *PartyHandler) GetZones(c *gin.Context) {
 	if err != nil {
 		utils.InternalError(c, "Failed to fetch zones")
 		return
+	}
+	if zones == nil {
+		zones = []models.GeographicZone{}
 	}
 	utils.JSON(c, http.StatusOK, zones)
 }
@@ -150,6 +156,13 @@ func (h *PartyHandler) CreateMember(c *gin.Context) {
 			member.StructureID = &sid
 		}
 	}
+	if req.MembershipType != "" {
+		member.MembershipType = &req.MembershipType
+	}
+	if req.MembershipTier != "" {
+		member.MembershipTier = &req.MembershipTier
+	}
+	member.ExemptFromDues = req.ExemptFromDues
 
 	if err := h.repo.CreateMember(member); err != nil {
 		utils.InternalError(c, "Failed to create member")
@@ -213,6 +226,9 @@ func (h *PartyHandler) UpdateMember(c *gin.Context) {
 	if req.CurrentAddressDetails != "" { data["current_address_details"] = req.CurrentAddressDetails }
 	if req.PartyRole != "" { data["party_role"] = req.PartyRole }
 	if req.Status != "" { data["status"] = req.Status }
+	if req.MembershipType != "" { data["membership_type"] = req.MembershipType }
+	if req.MembershipTier != "" { data["membership_tier"] = req.MembershipTier }
+	if req.ExemptFromDues != nil { data["exempt_from_dues"] = *req.ExemptFromDues }
 
 	if err := h.repo.UpdateMember(id, data); err != nil {
 		utils.InternalError(c, "Failed to update member")

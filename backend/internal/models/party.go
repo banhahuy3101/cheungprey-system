@@ -41,6 +41,11 @@ type Member struct {
 	PartyRole             string     `json:"party_role"`
 	JoinDate              string     `json:"join_date"`
 	Status                string     `json:"status"`
+	MembershipType        *string    `json:"membership_type,omitempty"`
+	MembershipTier        *string    `json:"membership_tier,omitempty"`
+	ResignationDate       *string    `json:"resignation_date,omitempty"`
+	ExpulsionReason       *string    `json:"expulsion_reason,omitempty"`
+	ExemptFromDues        bool       `json:"exempt_from_dues"`
 }
 
 type CreateMemberRequest struct {
@@ -60,6 +65,9 @@ type CreateMemberRequest struct {
 	StructureID           string `json:"structure_id,omitempty"`
 	PartyRole             string `json:"party_role,omitempty"`
 	JoinDate              string `json:"join_date" binding:"required"`
+	MembershipType        string `json:"membership_type,omitempty"`
+	MembershipTier        string `json:"membership_tier,omitempty"`
+	ExemptFromDues        bool   `json:"exempt_from_dues,omitempty"`
 }
 
 type UpdateMemberRequest struct {
@@ -79,6 +87,9 @@ type UpdateMemberRequest struct {
 	StructureID           string `json:"structure_id,omitempty"`
 	PartyRole             string `json:"party_role,omitempty"`
 	Status                string `json:"status,omitempty"`
+	MembershipType        string `json:"membership_type,omitempty"`
+	MembershipTier        string `json:"membership_tier,omitempty"`
+	ExemptFromDues        *bool  `json:"exempt_from_dues,omitempty"`
 }
 
 type VoterInsight struct {

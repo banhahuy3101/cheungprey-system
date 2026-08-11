@@ -11,6 +11,11 @@ export const FEATURES = {
   settings: "settings",
   users: "users",
   technical: "technical",
+  membership_write: "membership_write",
+  membership_dues: "membership_dues",
+  membership_admin: "membership_admin",
+  membership_cards: "membership_cards",
+  membership_delete: "membership_delete",
 };
 
 export const FEATURE_LABELS = {
@@ -26,6 +31,11 @@ export const FEATURE_LABELS = {
   settings: "ការកំណត់",
   users: "គ្រប់គ្រងអ្នកប្រើ",
   technical: "Technical",
+  membership_write: "សរសេរសមាជិក",
+  membership_dues: "តារាងសមាជិក",
+  membership_admin: "គ្រប់គ្រងសមាជិក",
+  membership_cards: "កាតសមាជិក",
+  membership_delete: "លុបសមាជិក",
 };
 
 export function canAccess(user, feature) {

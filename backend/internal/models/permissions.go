@@ -4,18 +4,23 @@ package models
 type Feature string
 
 const (
-	FeatureDashboard         Feature = "dashboard"
-	FeatureMembers           Feature = "members"
-	FeatureVoters            Feature = "voters"
-	FeatureFiles             Feature = "files"
-	FeatureRecords           Feature = "records"
-	FeatureReports           Feature = "reports"
-	FeaturePerformance       Feature = "performance"
-	FeaturePerformanceAdmin  Feature = "performance_admin"
-	FeatureSettings          Feature = "settings"
-	FeatureUsers             Feature = "users"
-	FeatureTechnical         Feature = "technical"
-	FeatureFinances         Feature = "finances"
+	FeatureDashboard          Feature = "dashboard"
+	FeatureMembers            Feature = "members"
+	FeatureVoters             Feature = "voters"
+	FeatureFiles              Feature = "files"
+	FeatureRecords            Feature = "records"
+	FeatureReports            Feature = "reports"
+	FeaturePerformance        Feature = "performance"
+	FeaturePerformanceAdmin   Feature = "performance_admin"
+	FeatureSettings           Feature = "settings"
+	FeatureUsers              Feature = "users"
+	FeatureTechnical          Feature = "technical"
+	FeatureFinances           Feature = "finances"
+	FeatureMembershipWrite    Feature = "membership_write"
+	FeatureMembershipDues     Feature = "membership_dues"
+	FeatureMembershipAdmin    Feature = "membership_admin"
+	FeatureMembershipCards    Feature = "membership_cards"
+	FeatureMembershipDelete   Feature = "membership_delete"
 )
 
 var AllFeatures = []Feature{
@@ -31,6 +36,11 @@ var AllFeatures = []Feature{
 	FeatureUsers,
 	FeatureTechnical,
 	FeatureFinances,
+	FeatureMembershipWrite,
+	FeatureMembershipDues,
+	FeatureMembershipAdmin,
+	FeatureMembershipCards,
+	FeatureMembershipDelete,
 }
 
 var FeatureLabels = map[Feature]string{
@@ -46,6 +56,11 @@ var FeatureLabels = map[Feature]string{
 	FeatureUsers:            "គ្រប់គ្រងអ្នកប្រើ",
 	FeatureTechnical:        "Technical",
 	FeatureFinances:         "ហិរញ្ញវត្ថុ",
+	FeatureMembershipWrite:  "សរសេរសមាជិក",
+	FeatureMembershipDues:   "តារាងសមាជិក",
+	FeatureMembershipAdmin:  "គ្រប់គ្រងសមាជិក",
+	FeatureMembershipCards:  "កាតសមាជិក",
+	FeatureMembershipDelete: "លុបសមាជិក",
 }
 
 type PermissionSet map[Feature]bool
@@ -127,6 +142,11 @@ func DefaultPermissionsForRole(role UserRole) PermissionSet {
 		p[FeatureReports] = true
 		p[FeaturePerformance] = true
 		p[FeatureSettings] = true
+		p[FeatureMembershipWrite] = true
+		p[FeatureMembershipDues] = true
+		p[FeatureMembershipAdmin] = true
+		p[FeatureMembershipCards] = true
+		p[FeatureMembershipDelete] = true
 		return p
 	}
 

@@ -46,6 +46,10 @@ Access to each module is gated by a feature flag assigned per role:
 | `users` | User & Role Administration | គ្រប់គ្រងអ្នកប្រើ |
 | `technical` | System / Technical Settings | Technical |
 | `finances` | Financial Management System (FMS) | ហិរញ្ញវត្ថុ |
+| `membership_write` | Membership Create/Edit | សរសេរសមាជិក |
+| `membership_dues` | Membership Dues | តារាងសមាជិក |
+| `membership_admin` | Membership Administration | គ្រប់គ្រងសមាជិក |
+| `membership_cards` | Membership Cards | កាតសមាជិក |
 
 ---
 
@@ -78,17 +82,35 @@ Access to each module is gated by a feature flag assigned per role:
 
 ---
 
-## 4. Party Member Management
+## 4. Party Member & Membership Management
+
+### 4.1 Core Member CRUD
 
 | ID | Requirement |
 |----|-------------|
 | BR-MEM-01 | System shall support CRUD operations for party members. |
-| BR-MEM-02 | Each member shall have: membership card number (unique), national ID (unique), Khmer and English names (last/first), gender, date of birth, phone number, email, Telegram username, registered village, current address, party structure, party role, join date, and status. |
-| BR-MEM-03 | Member status shall be one of: Active, Suspended, Expelled, Deceased. |
+| BR-MEM-02 | Each member shall have: membership card number (unique), national ID (unique), Khmer and English names (last/first), gender, date of birth, phone number, email, Telegram username, registered village, address, party structure, party role, join date, membership type, membership tier, and status. |
+| BR-MEM-03 | Member status shall be one of: Pending, Active, Suspended, Resigned, Expelled, Deceased. |
 | BR-MEM-04 | Members shall be filterable by status. |
 | BR-MEM-05 | The system shall provide a list view with search and pagination. |
 | BR-MEM-06 | The system shall provide an organizational chart view showing hierarchical party structures. |
 | BR-MEM-07 | The system shall export a member list as a PDF report (landscape A4, Khmer font support). |
+
+### 4.2 Membership Management
+
+The Membership module (`/api/membership`) extends core member CRUD with full lifecycle management. Refer to `docs/business-requirements-membership.md` for the complete specification.
+
+| ID | Requirement |
+|----|-------------|
+| BR-MS-01 | System shall support extended demographics: marital status, occupation, education, ethnicity, religion, emergency contact, blood type. |
+| BR-MS-02 | Status changes shall be audited with old/new status, reason, and changed-by tracking in `member_status_history`. |
+| BR-MS-03 | Dues payments shall be tracked: amount, payment method, date, status, reference number. |
+| BR-MS-04 | Member activities shall be logged: meetings, events, training, volunteer hours, donations, check-ins. |
+| BR-MS-05 | Position assignments shall be recorded: party role, title, committee, rank, structure, start/end dates. |
+| BR-MS-06 | Membership cards shall be issued and tracked through Pending → Issued → Delivered → Expired/Replaced lifecycle. |
+| BR-MS-07 | A full member profile endpoint shall aggregate: core data, demographics, current position, dues summary, cards, and recent activities. |
+| BR-MS-08 | The system shall support bulk member import with duplicate detection and batch error reporting. |
+| BR-MS-09 | Member search shall support multi-field filtering: status, zone, role, gender, text search, date ranges, with pagination and sorting. |
 
 ---
 
@@ -322,6 +344,7 @@ Access to each module is gated by a feature flag assigned per role:
 | Party Members | `/api/party/members*` | `members` |
 | Voter Insights | `/api/party/voters*` | `voters` |
 | Files | `/api/party/files*` | `files` |
+| Membership | `/api/membership/*` | `members` (read) / `membership_write` / `membership_dues` / `membership_admin` / `membership_cards` |
 | Records | `/api/records*` | `records` |
 | Report Documents | `/api/report-documents*` | `reports` |
 | Report Templates | `/api/report-templates*` | `reports` |
@@ -348,6 +371,14 @@ Access to each module is gated by a feature flag assigned per role:
 | Create Member | `/members/create` | `members` |
 | Org Chart | `/members/org` | `members` |
 | View/Edit Member | `/members/:id`, `/members/:id/edit` | `members` |
+| Membership Search | `/membership` | `members` |
+| Membership Profile | `/membership/:id` | `members` |
+| Membership Dues | `/membership/:id/dues` | `members` |
+| Membership Activity | `/membership/:id/activity` | `members` |
+| Membership Positions | `/membership/:id/positions` | `members` |
+| Membership Cards | `/membership/:id/cards` | `membership_cards` |
+| Membership Import | `/membership/import` | `membership_write` |
+| Membership Stats | `/membership/stats` | `members` |
 | Voters | `/voters` | `voters` |
 | Files | `/files` | `files` |
 | Records | `/records` | `records` |
@@ -390,6 +421,8 @@ Access to each module is gated by a feature flag assigned per role:
 | **RBAC** | Role-Based Access Control — permissions assigned per role, merged for multi-role users |
 | **JWT** | JSON Web Token — stateless authentication token verified against Supabase JWKS |
 | **Chromedp** | Headless Chrome driver used for server-side HTML-to-PDF rendering |
+| **Membership Lifecycle** | Full member journey: Pending → Active → Suspended/Resigned/Expelled/Deceased with audit trail |
+| **Membership Card** | Physical or digital card issued to a member, tracked through Issued → Delivered → Expired/Replaced |
 
 ---
 
@@ -399,4 +432,4 @@ Access to each module is gated by a feature flag assigned per role:
 |---------|------|---------|
 | 1.0 | — | Initial party administration BRD |
 | 2.0 | Jul 2026 | Migration to regulated FMS focus |
-| 3.0 | Aug 2026 | Comprehensive BRD covering all 12 modules from actual codebase feature audit |
+| 3.0 | Aug 2026 | Comprehensive BRD covering all modules from actual codebase feature audit; added membership module with demographics, dues, status workflow, activity, positions, cards |

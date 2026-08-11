@@ -110,6 +110,10 @@ func (r *Repository) GetReportTemplateByID(id uuid.UUID) (*models.ReportTemplate
 }
 
 func (r *Repository) CreateReportTemplate(tmpl *models.ReportTemplate) error {
+	keys := tmpl.Keys
+	if keys == nil {
+		keys = []string{}
+	}
 	row := map[string]any{
 		"id":           tmpl.ID.String(),
 		"name":         tmpl.Name,
@@ -120,7 +124,7 @@ func (r *Repository) CreateReportTemplate(tmpl *models.ReportTemplate) error {
 		"file_size":    tmpl.FileSize,
 		"storage_path": tmpl.StoragePath,
 		"content":      tmpl.Content,
-		"keys":         tmpl.Keys,
+		"keys":         keys,
 		"created_by":   tmpl.CreatedBy.String(),
 		"created_at":   tmpl.CreatedAt,
 		"updated_at":   tmpl.UpdatedAt,
@@ -132,6 +136,10 @@ func (r *Repository) CreateReportTemplate(tmpl *models.ReportTemplate) error {
 }
 
 func (r *Repository) UpdateReportTemplate(tmpl *models.ReportTemplate) error {
+	keys := tmpl.Keys
+	if keys == nil {
+		keys = []string{}
+	}
 	row := map[string]any{
 		"name":         tmpl.Name,
 		"description":  tmpl.Description,
@@ -141,7 +149,7 @@ func (r *Repository) UpdateReportTemplate(tmpl *models.ReportTemplate) error {
 		"file_size":    tmpl.FileSize,
 		"storage_path": tmpl.StoragePath,
 		"content":      tmpl.Content,
-		"keys":         tmpl.Keys,
+		"keys":         keys,
 		"updated_at":   tmpl.UpdatedAt,
 	}
 	_, _, err := r.AdminClient.From("report_templates").
@@ -160,6 +168,10 @@ func (r *Repository) DeleteReportTemplate(id uuid.UUID) error {
 }
 
 func (r *Repository) DuplicateReportTemplate(tmpl *models.ReportTemplate) error {
+	keys := tmpl.Keys
+	if keys == nil {
+		keys = []string{}
+	}
 	row := map[string]any{
 		"id":           tmpl.ID.String(),
 		"name":         tmpl.Name,
@@ -170,7 +182,7 @@ func (r *Repository) DuplicateReportTemplate(tmpl *models.ReportTemplate) error 
 		"file_size":    tmpl.FileSize,
 		"storage_path": tmpl.StoragePath,
 		"content":      tmpl.Content,
-		"keys":         tmpl.Keys,
+		"keys":         keys,
 		"created_by":   tmpl.CreatedBy.String(),
 		"created_at":   tmpl.CreatedAt,
 		"updated_at":   tmpl.UpdatedAt,
@@ -288,4 +300,29 @@ func (r *Repository) CreateReportTemplateKey(key *models.ReportTemplateKey) erro
 		Insert(row, false, "", "", "").
 		Execute()
 	return err
+}
+
+func (r *Repository) UpsertReportTemplateKey(key *models.ReportTemplateKey) error {
+	var existing []models.ReportTemplateKey
+	_, err := r.AdminClient.From("report_template_keys").
+		Select("id", "exact", false).
+		Eq("template_id", key.TemplateID.String()).
+		Eq("key_name", key.KeyName).
+		ExecuteTo(&existing)
+	if err == nil && len(existing) > 0 {
+		row := map[string]any{
+			"display_label": key.DisplayLabel,
+			"category":      key.Category,
+			"field_type":    key.FieldType,
+			"default_value": key.DefaultValue,
+			"is_required":   key.IsRequired,
+			"updated_at":    key.UpdatedAt,
+		}
+		_, _, err = r.AdminClient.From("report_template_keys").
+			Update(row, "", "").
+			Eq("id", existing[0].ID.String()).
+			Execute()
+		return err
+	}
+	return r.CreateReportTemplateKey(key)
 }

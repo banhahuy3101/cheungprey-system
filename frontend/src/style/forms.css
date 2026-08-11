@@ -297,3 +297,50 @@ select option {
   flex: 1;
 }
 
+/* Checkbox */
+.checkbox-field {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: border-color var(--transition), background var(--transition);
+  user-select: none;
+}
+.checkbox-field:hover {
+  border-color: var(--primary-light);
+  background: #f8fafd;
+}
+.checkbox-field input[type="checkbox"] {
+  width: 1.2rem;
+  height: 1.2rem;
+  min-height: unset;
+  padding: 0;
+  margin-top: 0.15rem;
+  accent-color: var(--primary);
+  cursor: pointer;
+  background-image: none;
+  flex-shrink: 0;
+}
+.checkbox-field .checkbox-text {
+  font-size: 0.85rem;
+  color: var(--text);
+  line-height: 1.4;
+}
+.checkbox-field .checkbox-hint {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin-top: 0.15rem;
+}
+
+/* Field error */
+.field-error {
+  display: block;
+  color: #dc2626;
+  font-size: 0.78rem;
+  margin-top: 0.3rem;
+  font-weight: 450;
+}
+

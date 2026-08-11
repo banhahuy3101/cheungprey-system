@@ -4,7 +4,6 @@ import {
   LuArrowLeft,
   LuFileText,
   LuPlus,
-  LuTrash2,
   LuEye,
   LuDownload,
   LuSave,
@@ -12,13 +11,10 @@ import {
   LuCheck,
   LuSparkles,
   LuChevronRight,
-  LuLayers,
-  LuTable,
   LuX,
   LuRefreshCw,
   LuZap,
   LuCalendar,
-  LuFileSpreadsheet,
   LuCopy,
   LuUser,
   LuBuilding,
@@ -26,6 +22,7 @@ import {
 } from "react-icons/lu";
 import { reportTemplatesAPI } from "../../api/reportTemplates";
 import { reportDocumentsAPI } from "../../api/reportDocuments";
+import { authAPI } from "../../api/auth";
 import ReportHero from "../../components/reports/ReportHero";
 import TextEditor from "../../components/TextEditor";
 import { useAuth } from "../../hooks/useAuth";
@@ -44,6 +41,21 @@ function getKhmerDateStr(date = new Date()) {
   const m = monthsKm[date.getMonth()];
   const y = toKhmerDigits(date.getFullYear());
   return `ថ្ងៃទី ${d} ខែ ${m} ឆ្នាំ ${y}`;
+}
+
+function humanizeKey(k) {
+  return (k || "")
+    .replace(/^\./, "")
+    .replace(/\./g, " ")
+    .replace(/_/g, " ")
+    .replace(/([A-Z])/g, " $1")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\b\w/g, (l) => l.toUpperCase());
+}
+
+function escapeRegex(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 export default function ReportCreateFromTemplate() {
@@ -91,7 +103,7 @@ export default function ReportCreateFromTemplate() {
     (selected.keys || []).forEach(k => {
       const val = formValues[k];
       const isFocused = activeFocusedKey === k;
-      const regex = new RegExp(`\\{\\{\\s*${k}\\s*\\}\\}`, "gi");
+      const regex = new RegExp(`\\{\\{\\s*${escapeRegex(k)}\\s*\\}\\}`, "gi");
 
       if (val && val.trim()) {
         const style = isFocused
@@ -154,21 +166,56 @@ export default function ReportCreateFromTemplate() {
     });
   }, [templates, selectedCategory, searchQuery]);
 
-  const handleSelect = (tmpl) => {
-    setSelected(tmpl);
-    const init = {};
-    (tmpl.keys || []).forEach(k => { init[k] = ""; });
-    setFormValues(init);
-    setAutoFilledKeys({});
-    setArrayRows([]);
-    setArrayKeys("");
-    setMessage("");
-    setFilledHtml("");
-    setFilledPath("");
-    setDocTitle(tmpl.name + " - " + new Date().toLocaleDateString("km-KH"));
-    setDocDescription(tmpl.description?.trim() || tmpl.name || "របាយការណ៍បង្កើតចេញពីគំរូ");
-    setDocCategory(tmpl.category || "ផ្សេងៗ");
-    setActiveStep(2);
+  const handleSelect = async (tmpl) => {
+    setLoading(true);
+    try {
+      const res = await reportTemplatesAPI.getById(tmpl.id);
+      const fullTmpl = res.data?.data || res.data;
+      setSelected(fullTmpl);
+
+      const init = {};
+      const nextAutoFilled = {};
+
+      const keys = fullTmpl.keys || [];
+      const meta = fullTmpl.keys_meta || [];
+
+      keys.forEach((k) => {
+        const found = meta.find((m) => m.key_name === k);
+        init[k] = found?.default_value || "";
+        if (found?.default_value) {
+          nextAutoFilled[k] = true;
+        }
+      });
+
+      setFormValues(init);
+      setAutoFilledKeys(nextAutoFilled);
+
+      if (keys.includes("signature")) {
+        try {
+          const profileRes = await authAPI.getProfile();
+          const profile = profileRes.data?.data || profileRes.data;
+          const sig = profile?.signature;
+          if (sig) {
+            setFormValues(prev => ({ ...prev, signature: sig }));
+            setAutoFilledKeys(prev => ({ ...prev, signature: true }));
+          }
+        } catch { /* ignore */ }
+      }
+
+      setArrayRows([]);
+      setArrayKeys("");
+      setMessage("");
+      setFilledHtml("");
+      setFilledPath("");
+      setDocTitle(fullTmpl.name + " - " + new Date().toLocaleDateString("km-KH"));
+      setDocDescription(fullTmpl.description?.trim() || fullTmpl.name || "របាយការណ៍បង្កើតចេញពីគំរូ");
+      setDocCategory(fullTmpl.category || "ផ្សេងៗ");
+      setActiveStep(2);
+    } catch {
+      setMessage("ទាញយកព័ត៌មានលម្អិតគំរូមិនបាន");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleChange = (k, v) => {
@@ -683,59 +730,11 @@ export default function ReportCreateFromTemplate() {
             </div>
           </div>
 
-          {/* Parameter Keys Overview Bar */}
-          {(selected.keys || []).length > 0 && (
-            <div className="template-keys-bar">
-              <div className="keys-bar-title" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <span style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem" }}>
-                  <LuLayers size={14} /> សោរព័ត៌មានដែលត្រូវបំពេញ (Information Keys)
-                </span>
-                <small style={{ color: "#6366f1", fontSize: "0.75rem", fontWeight: "500" }}>
-                  💡 ចុចលើសោរ {`{{key}}`} ដើម្បីថតចម្លង
-                </small>
-              </div>
-              <div className="keys-chips-list">
-                {(selected.keys || []).map(k => {
-                  const isFilled = Boolean(formValues[k]);
-                  return (
-                    <span
-                      key={k}
-                      className="key-chip"
-                      onClick={() => {
-                        navigator.clipboard.writeText(`{{${k}}}`);
-                        setCopiedKey(k);
-                        setTimeout(() => setCopiedKey(""), 1800);
-                      }}
-                      style={{
-                        borderColor: isFilled ? "#86efac" : "#c7d2fe",
-                        background: isFilled ? "#f0fdf4" : "#ffffff",
-                        color: isFilled ? "#15803d" : "#4338ca",
-                        cursor: "pointer",
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: "0.35rem",
-                        fontWeight: "600",
-                        transition: "all 0.15s ease"
-                      }}
-                      title="ចុចថតចម្លងសោរ {{key}}"
-                    >
-                      {copiedKey === k ? (
-                        <LuCheck size={12} style={{ color: "#16a34a" }} />
-                      ) : isFilled ? (
-                        <LuCheck size={12} />
-                      ) : (
-                        <LuCopy size={11} />
-                      )}
-                      {`{{${k}}}`}
-                    </span>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Smart Type-Aware Key Form Fields */}
-          <div className="template-fields-grid">
+          {/* Left (Form) + Right (Live Preview) Split */}
+          <div style={{ display: "flex", gap: "1rem", alignItems: "flex-start" }}>
+            {/* Left Column: Form Fields */}
+            <div style={{ flex: "1 1 50%", minWidth: 0 }}>
+              <div className="template-fields-grid" style={{ gridTemplateColumns: "1fr", gap: "0.5rem" }}>
             {(selected.keys || []).map(k => {
               const lowerKey = k.toLowerCase();
               const isAuto = autoFilledKeys[k];
@@ -766,257 +765,163 @@ export default function ReportCreateFromTemplate() {
                 lowerKey.includes("note") ||
                 lowerKey.includes("remark") ||
                 lowerKey.includes("content") ||
+                lowerKey.includes("responsibilities") ||
                 lowerKey.includes("បរិយាយ") ||
-                lowerKey.includes("ចំណាំ");
+                lowerKey.includes("ចំណាំ") ||
+                lowerKey.includes("ទំនួលខុស");
               const isNumberType =
                 lowerKey.includes("count") ||
                 lowerKey.includes("total") ||
                 lowerKey.includes("amount") ||
                 lowerKey.includes("ចំនួន");
+              const isSignatureType = lowerKey === "signature" || lowerKey.includes("ហត្ថលេខា") || lowerKey.includes("ហត្ថ");
 
               const currentUserName = user?.full_name || user?.name || user?.username || "មន្ត្រីទទួលបន្ទុក";
               const currentUserRole = user?.role || "ប្រធានការិយាល័យ";
               const currentOrg = user?.organization || "រដ្ឋបាលស្រុកជើងព្រៃ";
 
+              const metaItem = (selected.keys_meta || []).find(m => m.key_name === k);
+              const labelText = metaItem?.display_label || humanizeKey(k);
+              const fieldType = metaItem?.field_type || (isTextareaType ? "textarea" : isNumberType ? "number" : isDateType ? "date" : "text");
+              const isRequired = metaItem?.is_required || false;
+
               return (
-                <div key={k} className="modern-form-group">
-                  <label className="modern-form-label">
-                    <span style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontWeight: "600" }}>
-                      {isDateType && <LuCalendar size={15} style={{ color: "#6366f1" }} />}
-                      {isUserType && <LuUser size={15} style={{ color: "#0b6bcb" }} />}
-                      {isRoleType && <LuBriefcase size={15} style={{ color: "#d97706" }} />}
-                      {isOrgType && <LuBuilding size={15} style={{ color: "#059669" }} />}
-                      {!isDateType && !isUserType && !isRoleType && !isOrgType && <LuFileText size={15} style={{ color: "#64748b" }} />}
-                      {k}
+                <div key={k} className="modern-form-group" style={{ padding: "0.6rem 0.75rem" }}>
+                  <label className="modern-form-label" style={{ marginBottom: "0.25rem" }}>
+                    <span style={{ display: "flex", alignItems: "center", gap: "0.35rem", fontWeight: "600", fontSize: "0.83rem" }}>
+                      {(fieldType === "date" || isDateType) && <LuCalendar size={14} style={{ color: "#6366f1" }} />}
+                      {isUserType && <LuUser size={14} style={{ color: "#0b6bcb" }} />}
+                      {isRoleType && <LuBriefcase size={14} style={{ color: "#d97706" }} />}
+                      {isOrgType && <LuBuilding size={14} style={{ color: "#059669" }} />}
+                      {fieldType !== "date" && !isDateType && !isUserType && !isRoleType && !isOrgType && <LuFileText size={14} style={{ color: "#64748b" }} />}
+                      {labelText}
+                      {isRequired && <span style={{ color: "#ef4444" }}>*</span>}
                     </span>
-                    <div style={{ display: "flex", gap: "0.35rem", alignItems: "center" }}>
-                      {isAuto && (
-                        <span className="field-status-badge field-status-autofill">
-                          <LuZap size={11} /> ស្វ័យប្រវត្តិ
-                        </span>
-                      )}
-                      <code
-                        onClick={() => {
-                          navigator.clipboard.writeText(`{{${k}}}`);
-                          setCopiedKey(k);
-                          setTimeout(() => setCopiedKey(""), 1800);
-                        }}
-                        style={{
-                          fontSize: "0.75rem",
-                          color: "#4338ca",
-                          background: "#e0e7ff",
-                          padding: "0.15rem 0.45rem",
-                          borderRadius: "5px",
-                          cursor: "pointer",
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: "0.25rem",
-                          fontWeight: "600"
-                        }}
-                        title="ចុចថតចម្លងសោរ {{key}}"
-                      >
-                        {copiedKey === k ? <LuCheck size={11} style={{ color: "#16a34a" }} /> : <LuCopy size={10} />}
-                        {`{{${k}}}`}
-                      </code>
-                    </div>
+                    {isAuto && (
+                      <span className="field-status-badge field-status-autofill" style={{ fontSize: "0.65rem", padding: "0.05rem 0.3rem" }}>
+                        <LuZap size={10} /> ស្វ័យ
+                      </span>
+                    )}
                   </label>
 
-                  {isTextareaType ? (
+                  {isSignatureType ? (
+                    <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
+                      {formValues[k] ? (
+                        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                          <img
+                            src={formValues[k]}
+                            alt="ហត្ថលេខា"
+                            style={{ maxHeight: "60px", border: "1px solid #e2e8f0", borderRadius: "6px", padding: "4px", background: "#fff" }}
+                          />
+                          <button
+                            type="button"
+                            className="btn btn-sm"
+                            onClick={() => handleChange(k, "")}
+                            style={{ background: "#fef2f2", border: "1px solid #fecaca", color: "#dc2626", fontSize: "0.72rem", cursor: "pointer", borderRadius: "4px" }}
+                          >
+                            <LuX size={12} /> ដកចេញ
+                          </button>
+                        </div>
+                      ) : isAuto ? (
+                        <span style={{ fontSize: "0.82rem", color: "#64748b", fontStyle: "italic" }}>
+                          <LuZap size={12} style={{ verticalAlign: "middle", color: "#f59e0b" }} /> កំពុងទាញយកហត្ថលេខាពីប្រវត្តិរូប...
+                        </span>
+                      ) : (
+                        <span style={{ fontSize: "0.82rem", color: "#94a3b8" }}>
+                          ហត្ថលេខានឹងត្រូវបានបំពេញដោយស្វ័យប្រវត្តិពីប្រវត្តិរូបរបស់អ្នក
+                        </span>
+                      )}
+                    </div>
+                  ) : fieldType === "textarea" ? (
                     <textarea
                       className="modern-form-input"
                       rows={3}
                       value={formValues[k] || ""}
                       onChange={e => handleChange(k, e.target.value)}
-                      placeholder={`បញ្ចូលតម្លៃសម្រាប់ ${k}`}
+                      placeholder={`បញ្ចូល ${labelText}`}
+                      required={isRequired}
                     />
                   ) : (
-                    <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem" }}>
-                      <div style={{ display: "flex", gap: "0.5rem" }}>
-                        <input
-                          type={isNumberType ? "number" : "text"}
-                          className="modern-form-input"
-                          value={formValues[k] || ""}
-                          onChange={e => handleChange(k, e.target.value)}
-                          placeholder={`បញ្ចូលតម្លៃសម្រាប់ ${k}`}
-                        />
-                        {isDateType && (
-                          <button
-                            type="button"
-                            className="btn btn-secondary btn-sm"
-                            onClick={() => handleChange(k, getKhmerDateStr())}
-                            title="កំណត់ជាកាលបរិច្ឆេទថ្ងៃនេះ"
-                            style={{ borderRadius: "8px", whiteSpace: "nowrap", fontSize: "0.8rem", fontWeight: "500" }}
-                          >
-                            ⚡ ថ្ងៃនេះ
-                          </button>
-                        )}
-                      </div>
-
-                      {/* Quick Auto-Fill Suggestion Pills */}
-                      <div style={{ display: "flex", gap: "0.35rem", flexWrap: "wrap", marginTop: "0.15rem" }}>
-                        {isUserType && (
-                          <button
-                            type="button"
-                            onClick={() => handleChange(k, currentUserName)}
-                            style={{ background: "#eff6ff", border: "1px solid #bfdbfe", color: "#1d4ed8", borderRadius: "4px", padding: "0.1rem 0.4rem", fontSize: "0.72rem", cursor: "pointer", fontWeight: "500" }}
-                          >
-                            👤 {currentUserName}
-                          </button>
-                        )}
-                        {isRoleType && (
-                          <button
-                            type="button"
-                            onClick={() => handleChange(k, currentUserRole)}
-                            style={{ background: "#fffbeb", border: "1px solid #fde68a", color: "#b45309", borderRadius: "4px", padding: "0.1rem 0.4rem", fontSize: "0.72rem", cursor: "pointer", fontWeight: "500" }}
-                          >
-                            💼 {currentUserRole}
-                          </button>
-                        )}
-                        {isOrgType && (
-                          <button
-                            type="button"
-                            onClick={() => handleChange(k, currentOrg)}
-                            style={{ background: "#ecfdf5", border: "1px solid #a7f3d0", color: "#047857", borderRadius: "4px", padding: "0.1rem 0.4rem", fontSize: "0.72rem", cursor: "pointer", fontWeight: "500" }}
-                          >
-                            🏢 {currentOrg}
-                          </button>
-                        )}
-                      </div>
+                    <div style={{ display: "flex", gap: "0.4rem" }}>
+                      <input
+                        type={fieldType === "number" ? "number" : fieldType === "date" ? "date" : "text"}
+                        className="modern-form-input"
+                        value={formValues[k] || ""}
+                        onChange={e => handleChange(k, e.target.value)}
+                        placeholder={`បញ្ចូល ${labelText}`}
+                        required={isRequired}
+                      />
+                      {(fieldType === "date" || isDateType) && (
+                        <button type="button" className="btn btn-sm"
+                          onClick={() => handleChange(k, getKhmerDateStr())}
+                          style={{ background: "#eef2ff", border: "1px solid #c7d2fe", color: "#4338ca", borderRadius: "6px", whiteSpace: "nowrap", fontSize: "0.75rem", fontWeight: "600", padding: "0.2rem 0.5rem", cursor: "pointer" }}>
+                          ថ្ងៃនេះ
+                        </button>
+                      )}
+                      {isUserType && (
+                        <button type="button" onClick={() => handleChange(k, currentUserName)}
+                          style={{ background: "#eff6ff", border: "1px solid #bfdbfe", color: "#1d4ed8", borderRadius: "4px", padding: "0.1rem 0.4rem", fontSize: "0.7rem", cursor: "pointer", fontWeight: "500", whiteSpace: "nowrap" }}>
+                          👤
+                        </button>
+                      )}
+                      {isRoleType && (
+                        <button type="button" onClick={() => handleChange(k, currentUserRole)}
+                          style={{ background: "#fffbeb", border: "1px solid #fde68a", color: "#b45309", borderRadius: "4px", padding: "0.1rem 0.4rem", fontSize: "0.7rem", cursor: "pointer", fontWeight: "500" }}>
+                          💼
+                        </button>
+                      )}
+                      {isOrgType && (
+                        <button type="button" onClick={() => handleChange(k, currentOrg)}
+                          style={{ background: "#ecfdf5", border: "1px solid #a7f3d0", color: "#047857", borderRadius: "4px", padding: "0.1rem 0.4rem", fontSize: "0.7rem", cursor: "pointer", fontWeight: "500" }}>
+                          🏢
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>
               );
             })}
           </div>
+        </div>
 
-          {/* Dynamic Table Loop Data Builder & CSV Importer */}
-          <div className="table-builder-card">
-            <div className="table-builder-header">
-              <div className="table-builder-title">
-                <LuTable style={{ color: "#6366f1" }} />
-                <span>ទិន្នន័យតារាង (Dynamic Table Rows)</span>
-              </div>
-              <button
-                type="button"
-                className="btn btn-outline btn-sm"
-                onClick={() => setShowImporter(!showImporter)}
-                style={{ borderRadius: "8px", display: "inline-flex", alignItems: "center", gap: "0.35rem" }}
-              >
-                <LuFileSpreadsheet size={15} />
-                <span>{showImporter ? "បិទការនាំចូល" : "📋 នាំចូលពី Excel/CSV"}</span>
-              </button>
-            </div>
-
-            {/* CSV / Excel Data Paste Box */}
-            {showImporter && (
-              <div className="csv-importer-box">
-                <div style={{ fontSize: "0.85rem", fontWeight: 600, color: "#475569" }}>
-                  ចម្លង (Copy) ទិន្នន័យពី Excel, Google Sheets ឬ CSV រួចបិទភ្ជាប់ (Paste) នៅទីនេះ៖
-                </div>
-                <textarea
-                  className="importer-textarea"
-                  placeholder={`ឧទាហរណ៍៖\n activity \t target \t actual\n ចុះពិនិត្យ \t 100 \t 95\n វគ្គបណ្តុះបណ្តាល \t 50 \t 48`}
-                  value={rawCSVText}
-                  onChange={e => setRawCSVText(e.target.value)}
-                />
-                <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
-                  <button
-                    type="button"
-                    className="btn btn-secondary btn-sm"
-                    onClick={() => {
-                      setRawCSVText("");
-                      setShowImporter(false);
-                    }}
-                  >
-                    បោះបង់
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-primary btn-sm"
-                    onClick={handleImportCSVData}
-                    disabled={!rawCSVText.trim()}
-                  >
-                    <LuCheck size={14} /> ដំណើរការនាំចូលទិន្នន័យ
-                  </button>
-                </div>
-              </div>
-            )}
-
-            <div className="table-builder-cols-input">
-              <input
-                type="text"
-                className="builder-cols-field"
-                value={arrayKeys}
-                onChange={e => setArrayKeys(e.target.value)}
-                placeholder="បញ្ចូលឈ្មោះជួរឈរ (បំបែកដោយសញ្ញាក្បៀស e.g. activity, target, actual)"
-              />
-              <button
-                type="button"
-                className="btn btn-secondary btn-sm"
-                onClick={addArrayRow}
-                disabled={!arrayKeys.trim()}
-                style={{ borderRadius: "8px", whiteSpace: "nowrap" }}
-              >
-                <LuPlus size={16} /> បន្ថែមជួរ row
-              </button>
-            </div>
-
-            {arrayRows.length > 0 && (
-              <div style={{ overflowX: "auto" }}>
-                <table className="modern-data-table">
-                  <thead>
-                    <tr>
-                      <th style={{ width: "40px", textAlign: "center" }}>#</th>
-                      {arrayKeys
-                        .split(",")
-                        .map(s => s.trim())
-                        .filter(Boolean)
-                        .map(k => (
-                          <th key={k}>{k}</th>
-                        ))}
-                      <th style={{ width: "50px" }}></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {arrayRows.map((row, idx) => (
-                      <tr key={idx}>
-                        <td style={{ textAlign: "center", color: "#94a3b8", fontWeight: 600 }}>
-                          {idx + 1}
-                        </td>
-                        {arrayKeys
-                          .split(",")
-                          .map(s => s.trim())
-                          .filter(Boolean)
-                          .map(k => (
-                            <td key={k}>
-                              <input
-                                type="text"
-                                className="modern-table-input"
-                                value={row[k] || ""}
-                                onChange={e => handleArrayKeyChange(idx, k, e.target.value)}
-                                placeholder={k}
-                              />
-                            </td>
-                          ))}
-                        <td>
-                          <button
-                            type="button"
-                            className="row-delete-btn"
-                            onClick={() => removeArrayRow(idx)}
-                            title="លុបជួរនេះ"
-                          >
-                            <LuTrash2 size={14} />
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
+        {/* Right Column: Live Preview */}
+        <div style={{
+          flex: "1 1 50%",
+          minWidth: 0,
+          background: "#fff",
+          border: "1px solid #e2e8f0",
+          borderRadius: "12px",
+          overflow: "hidden",
+          position: "sticky",
+          top: "1rem",
+          maxHeight: "calc(100vh - 180px)",
+          display: "flex",
+          flexDirection: "column"
+        }}>
+          <div style={{
+            padding: "0.6rem 1rem",
+            background: "#f8fafc",
+            borderBottom: "1px solid #e2e8f0",
+            fontSize: "0.82rem",
+            fontWeight: "600",
+            color: "#475569",
+            display: "flex",
+            alignItems: "center",
+            gap: "0.4rem"
+          }}>
+            <LuEye size={14} style={{ color: "#6366f1" }} /> ទិដ្ឋភាពផ្ទាល់ (Live Preview)
           </div>
+          <div style={{ flex: 1, overflow: "auto" }}>
+            <TextEditor
+              value={livePreviewHtml}
+              readOnly={true}
+              placeholder="បំពេញទិន្នន័យនៅផ្នែកខាងឆ្វេង ដើម្បីមើលការបង្ហាញផ្ទាល់..."
+            />
+          </div>
+        </div>
+      </div>
 
-          {/* Action Row */}
+      {/* Action Row */}
           <div className="builder-actions-row">
             <button
               type="button"
