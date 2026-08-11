@@ -15,12 +15,13 @@ BEGIN
     AND column_name = 'keys'
     AND data_type = 'jsonb'
   ) THEN
-    ALTER TABLE public.report_templates
-      ALTER COLUMN keys TYPE TEXT[]
-      USING (ARRAY(SELECT jsonb_array_elements_text(keys)));
+    ALTER TABLE public.report_templates ADD COLUMN keys_new TEXT[] DEFAULT '{}';
 
-    ALTER TABLE public.report_templates
-      ALTER COLUMN keys SET DEFAULT '{}';
+    UPDATE public.report_templates
+    SET keys_new = ARRAY(SELECT jsonb_array_elements_text(keys));
+
+    ALTER TABLE public.report_templates DROP COLUMN keys;
+    ALTER TABLE public.report_templates RENAME COLUMN keys_new TO keys;
   END IF;
 END $$;
 

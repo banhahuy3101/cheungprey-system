@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+	"github.com/supabase-community/postgrest-go"
 
 	"github.com/banhahuy/cheungprey-system/backend/internal/models"
 )
@@ -214,11 +215,11 @@ func (r *Repository) ListMembersFiltered(f models.MemberFilter) ([]models.Member
 	if f.SortBy != "" && f.SortBy != "created_at" {
 		sortBy = f.SortBy
 	}
-	sortOrder := "desc"
+	ascending := false
 	if f.SortOrder == "asc" {
-		sortOrder = "asc"
+		ascending = true
 	}
-	q = q.Order(sortBy+"."+sortOrder, nil)
+	q = q.Order(sortBy, &postgrest.OrderOpts{Ascending: ascending})
 
 	if f.Limit <= 0 {
 		f.Limit = 50
