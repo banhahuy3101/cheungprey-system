@@ -1,27 +1,47 @@
 import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { LuUser, LuMail, LuPhone, LuMapPin, LuShield, LuPencil, LuCheck, LuArrowLeft } from "react-icons/lu";
+import {
+  LuUser,
+  LuMail,
+  LuPhone,
+  LuMapPin,
+  LuShield,
+  LuPencil,
+  LuCheck,
+  LuArrowLeft,
+  LuCalendar,
+  LuCircleCheck,
+  LuFileText,
+  LuUpload,
+  LuTrash2,
+  LuKey,
+  LuRefreshCw,
+} from "react-icons/lu";
 import { useAuth } from "../../hooks/useAuth";
 import { adminAPI } from "../../api/admin";
 import { authAPI } from "../../api/auth";
+import { partyAPI } from "../../api/party";
 import { isAdmin as userIsAdmin } from "../../utils/permissions";
 import { useRoleOptions } from "../../hooks/useRoleOptions";
 import ZoneCascadeSelect from "../../components/ZoneCascadeSelect";
 import { useZoneCascade } from "../../hooks/useZoneCascade";
-
-const ROLE_OPTIONS_FALLBACK = [
-  { value: "recorder", label: "Recorder" },
-  { value: "village_chief", label: "Village Chief" },
-  { value: "commune_clerk", label: "Commune Clerk" },
-  { value: "commune_chief", label: "Commune Chief" },
-  { value: "district_chief", label: "District Chief" },
-  { value: "admin", label: "Admin" },
-  { value: "super_admin", label: "Super Admin" },
-];
+import { unwrapZone } from "../../utils/zone";
 
 function formatDate(value) {
   if (!value || value.startsWith("0001-01-01")) return "-";
   return value.slice(0, 10);
+}
+
+function getInitials(name) {
+  if (!name) return "U";
+  const trimmed = name.trim();
+  const parts = trimmed.split(/\s+/);
+  if (parts.length >= 2) {
+    const first = Array.from(parts[0])[0] || "";
+    const last = Array.from(parts[parts.length - 1])[0] || "";
+    return (first + last).toUpperCase();
+  }
+  return Array.from(trimmed).slice(0, 2).join("").toUpperCase();
 }
 
 function SignatureDrawPad({ value, onChange }) {
@@ -34,7 +54,7 @@ function SignatureDrawPad({ value, onChange }) {
     const ctx = canvas.getContext("2d");
     ctx.lineWidth = 3;
     ctx.lineCap = "round";
-    ctx.strokeStyle = "#1e293b"; // Slate-800
+    ctx.strokeStyle = "#0f172a";
 
     if (value) {
       const img = new Image();
@@ -119,12 +139,24 @@ function SignatureDrawPad({ value, onChange }) {
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-      <div style={{ position: "relative", width: "100%", maxWidth: "400px", height: "150px", border: "1px dashed #cbd5e1", borderRadius: "8px", background: "#f8fafc", overflow: "hidden" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+      <div style={{
+        position: "relative",
+        width: "100%",
+        maxWidth: "480px",
+        height: "160px",
+        border: "1.5px dashed #cbd5e1",
+        borderRadius: "12px",
+        background: "#ffffff",
+        backgroundImage: "radial-gradient(#cbd5e1 1px, transparent 1px)",
+        backgroundSize: "16px 16px",
+        overflow: "hidden",
+        boxShadow: "inset 0 2px 4px rgba(0,0,0,0.02)"
+      }}>
         <canvas
           ref={canvasRef}
-          width={400}
-          height={150}
+          width={480}
+          height={160}
           onMouseDown={startDrawing}
           onMouseMove={draw}
           onMouseUp={stopDrawing}
@@ -135,29 +167,30 @@ function SignatureDrawPad({ value, onChange }) {
           style={{ width: "100%", height: "100%", cursor: "crosshair", display: "block" }}
         />
       </div>
-      <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+      <div style={{ display: "flex", gap: "0.6rem", alignItems: "center", flexWrap: "wrap" }}>
         <button
           type="button"
           className="btn btn-secondary btn-sm"
           onClick={clearCanvas}
-          style={{ padding: "0.2rem 0.6rem", fontSize: "0.78rem" }}
+          style={{ fontSize: "0.8rem", padding: "0.3rem 0.75rem", display: "inline-flex", alignItems: "center", gap: "0.35rem" }}
         >
-          លុបហត្ថលេខា
+          <LuTrash2 size={14} /> លុបហត្ថលេខា
         </button>
         <label
           className="btn btn-secondary btn-sm"
           style={{
-            padding: "0.2rem 0.6rem",
-            fontSize: "0.78rem",
+            padding: "0.3rem 0.75rem",
+            fontSize: "0.8rem",
             cursor: "pointer",
             display: "inline-flex",
             alignItems: "center",
-            background: "#f1f5f9",
-            border: "1px solid #cbd5e1",
+            gap: "0.35rem",
+            background: "var(--surface)",
+            border: "1px solid var(--border)",
             borderRadius: "6px",
           }}
         >
-          📤 ផ្ទុកឡើងរូបភាព (PNG)
+          <LuUpload size={14} /> ផ្ទុកឡើងរូបភាព (PNG)
           <input
             type="file"
             accept="image/png"
@@ -173,7 +206,7 @@ function SignatureDrawPad({ value, onChange }) {
 export default function Profile() {
   const { user, refreshProfile } = useAuth();
   const navigate = useNavigate();
-  const { roleOptions, roleLabelMap } = useRoleOptions();
+  const { roleLabelMap } = useRoleOptions();
 
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({
@@ -192,9 +225,33 @@ export default function Profile() {
   const isAdmin = userIsAdmin(user);
   const displayRoles = user?.roles?.length ? user.roles : (user?.role ? [user.role] : []);
 
+  const [zoneLabel, setZoneLabel] = useState(user?.zone_name || user?.zone_code || "");
+
   useEffect(() => {
     if (refreshProfile) refreshProfile();
   }, []);
+
+  useEffect(() => {
+    const zCode = user?.zone_code;
+    if (!zCode) {
+      setZoneLabel(user?.zone_name || "—");
+      return;
+    }
+    let isMounted = true;
+    partyAPI.getZones({ code: zCode })
+      .then((res) => {
+        if (!isMounted) return;
+        const zone = unwrapZone(res);
+        setZoneLabel(zone?.name_kh || user?.zone_name || zCode);
+      })
+      .catch(() => {
+        if (isMounted) setZoneLabel(user?.zone_name || zCode);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [user?.zone_code, user?.zone_name]);
 
   const zoneHook = useZoneCascade({
     userZone: user?.zone_code || "",
@@ -218,7 +275,7 @@ export default function Profile() {
           email: form.email,
           phone_number: form.phone_number || undefined,
           zone_code: zoneHook.resolvedZone || undefined,
-          role: user.role, // role can't edit, keep original user role
+          role: user.role,
           signature: form.signature || undefined,
         });
       } else {
@@ -263,185 +320,248 @@ export default function Profile() {
   };
 
   if (!user) {
-    return <div className="loading">កំពុងផ្ទុក...</div>;
+    return (
+      <div className="page" style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "50vh" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", color: "var(--text-muted)" }}>
+          <LuRefreshCw className="animate-spin" size={20} /> กำลังផ្ទុកប្រវត្តិរូប...
+        </div>
+      </div>
+    );
   }
+
+  const userName = user.full_name || user.name || "User";
 
   return (
     <div className="page">
-      <div className="page-header">
+      <div className="page-header" style={{ marginBottom: "1rem" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
           <button className="btn-icon" onClick={() => navigate(-1)} title="ត្រឡប់ក្រោយ">
-            <LuArrowLeft />
+            <LuArrowLeft size={18} />
           </button>
-          <h2 className="section-title">ប្រវត្តិរូប</h2>
+          <h2 className="section-title">ប្រវត្តិរូបគណនី</h2>
         </div>
-        {!editing ? (
-          <button className="btn btn-primary" onClick={() => setEditing(true)}>
-            <LuPencil size={14} /> កែប្រែ
-          </button>
-        ) : (
-          <button className="btn btn-secondary" onClick={handleCancel} disabled={saving}>
-            បោះបង់
-          </button>
-        )}
       </div>
 
       {success && (
-        <div className="alert alert-success">{success}</div>
+        <div className="alert alert-success" style={{ marginBottom: "1rem" }}>{success}</div>
       )}
       {error && (
-        <div className="alert alert-error">{error}</div>
+        <div className="alert alert-error" style={{ marginBottom: "1rem" }}>{error}</div>
       )}
 
-      <div className="card">
-        <div style={{ display: "flex", alignItems: "center", gap: "1rem", marginBottom: "1.25rem" }}>
-          <div className="profile-avatar" style={{ width: 56, height: 56 }}>
-            <LuUser size={28} />
-          </div>
-          <div>
-            <div style={{ fontWeight: 600, fontSize: "1.1rem" }}>{user.full_name || user.name || "User"}</div>
-            <div style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}>
-              <span className="profile-detail-value">
+      {/* Hero Profile Banner Card */}
+      <div className="profile-hero-card">
+        <div className="profile-cover-banner" />
+        <div className="profile-hero-body">
+          <div className="profile-user-group">
+            <div className="profile-avatar-wrapper">
+              {getInitials(userName)}
+              <span className="profile-online-badge" title="សកម្ម (Online)" />
+            </div>
+            <div className="profile-identity-info">
+              <div className="profile-display-name">
+                {userName}
+                <LuCircleCheck style={{ color: "#10b981", fontSize: "1.2rem" }} title="គណនីបានផ្ទៀងផ្ទាត់" />
+              </div>
+              <div className="profile-meta-row">
+                <span className="profile-status-active">
+                  ● សកម្ម
+                </span>
                 {displayRoles.map((r) => (
-                  <span key={r} className="badge" style={{ marginRight: "0.25rem" }}>
-                    {roleLabelMap[r] || r}
+                  <span key={r} className="profile-role-badge">
+                    <LuShield size={12} /> {roleLabelMap[r] || r}
                   </span>
                 ))}
-              </span>
+                {(zoneLabel || user.zone_name || user.zone_code) && (
+                  <span className="profile-meta-item">
+                    <LuMapPin size={14} style={{ color: "#818cf8" }} />
+                    {zoneLabel}
+                  </span>
+                )}
+              </div>
             </div>
+          </div>
+
+          <div style={{ display: "flex", gap: "0.5rem" }}>
+            {!editing ? (
+              <button className="btn btn-primary" onClick={() => setEditing(true)}>
+                <LuPencil size={15} /> កែប្រែប្រវត្តិរូប
+              </button>
+            ) : (
+              <button className="btn btn-secondary" onClick={handleCancel} disabled={saving}>
+                បោះបង់
+              </button>
+            )}
           </div>
         </div>
+      </div>
 
-        {!editing ? (
-          <div className="profile-detail-grid">
-            <div className="profile-detail-item">
-              <span className="profile-detail-label"><LuUser size={14} /> ឈ្មោះ</span>
-              <span className="profile-detail-value">{user.full_name || user.name || "-"}</span>
+      {!editing ? (
+        <>
+          {/* Executive Info Tile Grid */}
+          <div className="profile-grid-container">
+            <div className="profile-info-tile">
+              <div className="profile-tile-icon blue">
+                <LuUser />
+              </div>
+              <div className="profile-tile-content">
+                <span className="profile-tile-label">ឈ្មោះពេញ</span>
+                <span className="profile-tile-value">{user.full_name || user.name || "-"}</span>
+              </div>
             </div>
-            <div className="profile-detail-item">
-              <span className="profile-detail-label"><LuMail size={14} /> អ៊ីមែល</span>
-              <span className="profile-detail-value">{user.email || "-"}</span>
+
+            <div className="profile-info-tile">
+              <div className="profile-tile-icon sky">
+                <LuMail />
+              </div>
+              <div className="profile-tile-content">
+                <span className="profile-tile-label">អាសយដ្ឋានអ៊ីមែល</span>
+                <span className="profile-tile-value">{user.email || "-"}</span>
+              </div>
             </div>
-            <div className="profile-detail-item">
-              <span className="profile-detail-label"><LuPhone size={14} /> លេខទូរស័ព្ទ</span>
-              <span className="profile-detail-value">{user.phone_number || "-"}</span>
+
+            <div className="profile-info-tile">
+              <div className="profile-tile-icon emerald">
+                <LuPhone />
+              </div>
+              <div className="profile-tile-content">
+                <span className="profile-tile-label">លេខទូរស័ព្ទ</span>
+                <span className="profile-tile-value">{user.phone_number || "-"}</span>
+              </div>
             </div>
-            <div className="profile-detail-item">
-              <span className="profile-detail-label"><LuMapPin size={14} /> តំបន់</span>
-              <span className="profile-detail-value">{user.zone_name || user.zone_code || "-"}</span>
+
+            <div className="profile-info-tile">
+              <div className="profile-tile-icon indigo">
+                <LuMapPin />
+              </div>
+              <div className="profile-tile-content">
+                <span className="profile-tile-label">តំបន់ / ទីតាំង</span>
+                <span className="profile-tile-value" title={zoneLabel}>{zoneLabel || "-"}</span>
+              </div>
             </div>
-            <div className="profile-detail-item">
-              <span className="profile-detail-label"><LuShield size={14} /> តួនាទី</span>
-              <span className="profile-detail-value">
-                {displayRoles.map((r) => (
-                  <span key={r} className="badge" style={{ marginRight: "0.25rem" }}>
-                    {roleLabelMap[r] || r}
-                  </span>
-                ))}
-              </span>
+
+            <div className="profile-info-tile">
+              <div className="profile-tile-icon amber">
+                <LuShield />
+              </div>
+              <div className="profile-tile-content">
+                <span className="profile-tile-label">តួនាទី និងសិទ្ធិ</span>
+                <span className="profile-tile-value">
+                  {displayRoles.map((r) => roleLabelMap[r] || r).join(", ") || "-"}
+                </span>
+              </div>
             </div>
-            <div className="profile-detail-item">
-              <span className="profile-detail-label">ចូលប្រើតាំងពី</span>
-              <span className="profile-detail-value">{formatDate(user.created_at)}</span>
-            </div>
-            <div className="profile-detail-item">
-              <span className="profile-detail-label">ធ្វើបច្ចុប្បន្នភាពចុងក្រោយ</span>
-              <span className="profile-detail-value">{formatDate(user.updated_at)}</span>
-            </div>
-            <div className="profile-detail-item" style={{ gridColumn: "span 2" }}>
-              <span className="profile-detail-label"><LuPencil size={14} /> ហត្ថលេខា</span>
-              <span className="profile-detail-value" style={{ marginTop: "0.5rem" }}>
-                {user.signature ? (
-                  <img
-                    src={user.signature}
-                    alt="ហត្ថលេខា"
-                    style={{
-                      maxHeight: "80px",
-                      background: "#ffffff",
-                      border: "1px dashed #cbd5e1",
-                      borderRadius: "8px",
-                      padding: "4px",
-                    }}
-                  />
-                ) : (
-                  <span style={{ color: "var(--text-muted)", fontStyle: "italic" }}>មិនទាន់មានហត្ថលេខា</span>
-                )}
-              </span>
+
+            <div className="profile-info-tile">
+              <div className="profile-tile-icon slate">
+                <LuCalendar />
+              </div>
+              <div className="profile-tile-content">
+                <span className="profile-tile-label">ចូលប្រើប្រាស់ដំបូង</span>
+                <span className="profile-tile-value">{formatDate(user.created_at)}</span>
+              </div>
             </div>
           </div>
-        ) : (
-          <>
-            <div className="form-group">
-              <label>ឈ្មោះ</label>
-              <input name="full_name" value={form.full_name} onChange={handleChange} />
+
+          {/* Digital Signature Card */}
+          <div className="profile-section-card">
+            <div className="profile-section-header">
+              <div className="profile-section-title">
+                <LuFileText style={{ color: "var(--primary)" }} /> ហត្ថលេខាឌីជីថលផ្លូវការ
+              </div>
+              {user.signature ? (
+                <span className="profile-status-active">● បានផ្ទៀងផ្ទាត់</span>
+              ) : (
+                <span style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>មិនទាន់មាន</span>
+              )}
             </div>
-            <div className="form-group">
-              <label>អ៊ីមែល</label>
-              <input name="email" type="email" value={form.email} onChange={handleChange} />
+            <div className="signature-display-box">
+              {user.signature ? (
+                <img src={user.signature} alt="ហត្ថលេខា" className="signature-preview-img" />
+              ) : (
+                <span className="signature-empty-text">
+                  <LuFileText size={18} /> មិនទាន់មានហត្ថលេខាឌីជីថល (ចុច "កែប្រែប្រវត្តិរូប" ដើម្បីគូរ ឬផ្ទុកឡើង)
+                </span>
+              )}
             </div>
-            <div className="form-group">
-              <label>លេខទូរស័ព្ទ</label>
-              <input name="phone_number" value={form.phone_number} onChange={handleChange} />
+          </div>
+        </>
+      ) : (
+        /* Edit Mode Form Card */
+        <div className="card">
+          <div className="profile-section-header" style={{ marginBottom: "1.25rem" }}>
+            <div className="profile-section-title">
+              <LuPencil style={{ color: "var(--primary)" }} /> កែប្រែព័ត៌មានប្រវត្តិរូប
             </div>
-            {isAdmin && (
-              <>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: "1rem", width: "100%", marginBottom: "1rem" }}>
-                  <ZoneCascadeSelect hook={zoneHook} />
-                </div>
-                <div className="form-group">
-                  <label>តួនាទី (មិនអាចកែប្រែបាន)</label>
-                  <input
-                    type="text"
-                    value={roleLabelMap[user.role] || user.role}
-                    disabled
-                    style={{
-                      background: "#f1f5f9",
-                      color: "#64748b",
-                      border: "1px solid #cbd5e1",
-                      borderRadius: "6px",
-                      padding: "0.5rem",
-                      cursor: "not-allowed",
-                    }}
-                  />
-                </div>
-              </>
-            )}
+          </div>
+
+          <div className="profile-edit-grid">
             <div className="form-group">
-              <label>ពាក្យសម្ងាត់ថ្មី (ទុកទទេរបើមិនប្តូរ)</label>
+              <label><LuUser size={14} /> ឈ្មោះពេញ</label>
+              <input name="full_name" value={form.full_name} onChange={handleChange} placeholder="បញ្ចូលឈ្មោះពេញ" />
+            </div>
+
+            <div className="form-group">
+              <label><LuMail size={14} /> អ៊ីមែល</label>
+              <input name="email" type="email" value={form.email} onChange={handleChange} placeholder="example@domain.com" />
+            </div>
+
+            <div className="form-group">
+              <label><LuPhone size={14} /> លេខទូរស័ព្ទ</label>
+              <input name="phone_number" value={form.phone_number} onChange={handleChange} placeholder="012 345 678" />
+            </div>
+
+            <div className="form-group">
+              <label><LuKey size={14} /> ពាក្យសម្ងាត់ថ្មី</label>
               <input
                 name="password"
                 type="text"
                 value={form.password}
                 onChange={handleChange}
-                placeholder="ទុកទទេរ"
+                placeholder="ទុកទទេរបើមិនចង់ប្តូរពាក្យសម្ងាត់"
               />
             </div>
-            <div className="form-group" style={{ gridColumn: "span 2" }}>
-              <label style={{ display: "block", marginBottom: "0.5rem" }}><LuPencil size={14} /> គូរហត្ថលេខា</label>
-              <SignatureDrawPad
-                value={form.signature}
-                onChange={(val) => setForm((prev) => ({ ...prev, signature: val }))}
-              />
+          </div>
+
+          {isAdmin && (
+            <div style={{ background: "#f8fafc", padding: "1rem", borderRadius: "10px", border: "1px solid #e2e8f0", marginBottom: "1.25rem" }}>
+              <label style={{ fontWeight: 600, fontSize: "0.85rem", marginBottom: "0.5rem", display: "block" }}>
+                <LuMapPin size={14} /> ជ្រើសរើសតំបន់/ទីតាំង (Zone)
+              </label>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "0.75rem" }}>
+                <ZoneCascadeSelect hook={zoneHook} />
+              </div>
             </div>
-            <div className="profile-actions" style={{ justifyContent: "flex-end" }}>
-              <button
-                className="btn btn-secondary"
-                onClick={handleCancel}
-                disabled={saving}
-              >
-                បោះបង់
-              </button>
-              <button
-                className="btn btn-primary"
-                onClick={handleSave}
-                disabled={saving}
-              >
-                {saving ? "រក្សាទុក..." : <><LuCheck size={14} /> រក្សាទុក</>}
-              </button>
-            </div>
-          </>
-        )}
-      </div>
+          )}
+
+          <div className="form-group" style={{ marginBottom: "1.25rem" }}>
+            <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", marginBottom: "0.5rem" }}>
+              <LuFileText size={15} style={{ color: "var(--primary)" }} /> ហត្ថលេខាឌីជីថល (គូរ ឬផ្ទុកឡើង)
+            </label>
+            <SignatureDrawPad
+              value={form.signature}
+              onChange={(val) => setForm((prev) => ({ ...prev, signature: val }))}
+            />
+          </div>
+
+          <div className="profile-actions">
+            <button
+              className="btn btn-secondary"
+              onClick={handleCancel}
+              disabled={saving}
+            >
+              បោះបង់
+            </button>
+            <button
+              className="btn btn-primary"
+              onClick={handleSave}
+              disabled={saving}
+            >
+              {saving ? "កំពុងរក្សាទុក..." : <><LuCheck size={16} /> រក្សាទុកព័ត៌មាន</>}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
