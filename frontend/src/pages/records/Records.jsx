@@ -1,6 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
-import { LuPlus, LuPencil, LuTrash2, LuSearch, LuX } from "react-icons/lu";
+import { LuPlus, LuPencil, LuTrash2, LuSearch, LuFileText } from "react-icons/lu";
 import { recordsAPI } from "../../api/records";
+import Modal from "../settings/Modal";
+import DataTable from "../../components/DataTable";
+import { useAuth } from "../../hooks/useAuth";
+import { canAccess, FEATURES } from "../../utils/permissions";
 
 const initialForm = {
   title: "",
@@ -10,6 +14,10 @@ const initialForm = {
 };
 
 export default function Records() {
+  const { user } = useAuth();
+  const canCreate = canAccess(user, FEATURES.records, "create");
+  const canUpdate = canAccess(user, FEATURES.records, "update");
+  const canDelete = canAccess(user, FEATURES.records, "delete");
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -77,14 +85,14 @@ export default function Records() {
       setShowModal(false);
       fetchRecords();
     } catch (err) {
-      setError(err.response?.data?.message || "Operation failed.");
+      setError(err.response?.data?.message || "ប្រតិបត្តិការបរាជ័យ");
     } finally {
       setSubmitting(false);
     }
   };
 
   const handleDelete = async (id) => {
-    if (!confirm("តើអ្នកពិតជាចង់លុបឬ?")) return;
+    if (!confirm("តើអ្នកពិតជាចង់លុបកំណត់ត្រានេះឬ?")) return;
     try {
       await recordsAPI.delete(id);
       fetchRecords();
@@ -95,16 +103,66 @@ export default function Records() {
 
   const totalPages = Math.ceil(total / 20);
 
+  const columns = [
+    {
+      key: "title",
+      label: "ចំណងជើង",
+      render: (val) => <span style={{ fontWeight: "700", color: "#0f172a" }}>{val}</span>,
+    },
+    {
+      key: "category",
+      label: "ប្រភេទ",
+      render: (val) => (
+        <span className="badge" style={{ background: "#eef2ff", color: "#4338ca", fontWeight: "600", border: "1px solid #c7d2fe" }}>
+          {val || "-"}
+        </span>
+      ),
+    },
+    {
+      key: "date",
+      label: "កាលបរិច្ឆេទ",
+      render: (val, row) => <span style={{ color: "#64748b" }}>{val?.slice(0, 10) || row.created_at?.slice(0, 10) || "-"}</span>,
+    },
+    {
+      key: "description",
+      label: "ការពិពណ៌នា",
+      render: (val) => <span style={{ color: "#475569" }}>{val || "—"}</span>,
+    },
+    {
+      key: "actions",
+      label: "សកម្មភាព",
+      align: "right",
+      width: "90px",
+      render: (_, row) => (
+        <div className="actions" style={{ display: "flex", justifyContent: "flex-end", gap: "0.35rem" }}>
+          {canUpdate && <button className="btn-icon" onClick={() => openEdit(row)} title="កែប្រែ"><LuPencil /></button>}
+          {canDelete && <button className="btn-icon btn-danger" onClick={() => handleDelete(row.id)} title="លុប"><LuTrash2 /></button>}
+        </div>
+      ),
+    },
+  ];
+
   return (
-    <div className="page">
-      <div className="page-header">
-        <h2 className="section-title">កំណត់ត្រា</h2>
-        <button className="btn btn-primary" onClick={openCreate}>
-          <LuPlus /> បន្ថែមកំណត់ត្រា
-        </button>
+    <div className="page" style={{ maxWidth: "1200px", margin: "0 auto" }}>
+      <div className="page-header" style={{ marginBottom: "1.25rem" }}>
+        <div>
+          <h2 className="section-title" style={{ margin: 0, fontSize: "1.35rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+            <LuFileText style={{ color: "var(--primary)" }} /> កំណត់ត្រា (Records)
+          </h2>
+          <span style={{ fontSize: "0.82rem", color: "#64748b" }}>
+            គ្រប់គ្រងកំណត់ត្រា និងកិច្ចការងារប្រព័ន្ធគ្រប់គ្រងស្រុកជើងព្រៃ
+          </span>
+        </div>
+        {canCreate && <button
+          className="btn btn-primary"
+          onClick={openCreate}
+          style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem", borderRadius: "10px", padding: "0.6rem 1.2rem", fontWeight: "600" }}
+        >
+          <LuPlus size={18} /> បន្ថែមកំណត់ត្រា
+        </button>}
       </div>
 
-      <div className="search-bar">
+      <div className="search-bar" style={{ marginBottom: "1.25rem" }}>
         <LuSearch className="search-icon" />
         <input
           type="text"
@@ -114,96 +172,99 @@ export default function Records() {
         />
       </div>
 
-      {loading ? (
-        <div className="loading">កំពុងផ្ទុក...</div>
-      ) : (
-        <>
-          <div className="table-responsive">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>ចំណងជើង</th>
-                  <th>ប្រភេទ</th>
-                  <th>កាលបរិច្ឆេទ</th>
-                  <th>ការពិពណ៌នា</th>
-                  <th>សកម្មភាព</th>
-                </tr>
-              </thead>
-              <tbody>
-                {records.length === 0 ? (
-                  <tr><td colSpan={5} className="text-center">គ្មានទិន្នន័យ</td></tr>
-                ) : (
-                  records.map((r) => (
-                    <tr key={r.id}>
-                      <td>{r.title}</td>
-                      <td><span className="badge">{r.category || "-"}</span></td>
-                      <td>{r.date?.slice(0, 10) || r.created_at?.slice(0, 10)}</td>
-                      <td>{r.description}</td>
-                      <td>
-                        <div className="actions">
-                          <button className="btn-icon" onClick={() => openEdit(r)} title="កែប្រែ">
-                            <LuPencil />
-                          </button>
-                          <button className="btn-icon btn-danger" onClick={() => handleDelete(r.id)} title="លុប">
-                            <LuTrash2 />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          {totalPages > 1 && (
-            <div className="pagination">
-              <button disabled={page <= 1} onClick={() => setPage(page - 1)}>មុន</button>
-              <span>ទំព័រ {page} / {totalPages}</span>
-              <button disabled={page >= totalPages} onClick={() => setPage(page + 1)}>បន្ទាប់</button>
-            </div>
-          )}
-        </>
-      )}
+      <DataTable
+        columns={columns}
+        data={records}
+        loading={loading}
+        emptyMessage="គ្មានទិន្នន័យកំណត់ត្រា"
+        pagination={{
+          page,
+          totalPages,
+          total,
+          onPageChange: (p) => setPage(p),
+        }}
+      />
 
       {showModal && (
-        <div className="modal-overlay" onClick={() => setShowModal(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3>{editing ? "កែប្រែកំណត់ត្រា" : "បន្ថែមកំណត់ត្រាថ្មី"}</h3>
-              <button className="btn-icon" onClick={() => setShowModal(false)}><LuX /></button>
-            </div>
-            <form onSubmit={handleSubmit}>
-              <div className="modal-body">
-                <div className="form-group">
-                  <label>ចំណងជើង *</label>
-                  <input name="title" value={form.title} onChange={handleChange} required />
-                </div>
-                <div className="form-row">
-                  <div className="form-group">
-                    <label>ប្រភេទ</label>
-                    <input name="category" value={form.category} onChange={handleChange} placeholder="ប្រភេទកំណត់ត្រា" />
-                  </div>
-                  <div className="form-group">
-                    <label>កាលបរិច្ឆេទ</label>
-                    <input name="date" type="date" value={form.date} onChange={handleChange} />
-                  </div>
-                </div>
-                <div className="form-group">
-                  <label>ការពិពណ៌នា</label>
-                  <textarea name="description" value={form.description} onChange={handleChange} rows={3} />
-                </div>
-                {error && <div className="alert alert-error">{error}</div>}
+        <Modal
+          open={showModal}
+          onClose={() => setShowModal(false)}
+          title={editing ? "📝 កែប្រែកំណត់ត្រា" : "📝 បន្ថែមកំណត់ត្រាថ្មី"}
+        >
+          <form onSubmit={handleSubmit}>
+            <div style={{ display: "flex", flexDirection: "column", gap: "1rem", padding: "0.5rem 0" }}>
+              <div>
+                <label style={{ fontWeight: 700, fontSize: "0.85rem", color: "#334155", marginBottom: "0.35rem", display: "block" }}>
+                  ចំណងជើង / Title <span style={{ color: "#dc2626" }}>*</span>
+                </label>
+                <input
+                  name="title"
+                  className="modern-form-input"
+                  value={form.title}
+                  onChange={handleChange}
+                  placeholder="បញ្ចូលចំណងជើងកំណត់ត្រា..."
+                  required
+                  style={{ width: "100%" }}
+                />
               </div>
-              <div className="modal-footer">
-                <button type="button" className="btn btn-secondary" onClick={() => setShowModal(false)}>បោះបង់</button>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+                <div>
+                  <label style={{ fontWeight: 700, fontSize: "0.85rem", color: "#334155", marginBottom: "0.35rem", display: "block" }}>
+                    ប្រភេទ / Category
+                  </label>
+                  <input
+                    name="category"
+                    className="modern-form-input"
+                    value={form.category}
+                    onChange={handleChange}
+                    placeholder="ប្រភេទកំណត់ត្រា"
+                    style={{ width: "100%" }}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontWeight: 700, fontSize: "0.85rem", color: "#334155", marginBottom: "0.35rem", display: "block" }}>
+                    កាលបរិច្ឆេទ / Date
+                  </label>
+                  <input
+                    name="date"
+                    type="date"
+                    className="modern-form-input"
+                    value={form.date}
+                    onChange={handleChange}
+                    style={{ width: "100%" }}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label style={{ fontWeight: 700, fontSize: "0.85rem", color: "#334155", marginBottom: "0.35rem", display: "block" }}>
+                  ការពិពណ៌នា / Description
+                </label>
+                <textarea
+                  name="description"
+                  className="modern-form-input"
+                  value={form.description}
+                  onChange={handleChange}
+                  rows={3}
+                  placeholder="បញ្ចូលការពិពណ៌នាលម្អិតអំពីកំណត់ត្រា..."
+                  style={{ width: "100%", resize: "vertical" }}
+                />
+              </div>
+
+              {error && <div className="alert alert-error" style={{ fontSize: "0.85rem" }}>{error}</div>}
+
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem", marginTop: "0.5rem" }}>
+                <button type="button" className="btn btn-secondary" onClick={() => setShowModal(false)}>
+                  បោះបង់
+                </button>
                 <button type="submit" className="btn btn-primary" disabled={submitting}>
                   {submitting ? "រក្សាទុក..." : editing ? "ធ្វើបច្ចុប្បន្នភាព" : "រក្សាទុក"}
                 </button>
               </div>
-            </form>
-          </div>
-        </div>
+            </div>
+          </form>
+        </Modal>
       )}
     </div>
   );

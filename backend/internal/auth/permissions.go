@@ -1,6 +1,8 @@
 package auth
 
 import (
+	"fmt"
+
 	"github.com/gin-gonic/gin"
 
 	"github.com/banhahuy/cheungprey-system/backend/internal/models"
@@ -36,6 +38,65 @@ func HasFeature(c *gin.Context, feature models.Feature) bool {
 		return true
 	}
 	return false
+}
+
+// HasFeatureAction requires both the module and one explicit CRUD action.
+// Missing action keys fall back to the module permission for legacy data.
+func HasFeatureAction(c *gin.Context, feature models.Feature, action string) bool {
+	perms, err := GetPermissions(c)
+	if err != nil || perms == nil {
+		return false
+	}
+
+	// 1. Explicit granular action key check (e.g. performance_read)
+	key := models.Feature(fmt.Sprintf("%s_%s", feature, action))
+	if value, exists := perms[key]; exists && value {
+		return true
+	}
+
+	// 2. Base feature key check (e.g. performance)
+	if value, exists := perms[feature]; exists && value {
+		return true
+	}
+
+	// 3. Admin feature key check (e.g. performance_admin when feature == performance)
+	adminKey := models.Feature(fmt.Sprintf("%s_admin", feature))
+	if value, exists := perms[adminKey]; exists && value {
+		return true
+	}
+
+	return false
+}
+
+func RequireFeatureAction(feature models.Feature, action string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if !HasFeatureAction(c, feature, action) {
+			utils.Forbidden(c, "Insufficient permissions")
+			c.Abort()
+			return
+		}
+		c.Next()
+	}
+}
+
+func HasAnyFeature(c *gin.Context, features ...models.Feature) bool {
+	for _, feature := range features {
+		if HasFeature(c, feature) {
+			return true
+		}
+	}
+	return false
+}
+
+func RequireAnyFeature(features ...models.Feature) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if !HasAnyFeature(c, features...) {
+			utils.Forbidden(c, "Insufficient permissions")
+			c.Abort()
+			return
+		}
+		c.Next()
+	}
 }
 
 func RequireFeature(feature models.Feature) gin.HandlerFunc {

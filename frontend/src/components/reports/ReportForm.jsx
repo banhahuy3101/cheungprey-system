@@ -2,10 +2,11 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   LuArrowLeft, LuSave, LuPencil, LuDownload,
-  LuSend, LuX, LuCircleX, LuCircleCheck, LuClock, LuCalendar, LuRotateCcw,
-  LuFileText, LuTag, LuChevronDown, LuChevronUp, LuSettings, LuChevronLeft, LuChevronRight,
+  LuSend, LuCircleX, LuCircleCheck, LuClock, LuCalendar, LuRotateCcw,
+  LuFileText, LuTag, LuSettings, LuChevronRight,
 } from "react-icons/lu";
 import { useAuth } from "../../hooks/useAuth";
+import { useModules } from "../../hooks/useModules";
 import { reportDocumentsAPI } from "../../api/reportDocuments";
 import TextEditor from "../TextEditor";
 import Modal from "../../pages/settings/Modal";
@@ -27,8 +28,10 @@ function fmtDate(iso) {
 
 export default function ReportForm({ mode = "create", reportId }) {
   const { user } = useAuth();
+  const { needsApproval, canEditInTransaction } = useModules();
+  const isApprovalActive = needsApproval("reports");
+  const allowTransactionEdit = canEditInTransaction("reports");
   const navigate = useNavigate();
-  const isView = mode === "view";
   const isEdit = mode === "edit";
   const isCreate = mode === "create";
 
@@ -71,8 +74,20 @@ export default function ReportForm({ mode = "create", reportId }) {
   /* ---- actions ---- */
   const doSave = async (e) => {
     e?.preventDefault();
-    setError(""); setFieldErrors({}); setSaving(true);
-    setError(""); setFieldErrors({}); setSaving(true);
+    setError(""); setFieldErrors({});
+
+    const errs = {};
+    if (!form.title?.trim()) errs.title = "សូមបញ្ចូលចំណងជើងរបាយការណ៍";
+    if (!form.description?.trim()) errs.description = "សូមបញ្ចូលការពិពណ៌នា";
+    if (isEmptyContent(form.content)) errs.content = "សូមបញ្ចូលខ្លឹមសាររបាយការណ៍";
+
+    if (Object.keys(errs).length > 0) {
+      setFieldErrors(errs);
+      setValidationPopup(errs);
+      return;
+    }
+
+    setSaving(true);
     try {
       const p = buildSimpleReportPayload(form);
       if (isEdit) { await reportDocumentsAPI.updateSimple(reportId, p); navigate(`/reports/${reportId}`); return; }
@@ -134,7 +149,7 @@ export default function ReportForm({ mode = "create", reportId }) {
     finally { setRejecting(false); }
   };
 
-  const canReview = user?.role === "district_chief" || user?.role === "commune_chief" || user?.role === "admin" || user?.role === "super_admin";
+  const canReview = canAccess(user, FEATURES.reports, "update") || canAccess(user, FEATURES.reports, "create");
   const status = doc?.status || "draft";
 
   if (loading) return (
@@ -535,7 +550,7 @@ export default function ReportForm({ mode = "create", reportId }) {
             style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}>
             <LuDownload size={15} /> {downloading ? "កំពុងទាញយក..." : "ទាញយក PDF"}
           </button>
-          {(status === "draft" || status === "rejected") && (
+          {allowTransactionEdit && (canReview || doc?.created_by === user?.id) && (
             <button className="btn btn-outline btn-sm" onClick={() => navigate(`/reports/${reportId}/edit`)}
               style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}>
               <LuPencil size={15} /> កែប្រែ

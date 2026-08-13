@@ -9,34 +9,18 @@ import (
 type UserRole string
 
 const (
-	RoleSuperAdmin    UserRole = "super_admin"
-	RoleAdmin         UserRole = "admin"
-	RoleProvinceChief UserRole = "province_chief"
-	RoleDistrictChief UserRole = "district_chief"
-	RoleCommuneChief  UserRole = "commune_chief"
-	RoleCommuneClerk  UserRole = "commune_clerk"
-	RoleVillageChief  UserRole = "village_chief"
-	RoleRecorder      UserRole = "recorder"
-	RoleRegularUser   UserRole = "regular_user"
+	RoleSuperAdmin UserRole = "super_admin"
 )
 
 var RoleHierarchy = map[UserRole]int{
-	RoleSuperAdmin:    8,
-	RoleAdmin:         7,
-	RoleProvinceChief: 6,
-	RoleDistrictChief: 5,
-	RoleCommuneChief:  4,
-	RoleCommuneClerk:  3,
-	RoleVillageChief:  2,
-	RoleRecorder:      1,
-	RoleRegularUser:   0,
+	RoleSuperAdmin: 8,
 }
 
 func RoleLevel(role UserRole) int {
 	if level, ok := RoleHierarchy[role]; ok {
 		return level
 	}
-	return RoleHierarchy[RoleRegularUser]
+	return 0
 }
 
 type Profile struct {

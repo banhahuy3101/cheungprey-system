@@ -61,7 +61,7 @@ func (r *Repository) CreateProfile(profile *models.Profile) error {
 	}
 	var inserted []models.Profile
 	_, err := r.AdminClient.From("profiles").
-		Insert(payload, false, "", "*", "").
+		Upsert(payload, "", "*", "").
 		ExecuteTo(&inserted)
 	if err != nil {
 		return err
@@ -175,7 +175,7 @@ func (r *Repository) ListAdminUsers() ([]models.AdminUser, error) {
 	}
 
 	emailByID := map[string]string{}
-	if authResp, err := r.AdminClient.Auth.AdminListUsers(); err == nil && authResp != nil {
+	if authResp, err := r.AdminClient.Auth.WithToken(r.cfg.SupabaseServiceKey).AdminListUsers(); err == nil && authResp != nil {
 		for _, u := range authResp.Users {
 			emailByID[u.ID.String()] = u.Email
 		}
@@ -230,7 +230,8 @@ func (r *Repository) ListAdminUsers() ([]models.AdminUser, error) {
 }
 
 func (r *Repository) AdminResetUserPassword(id uuid.UUID, password string) error {
-	_, err := r.AdminClient.Auth.AdminUpdateUser(gotrue.AdminUpdateUserRequest{
+	adminAuth := r.AdminClient.Auth.WithToken(r.cfg.SupabaseServiceKey)
+	_, err := adminAuth.AdminUpdateUser(gotrue.AdminUpdateUserRequest{
 		UserID:   id,
 		Password: password,
 	})

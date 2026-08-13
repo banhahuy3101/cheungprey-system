@@ -4,7 +4,6 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	gotrue "github.com/supabase-community/gotrue-go/types"
 
 	"github.com/banhahuy/cheungprey-system/backend/internal/auth"
 	"github.com/banhahuy/cheungprey-system/backend/internal/models"
@@ -59,33 +58,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 }
 
 func (h *AuthHandler) Register(c *gin.Context) {
-	var req models.RegisterRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, err.Error())
-		return
-	}
-
-	resp, err := h.repo.Client.Auth.Signup(gotrue.SignupRequest{
-		Email:    req.Email,
-		Password: req.Password,
-	})
-	if err != nil {
-		utils.BadRequest(c, err.Error())
-		return
-	}
-
-	userID := resp.User.ID
-
-	profile, err := h.svc.CreateProfile(userID, &req)
-	if err != nil {
-		utils.InternalError(c, "Failed to create profile")
-		return
-	}
-
-	utils.JSON(c, http.StatusCreated, gin.H{
-		"message": "User registered successfully",
-		"user":    profile,
-	})
+	utils.Forbidden(c, "Self-registration is disabled. Contact system administrator.")
 }
 
 func (h *AuthHandler) RefreshToken(c *gin.Context) {

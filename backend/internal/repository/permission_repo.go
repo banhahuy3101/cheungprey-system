@@ -61,9 +61,6 @@ func (r *Repository) SetUserRoles(userID uuid.UUID, roles []models.UserRole) err
 	}
 	primary := models.PrimaryRole(roles)
 	profileRole := primary
-	if _, ok := models.RoleHierarchy[primary]; !ok {
-		profileRole = models.RoleRegularUser
-	}
 	_, _, err = r.AdminClient.From("profiles").
 		Update(map[string]any{"role": profileRole, "updated_at": "now()"}, "", "").
 		Eq("id", userID.String()).
@@ -114,14 +111,8 @@ func (r *Repository) GetAllRolePermissionsMap() (map[models.UserRole]models.Perm
 	for _, item := range list {
 		m[item.Role] = item.Permissions
 	}
-	for _, role := range []models.UserRole{
-		models.RoleSuperAdmin, models.RoleAdmin, models.RoleProvinceChief,
-		models.RoleDistrictChief, models.RoleCommuneChief, models.RoleCommuneClerk,
-		models.RoleVillageChief, models.RoleRecorder, models.RoleRegularUser,
-	} {
-		if _, ok := m[role]; !ok {
-			m[role] = models.DefaultPermissionsForRole(role)
-		}
+	if _, ok := m[models.RoleSuperAdmin]; !ok {
+		m[models.RoleSuperAdmin] = models.DefaultPermissionsForRole(models.RoleSuperAdmin)
 	}
 	if roleList, err := r.ListRoles(); err == nil {
 		for _, row := range roleList {
@@ -170,6 +161,23 @@ func decodePermissions(raw json.RawMessage, role models.UserRole) models.Permiss
 			result[f] = v
 		} else {
 			result[f] = defaults[f]
+		}
+	}
+	// Old rows only contain the base module key. Preserve their previous
+	// behavior by filling missing CRUD actions from that base key.
+	for _, module := range []models.Feature{
+		models.FeatureMembers, models.FeatureVoters, models.FeatureFiles,
+		models.FeatureRecords, models.FeatureReports, models.FeaturePerformance,
+		models.FeatureFinances, models.FeatureUsers,
+	} {
+		if !result[module] {
+			continue
+		}
+		for _, action := range []string{"create", "read", "update", "delete"} {
+			key := models.Feature(string(module) + "_" + action)
+			if _, explicitlySet := m[string(key)]; !explicitlySet {
+				result[key] = true
+			}
 		}
 	}
 	return result
@@ -229,15 +237,7 @@ func sortRoles(rows []models.Role) {
 
 func builtinRoles() []models.Role {
 	return []models.Role{
-		{Role: "super_admin", Label: "Super Admin", IsSystem: true},
-		{Role: "admin", Label: "Admin", IsSystem: true},
-		{Role: "province_chief", Label: "Province Chief", IsSystem: true},
-		{Role: "district_chief", Label: "District Chief", IsSystem: true},
-		{Role: "commune_chief", Label: "Commune Chief", IsSystem: true},
-		{Role: "commune_clerk", Label: "Commune Clerk", IsSystem: true},
-		{Role: "village_chief", Label: "Village Chief", IsSystem: true},
-		{Role: "recorder", Label: "Recorder", IsSystem: true},
-		{Role: "regular_user", Label: "Regular User", IsSystem: true},
+		{Role: "super_admin", Label: "អ្នកគ្រប់គ្រងជាន់ខ្ពស់", IsSystem: true},
 	}
 }
 
@@ -315,14 +315,7 @@ func (r *Repository) DeleteRole(role string) error {
 }
 
 func isSystemRole(role string) bool {
-	switch models.UserRole(role) {
-	case models.RoleSuperAdmin, models.RoleAdmin, models.RoleProvinceChief,
-		models.RoleDistrictChief, models.RoleCommuneChief, models.RoleCommuneClerk,
-		models.RoleVillageChief, models.RoleRecorder, models.RoleRegularUser:
-		return true
-	default:
-		return false
-	}
+	return models.UserRole(role) == models.RoleSuperAdmin
 }
 
 func (r *Repository) SeedRolePermissionsIfEmpty() error {
@@ -333,14 +326,5 @@ func (r *Repository) SeedRolePermissionsIfEmpty() error {
 	if len(list) > 0 {
 		return nil
 	}
-	for _, role := range []models.UserRole{
-		models.RoleSuperAdmin, models.RoleAdmin, models.RoleProvinceChief,
-		models.RoleDistrictChief, models.RoleCommuneChief, models.RoleCommuneClerk,
-		models.RoleVillageChief, models.RoleRecorder, models.RoleRegularUser,
-	} {
-		if err := r.UpdateRolePermissions(role, models.DefaultPermissionsForRole(role)); err != nil {
-			return err
-		}
-	}
-	return nil
+	return r.UpdateRolePermissions(models.RoleSuperAdmin, models.DefaultPermissionsForRole(models.RoleSuperAdmin))
 }

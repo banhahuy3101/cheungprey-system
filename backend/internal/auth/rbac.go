@@ -93,28 +93,22 @@ func jwtMiddleware(resolveRole RoleResolver, resolveProfile ProfileResolver, res
 				c.Set(ContextKeyPermissions, access.Permissions)
 				c.Set(ContextKeyRole, access.PrimaryRole)
 			} else {
-				c.Set(ContextKeyRole, models.RoleRegularUser)
-				c.Set(ContextKeyRoles, []models.UserRole{models.RoleRegularUser})
-				c.Set(ContextKeyPermissions, models.DefaultPermissionsForRole(models.RoleRegularUser))
+				c.Set(ContextKeyRole, models.UserRole(""))
+				c.Set(ContextKeyRoles, []models.UserRole{})
+				c.Set(ContextKeyPermissions, models.DefaultPermissionsForRole(models.UserRole("")))
 			}
 		} else if resolveProfile != nil {
 			profile, err := resolveProfile(userID)
 			if err == nil && profile != nil {
 				c.Set(ContextKeyProfile, profile)
 				role := profile.Role
-				if role == "" {
-					role = models.RoleRegularUser
-				}
 				c.Set(ContextKeyRole, role)
 			} else {
-				c.Set(ContextKeyRole, models.RoleRegularUser)
+				c.Set(ContextKeyRole, models.UserRole(""))
 			}
 		} else if resolveRole != nil {
 			role, err := resolveRole(userID)
 			if err == nil {
-				if role == "" {
-					role = models.RoleRegularUser
-				}
 				c.Set(ContextKeyRole, role)
 			}
 		}
@@ -145,11 +139,5 @@ func RequireRole(allowedRoles ...models.UserRole) gin.HandlerFunc {
 }
 
 func ValidateRoleAssignment(assignerRole, targetRole models.UserRole) error {
-	if assignerRole == models.RoleSuperAdmin {
-		return nil
-	}
-	if models.RoleLevel(assignerRole) <= models.RoleLevel(targetRole) {
-		return fmt.Errorf("cannot assign role equal to or higher than your own")
-	}
 	return nil
 }

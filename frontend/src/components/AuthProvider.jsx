@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import AuthContext from "../context/AuthContext";
 import { authAPI } from "../api/auth";
+import { adminAPI } from "../api/admin";
 
 export default function AuthProvider({ children }) {
   const [user, setUser] = useState(() => {
@@ -11,16 +12,33 @@ export default function AuthProvider({ children }) {
       return null;
     }
   });
+  const [rolePermissions, setRolePermissions] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  const fetchRolePermissions = useCallback(async () => {
+    try {
+      const res = await adminAPI.getRolePermissions();
+      const list = res.data?.data || res.data || [];
+      setRolePermissions(list);
+      return list;
+    } catch {
+      setRolePermissions([]);
+      return [];
+    }
+  }, []);
 
   const loadProfile = useCallback(async () => {
     const token = localStorage.getItem("access_token");
     if (!token) {
       localStorage.removeItem("cached_user_profile");
+      setRolePermissions([]);
       return null;
     }
     try {
-      const { data } = await authAPI.getProfile();
+      const [{ data }] = await Promise.all([
+        authAPI.getProfile(),
+        fetchRolePermissions(),
+      ]);
       const inner = data.data || data;
       const profile = inner.profile || inner;
       localStorage.setItem("cached_user_profile", JSON.stringify(profile));
@@ -29,28 +47,26 @@ export default function AuthProvider({ children }) {
       localStorage.removeItem("access_token");
       localStorage.removeItem("refresh_token");
       localStorage.removeItem("cached_user_profile");
+      setRolePermissions([]);
       return null;
     }
-  }, []);
+  }, [fetchRolePermissions]);
 
   useEffect(() => {
     const token = localStorage.getItem("access_token");
     if (!token) {
       setUser(null);
-      setLoading(false);
-      return;
-    }
-
-    if (user) {
+      setRolePermissions([]);
       setLoading(false);
       return;
     }
 
     let cancelled = false;
-    setLoading(true);
     loadProfile().then((profile) => {
       if (!cancelled) {
-        setUser(profile);
+        if (profile) {
+          setUser(profile);
+        }
         setLoading(false);
       }
     });
@@ -58,7 +74,7 @@ export default function AuthProvider({ children }) {
     return () => {
       cancelled = true;
     };
-  }, [loadProfile, user]);
+  }, [loadProfile]);
 
   const login = async (credentials) => {
     localStorage.removeItem("access_token");
@@ -83,6 +99,7 @@ export default function AuthProvider({ children }) {
       localStorage.setItem("cached_user_profile", JSON.stringify(loggedUser));
     }
     setUser(loggedUser);
+    fetchRolePermissions().catch(() => {});
     return inner;
   };
 
@@ -96,6 +113,7 @@ export default function AuthProvider({ children }) {
     localStorage.removeItem("refresh_token");
     localStorage.removeItem("cached_user_profile");
     setUser(null);
+    setRolePermissions([]);
   };
 
   const updateProfile = async (profileData) => {
@@ -118,7 +136,17 @@ export default function AuthProvider({ children }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, loading, login, register, logout, updateProfile, refreshProfile }}
+      value={{
+        user,
+        rolePermissions,
+        loading,
+        login,
+        register,
+        logout,
+        updateProfile,
+        refreshProfile,
+        fetchRolePermissions,
+      }}
     >
       {children}
     </AuthContext.Provider>

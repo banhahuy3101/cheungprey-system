@@ -1,12 +1,14 @@
 import { Navigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
-import { canAccess, isAdmin } from "../utils/permissions";
+import { canAccess, hasAnyFeature, isAdmin } from "../utils/permissions";
+import Forbidden from "../pages/Forbidden";
 
 export default function ProtectedRoute({
   children,
   adminOnly = false,
   feature = null,
-  keepLayout = false,
+  action = null,
+  features = null,
 }) {
   const { user, loading } = useAuth();
 
@@ -16,10 +18,13 @@ export default function ProtectedRoute({
 
   if (!loading) {
     if (adminOnly && !isAdmin(user)) {
-      return <Navigate to="/" replace />;
+      return <Forbidden />;
     }
-    if (feature && !canAccess(user, feature)) {
-      return <Navigate to="/" replace />;
+    if (features?.length && !hasAnyFeature(user, features)) {
+      return <Forbidden />;
+    }
+    if (feature && !canAccess(user, feature, action)) {
+      return <Forbidden />;
     }
   }
 

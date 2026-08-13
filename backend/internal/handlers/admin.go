@@ -82,9 +82,6 @@ func (h *AdminHandler) CreateUser(c *gin.Context) {
 	if targetRole == "" && len(req.Roles) > 0 {
 		targetRole = models.PrimaryRole(req.Roles)
 	}
-	if targetRole == "" {
-		targetRole = models.RoleRecorder
-	}
 	if err := auth.ValidateRoleAssignment(assignerRole, targetRole); err != nil {
 		utils.Forbidden(c, err.Error())
 		return
@@ -101,9 +98,13 @@ func (h *AdminHandler) CreateUser(c *gin.Context) {
 	}
 
 	pw := req.Password
-	resp, err := h.repo.AdminClient.Auth.AdminCreateUser(gotrue.AdminCreateUserRequest{
-		Email:    req.Email,
-		Password: &pw,
+	if pw == "" {
+		pw = "Demo123!"
+	}
+	resp, err := h.repo.AdminClient.Auth.WithToken(h.cfg.SupabaseServiceKey).AdminCreateUser(gotrue.AdminCreateUserRequest{
+		Email:        req.Email,
+		Password:     &pw,
+		EmailConfirm: true,
 	})
 	if err != nil {
 		utils.BadRequest(c, err.Error())
@@ -138,7 +139,8 @@ func (h *AdminHandler) CreateUser(c *gin.Context) {
 	}
 
 	if err := h.repo.CreateProfile(profile); err != nil {
-		utils.InternalError(c, "Failed to create profile")
+		_ = h.repo.AdminClient.Auth.WithToken(h.cfg.SupabaseServiceKey).AdminDeleteUser(gotrue.AdminDeleteUserRequest{UserID: resp.User.ID})
+		utils.InternalError(c, "Failed to create user profile: "+err.Error())
 		return
 	}
 
@@ -176,11 +178,9 @@ func (h *AdminHandler) UpdateUser(c *gin.Context) {
 
 	if req.Role != "" {
 		assignerRole, _ := auth.GetUserRole(c)
-		if assignerRole != models.RoleSuperAdmin {
-			if err := auth.ValidateRoleAssignment(assignerRole, req.Role); err != nil {
-				utils.Forbidden(c, err.Error())
-				return
-			}
+		if err := auth.ValidateRoleAssignment(assignerRole, req.Role); err != nil {
+			utils.Forbidden(c, err.Error())
+			return
 		}
 	}
 
@@ -322,6 +322,91 @@ func (h *AdminHandler) GetStatistics(c *gin.Context) {
 	}
 
 	utils.JSON(c, http.StatusOK, stats)
+}
+
+type SettingsNavItem struct {
+	Key       string   `json:"key,omitempty"`
+	ModuleKey string   `json:"module_key,omitempty"`
+	Icon      string   `json:"icon"`
+	Title     string   `json:"title"`
+	Desc      string   `json:"desc"`
+	Path      string   `json:"path"`
+	Features  []string `json:"features,omitempty"`
+}
+
+func (h *AdminHandler) GetSettingsCatalog(c *gin.Context) {
+	moduleConfigs, _ := h.repo.ListModuleConfigs()
+	enabledMap := make(map[string]bool)
+	for _, mc := range moduleConfigs {
+		enabledMap[mc.ModuleKey] = mc.Enabled
+	}
+
+	catalog := []SettingsNavItem{
+		{
+			Key:   string(models.FeatureUsers),
+			Icon:  "LuShield",
+			Title: "គ្រប់គ្រងអ្នកប្រើប្រាស់",
+			Desc:  "បន្ថែម កែប្រែ ឬលុបអ្នកប្រើប្រាស់",
+			Path:  "/settings/users",
+		},
+		{
+			Key:   string(models.FeatureUsers),
+			Icon:  "LuKeyRound",
+			Title: "សិទ្ធិតួនាទី",
+			Desc:  "កំណត់ feature allow/none សម្រាប់រដ្ឋបាលនីមួយៗ",
+			Path:  "/settings/role-permissions",
+		},
+		{
+			Key:       string(models.FeatureUsers),
+			ModuleKey: "zone_chiefs",
+			Icon:      "LuMapPin",
+			Title:     "កំណត់ប្រធានភូមិសាស្ត្រ",
+			Desc:      "ចាត់តាំងប្រធានខេត្ត ស្រុក ឃុំ ភូមិ",
+			Path:      "/settings/zone-chiefs",
+		},
+		{
+			Key:       string(models.FeatureReports),
+			ModuleKey: "reports",
+			Icon:      "LuFileText",
+			Title:     "គំរូរបាយការណ៍",
+			Desc:      "បញ្ចូល និងគ្រប់គ្រងគំរូ .docx / .html សម្រាប់របាយការណ៍",
+			Path:      "/settings/report-templates",
+		},
+		{
+			Key:   string(models.FeatureTechnical),
+			Icon:  "LuWrench",
+			Title: "Technical",
+			Desc:  "System settings — ពាក្យសម្ងាត់ដើម និងការកំណត់ប្រព័ន្ធ",
+			Path:  "/settings/technical",
+		},
+		{
+			Features: []string{string(models.FeatureTechnical), string(models.FeatureUsers)},
+			Icon:     "LuSettings2",
+			Title:    "ម៉ូឌុលប្រព័ន្ធ (Module)",
+			Desc:     "បើក/បិទម៉ូឌុលប្រព័ន្ធ និងកំណត់ដំណើរការអនុម័ត",
+			Path:     "/settings/modules",
+		},
+		{
+			Key:       string(models.FeaturePerformanceAdmin),
+			ModuleKey: "performance",
+			Icon:      "LuTarget",
+			Title:     "គ្រប់គ្រង Performance",
+			Desc:      "គ្រប់គ្រងដែន ចំណុចរង សូចនាករ និងរយៈពេល",
+			Path:      "/settings/performance",
+		},
+	}
+
+	var filtered []SettingsNavItem
+	for _, item := range catalog {
+		if item.ModuleKey != "" {
+			if enabled, ok := enabledMap[item.ModuleKey]; ok && !enabled {
+				continue
+			}
+		}
+		filtered = append(filtered, item)
+	}
+
+	utils.JSON(c, http.StatusOK, filtered)
 }
 
 func (h *AdminHandler) GetSettings(c *gin.Context) {

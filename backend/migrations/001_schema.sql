@@ -53,7 +53,7 @@ CREATE TABLE public.profiles (
     phone_number TEXT UNIQUE,
     commune_id UUID REFERENCES public.communes(id),
     village_id UUID REFERENCES public.villages(id),
-    role user_role NOT NULL DEFAULT 'recorder',
+    role VARCHAR NOT NULL DEFAULT '',
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );

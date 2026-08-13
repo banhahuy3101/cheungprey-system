@@ -31,7 +31,7 @@ func (s *PermissionService) GetUserAccess(userID uuid.UUID) (*models.UserAccess,
 	if len(roles) == 0 {
 		role := profile.Role
 		if role == "" {
-			role = models.RoleRegularUser
+			role = models.UserRole("user")
 		}
 		roles = []models.UserRole{role}
 	}
@@ -109,13 +109,13 @@ func (s *PermissionService) ResolveProfileZoneCode(profile *models.Profile) stri
 	if profile.CommuneID != nil {
 		if c, err := s.repo.GetCommuneByID(*profile.CommuneID); err == nil && c != nil {
 			if d, err := s.repo.GetDistrictByID(c.DistrictID); err == nil && d != nil && d.Code != "" {
-				if profile.Role == models.RoleDistrictChief {
+				if string(profile.Role) == "district_chief" {
 					return d.Code
 				}
 			}
 		}
 	}
-	if profile.Role == models.RoleDistrictChief {
+	if string(profile.Role) == "district_chief" {
 		return "0303"
 	}
 	return ""

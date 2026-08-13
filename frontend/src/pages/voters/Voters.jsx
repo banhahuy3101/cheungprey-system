@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback } from "react";
 import { LuPlus, LuSearch, LuX } from "react-icons/lu";
 import { partyAPI } from "../../api/party";
 import Select from "../../components/Select";
+import { useAuth } from "../../hooks/useAuth";
+import { canAccess, FEATURES } from "../../utils/permissions";
 
 const initialForm = {
   name: "",
@@ -16,6 +18,8 @@ const initialForm = {
 };
 
 export default function Voters() {
+  const { user } = useAuth();
+  const canCreate = canAccess(user, FEATURES.voters, "create");
   const [voters, setVoters] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -78,9 +82,11 @@ export default function Voters() {
     <div className="page">
       <div className="page-header">
         <h2 className="section-title">បញ្ជីអ្នកបោះឆ្នោត</h2>
-        <button className="btn btn-primary" onClick={openCreate}>
-          <LuPlus /> បន្ថែមអ្នកបោះឆ្នោត
-        </button>
+        {canCreate && (
+          <button className="btn btn-primary" onClick={openCreate}>
+            <LuPlus /> បន្ថែមអ្នកបោះឆ្នោត
+          </button>
+        )}
       </div>
 
       <div className="search-bar">

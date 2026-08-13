@@ -1,19 +1,19 @@
 import { useState, useEffect } from "react";
-import { LuSearch, LuPencil, LuEye, LuBanknote, LuActivity, LuCreditCard, LuChevronDown, LuChevronUp, LuCheck, LuX } from "react-icons/lu";
+import { LuSearch, LuPencil, LuEye, LuBanknote, LuActivity, LuCreditCard, LuCheck, LuX, LuPrinter } from "react-icons/lu";
 import { useNavigate } from "react-router-dom";
-import { membershipAPI, approvalsAPI } from "../../api/membership";
+import { membershipAPI } from "../../api/membership";
 import Select from "../../components/Select";
-import EmptyState from "../../components/EmptyState";
-import { SkeletonTable, SkeletonGrid } from "../../components/Skeleton";
+import { SkeletonGrid } from "../../components/Skeleton";
+import DataTable from "../../components/DataTable";
 
 export default function MembershipList({
   members, search, setSearch,
-  statusFilter, setStatusFilter,
+  setStatusFilter,
   zoneFilter, setZoneFilter,
   roleFilter, setRoleFilter,
-  genderFilter, setGenderFilter,
+  setGenderFilter,
   page, setPage, total, loading,
-  canApprove, onRefresh,
+  canApprove, canUpdate, onRefresh,
 }) {
   const navigate = useNavigate();
   const [stats, setStats] = useState(null);
@@ -68,6 +68,92 @@ export default function MembershipList({
     }
   };
 
+  const handlePrintRoster = () => {
+    const listToPrint = selectedIds.length > 0
+      ? members.filter(m => selectedIds.includes(m.id))
+      : members;
+
+    const win = window.open("", "_blank");
+    if (!win) return;
+
+    const rowsHtml = listToPrint.map((m, idx) => `
+      <tr>
+        <td style="text-align: center; border: 1px solid #cbd5e1; padding: 6px 8px;">${idx + 1}</td>
+        <td style="border: 1px solid #cbd5e1; padding: 6px 8px; font-weight: bold;">${m.membership_card_no || "—"}</td>
+        <td style="border: 1px solid #cbd5e1; padding: 6px 8px; font-weight: bold;">${m.last_name_kh || ""} ${m.first_name_kh || ""}</td>
+        <td style="text-align: center; border: 1px solid #cbd5e1; padding: 6px 8px;">${m.gender === "Male" || m.gender === "ប្រុស" ? "ប្រុស" : "ស្រី"}</td>
+        <td style="border: 1px solid #cbd5e1; padding: 6px 8px;">${m.phone_number || "—"}</td>
+        <td style="border: 1px solid #cbd5e1; padding: 6px 8px;">${m.party_role || "សមាជិក"}</td>
+        <td style="border: 1px solid #cbd5e1; padding: 6px 8px;">${m.join_date?.slice(0, 10) || "—"}</td>
+        <td style="text-align: center; border: 1px solid #cbd5e1; padding: 6px 8px;">${statusLabel(m.status)}</td>
+      </tr>
+    `).join("");
+
+    win.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>បញ្ជីសមាជិក - ស្រុកជើងព្រៃ</title>
+          <style>
+            @media print {
+              @page { size: A4 landscape; margin: 15mm; }
+            }
+            body { font-family: 'Kantumruy Pro', 'Hanuman', 'Segoe UI', Tahoma, sans-serif; padding: 20px; color: #0f172a; }
+            .header { text-align: center; margin-bottom: 20px; }
+            .header h2 { margin: 0; font-size: 18pt; color: #1e3a8a; }
+            .header h4 { margin: 5px 0 0 0; font-size: 12pt; color: #475569; font-weight: normal; }
+            table { width: 100%; border-collapse: collapse; font-size: 10pt; }
+            th { background: #f1f5f9; border: 1px solid #94a3b8; padding: 8px; text-align: left; }
+            .footer { margin-top: 40px; display: flex; justify-content: space-between; font-size: 11pt; text-align: center; }
+            .signature-block { width: 220px; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h2>ព្រះរាជាណាចក្រកម្ពុជា · ជាតិ សាសនា ព្រះមហាក្សត្រ</h2>
+            <h4>គណបក្សប្រជាជនកម្ពុជា គណៈកម្មាធិការបក្សស្រុកជើងព្រៃ</h4>
+            <h3 style="margin-top: 15px; text-decoration: underline;">តារាងបញ្ជីឈ្មោះសមាជិកគណបក្ស</h3>
+          </div>
+          <div style="display:flex; justify-content:space-between; font-size:10pt; margin-bottom:10px;">
+            <span>សរុបសមាជិក: <strong>${listToPrint.length} នាក់</strong></span>
+            <span>កាលបរិច្ឆេទបោះពុម្ព: ${new Date().toLocaleDateString('km-KH')}</span>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 40px; text-align: center;">ល.រ</th>
+                <th>លេខប័ណ្ណ</th>
+                <th>គោត្តនាម និង នាម</th>
+                <th style="width: 50px; text-align: center;">ភេទ</th>
+                <th>លេខទូរសព្ទ</th>
+                <th>តួនាទីគណបក្ស</th>
+                <th>ថ្ងៃចូលបក្ស</th>
+                <th style="width: 70px; text-align: center;">ស្ថានភាព</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rowsHtml}
+            </tbody>
+          </table>
+          <div class="footer">
+            <div class="signature-block">
+              <p>បានឃើញ និងពិនិត្យ</p>
+              <p style="margin-top: 50px;"><strong>ប្រធានគណៈកម្មាធិការបក្សស្រុក</strong></p>
+            </div>
+            <div class="signature-block">
+              <p>ថ្ងៃ........ខែ........ឆ្នាំ........ព.ស.២៥៧...</p>
+              <p style="margin-top: 50px;"><strong>អ្នករៀបចំបញ្ជី</strong></p>
+            </div>
+          </div>
+          <script>
+            window.onload = function() { window.print(); };
+          </script>
+        </body>
+      </html>
+    `);
+    win.document.close();
+  };
+
   return (
     <>
       {/* Stats bar */}
@@ -113,6 +199,17 @@ export default function MembershipList({
             <option value="Advisor">Advisor</option>
           </Select>
         </div>
+        <div className="form-group" style={{ marginLeft: "auto", flex: "0 0 auto" }}>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={handlePrintRoster}
+            style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem", borderRadius: "8px", fontWeight: "600", fontSize: "0.82rem" }}
+            title="បោះពុម្ពបញ្ជីសមាជិក (A4 Landscape)"
+          >
+            <LuPrinter size={16} /> បោះពុម្ពបញ្ជី
+          </button>
+        </div>
       </div>
 
       {/* Bulk actions */}
@@ -141,84 +238,104 @@ export default function MembershipList({
       )}
 
       {/* Table */}
-      {loading ? (
-        <SkeletonTable rows={8} cols={8} />
-      ) : members.length === 0 ? (
-        <EmptyState type="search" actionLabel="បន្ថែមសមាជិកថ្មី" onAction={() => navigate("/membership/create")} />
-      ) : (
-        <div className="table-responsive">
-          <table className="table">
-            <thead>
-              <tr>
-                <th style={{ width: "40px" }}>
-                  <input type="checkbox" checked={selectedIds.length === members.length && members.length > 0} onChange={toggleAll} />
-                </th>
-                <th>#</th>
-                <th>ឈ្មោះខ្មែរ</th>
-                <th>ភេទ</th>
-                <th>លេខទូរសព្ទ</th>
-                <th>ឋានៈ</th>
-                <th>ស្ថានភាព</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {members.map((m, i) => (
-                <tr key={m.id}>
-                  <td><input type="checkbox" checked={selectedIds.includes(m.id)} onChange={() => toggleSelect(m.id)} /></td>
-                  <td>{(page - 1) * 20 + i + 1}</td>
-                  <td>
-                    <MemberHoverCard member={m}>
-                      <span style={{ cursor: "pointer" }}>{m.last_name_kh} {m.first_name_kh}</span>
-                    </MemberHoverCard>
-                  </td>
-                  <td><span style={{ fontSize: "0.82rem" }}>{m.gender === "Male" ? "ប្រុស" : m.gender === "Female" ? "ស្រី" : "ផ្សេងៗ"}</span></td>
-                  <td style={{ fontSize: "0.85rem" }}>{m.phone_number}</td>
-                  <td>{m.party_role}</td>
-                  <td><span className={`badge ${statusBadge(m.status)}`}>{statusLabel(m.status)}</span></td>
-                  <td>
-                    <div className="actions">
-                      {canApprove && m.status === "Pending" && (
-                        <>
-                          <button
-                            className="btn-icon"
-                            style={{ color: "var(--success)" }}
-                            title="យល់ព្រម"
-                            onClick={() => approveMember(m.id)}
-                          ><LuCheck /></button>
-                          <button
-                            className="btn-icon"
-                            style={{ color: "var(--danger)" }}
-                            title="បដិសេធ"
-                            onClick={() => rejectMember(m)}
-                          ><LuX /></button>
-                        </>
-                      )}
-                      <button className="btn-icon" onClick={() => navigate(`/membership/${m.id}`)} title="មើល"><LuEye /></button>
-                      <button className="btn-icon" onClick={() => navigate(`/membership/${m.id}/edit`)} title="កែប្រែ"><LuPencil /></button>
-                      {m.status !== "Pending" && (
-                        <>
-                          <button className="btn-icon" onClick={() => navigate(`/membership/${m.id}/dues`)} title="បង់រំលោះ"><LuBanknote /></button>
-                          <button className="btn-icon" onClick={() => navigate(`/membership/${m.id}/activity`)} title="សកម្មភាព"><LuActivity /></button>
-                          <button className="btn-icon" onClick={() => navigate(`/membership/${m.id}/cards`)} title="កាត"><LuCreditCard /></button>
-                        </>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {totalPages > 1 && (
-        <div className="pagination">
-          <button disabled={page <= 1} onClick={() => setPage(page - 1)}>មុន</button>
-          <span>ទំព័រ {page} / {totalPages}</span>
-          <button disabled={page >= totalPages} onClick={() => setPage(page + 1)}>បន្ទាប់</button>
-        </div>
-      )}
+      <DataTable
+        selectable={true}
+        selectedIds={selectedIds}
+        onSelectRow={toggleSelect}
+        onSelectAll={toggleAll}
+        loading={loading}
+        emptyMessage="មិនទាន់មានសមាជិក"
+        columns={[
+          {
+            key: "idx",
+            label: "#",
+            width: "40px",
+            render: (_, __, i) => (page - 1) * 20 + i + 1,
+          },
+          {
+            key: "name",
+            label: "ឈ្មោះខ្មែរ",
+            render: (_, m) => (
+              <MemberHoverCard member={m}>
+                <span style={{ cursor: "pointer", fontWeight: "700", color: "#0f172a" }}>
+                  {m.last_name_kh} {m.first_name_kh}
+                </span>
+              </MemberHoverCard>
+            ),
+          },
+          {
+            key: "gender",
+            label: "ភេទ",
+            width: "60px",
+            render: (val) => (
+              <span style={{ fontSize: "0.82rem" }}>
+                {val === "Male" ? "ប្រុស" : val === "Female" ? "ស្រី" : "ផ្សេងៗ"}
+              </span>
+            ),
+          },
+          {
+            key: "phone_number",
+            label: "លេខទូរសព្ទ",
+            render: (val) => <span style={{ fontSize: "0.85rem", color: "#475569" }}>{val || "—"}</span>,
+          },
+          {
+            key: "party_role",
+            label: "ឋានៈ",
+            render: (val) => val || "សមាជិក",
+          },
+          {
+            key: "status",
+            label: "ស្ថានភាព",
+            render: (val) => (
+              <span className={`badge ${statusBadge(val)}`}>
+                {statusLabel(val)}
+              </span>
+            ),
+          },
+          {
+            key: "actions",
+            label: "សកម្មភាព",
+            align: "right",
+            width: "180px",
+            render: (_, m) => (
+              <div className="actions" style={{ display: "flex", justifyContent: "flex-end", gap: "0.25rem" }}>
+                {canApprove && m.status === "Pending" && (
+                  <>
+                    <button
+                      className="btn-icon"
+                      style={{ color: "var(--success)" }}
+                      title="យល់ព្រម"
+                      onClick={() => approveMember(m.id)}
+                    ><LuCheck /></button>
+                    <button
+                      className="btn-icon"
+                      style={{ color: "var(--danger)" }}
+                      title="បដិសេធ"
+                      onClick={() => rejectMember(m)}
+                    ><LuX /></button>
+                  </>
+                )}
+                <button className="btn-icon" onClick={() => navigate(`/membership/${m.id}`)} title="មើល"><LuEye /></button>
+                {canUpdate && <button className="btn-icon" onClick={() => navigate(`/membership/${m.id}/edit`)} title="កែប្រែ"><LuPencil /></button>}
+                {m.status !== "Pending" && (
+                  <>
+                    <button className="btn-icon" onClick={() => navigate(`/membership/${m.id}/dues`)} title="បង់រំលោះ"><LuBanknote /></button>
+                    <button className="btn-icon" onClick={() => navigate(`/membership/${m.id}/activity`)} title="សកម្មភាព"><LuActivity /></button>
+                    <button className="btn-icon" onClick={() => navigate(`/membership/${m.id}/cards`)} title="កាត"><LuCreditCard /></button>
+                  </>
+                )}
+              </div>
+            ),
+          },
+        ]}
+        data={members}
+        pagination={{
+          page,
+          totalPages,
+          total,
+          onPageChange: (p) => setPage(p),
+        }}
+      />
     </>
   );
 }

@@ -28,13 +28,23 @@ func (h *ModuleConfigHandler) ListModules(c *gin.Context) {
 		utils.InternalError(c, "Failed to list modules")
 		return
 	}
+
+	for i := range configs {
+		steps, err := h.repo.ListWorkflowSteps(configs[i].ModuleKey)
+		if err == nil && steps != nil {
+			configs[i].Steps = steps
+		} else {
+			configs[i].Steps = []models.WorkflowStep{}
+		}
+	}
+
 	utils.JSON(c, http.StatusOK, configs)
 }
 
 func (h *ModuleConfigHandler) UpdateModule(c *gin.Context) {
 	moduleKey := c.Param("key")
-	if moduleKey == "dashboard" || moduleKey == "settings" {
-		utils.BadRequest(c, "Cannot disable dashboard or settings module")
+	if moduleKey == "dashboard" {
+		utils.BadRequest(c, "Cannot disable dashboard module")
 		return
 	}
 
@@ -55,6 +65,9 @@ func (h *ModuleConfigHandler) UpdateModule(c *gin.Context) {
 	}
 	if req.NeedApproval != nil {
 		cfg.NeedApproval = *req.NeedApproval
+	}
+	if req.AllowEdit != nil {
+		cfg.AllowEdit = *req.AllowEdit
 	}
 	if req.Settings != nil {
 		cfg.Settings = req.Settings
@@ -318,7 +331,7 @@ func (h *ModuleConfigHandler) ApproveItem(c *gin.Context) {
 	}
 
 	if currentStep != nil && string(role) != currentStep.ApproverRole {
-		if !h.canOverride(role) {
+		if !h.canOverride(c) {
 			utils.Forbidden(c, "Only "+currentStep.ApproverRole+" can approve this step")
 			return
 		}
@@ -344,6 +357,16 @@ func (h *ModuleConfigHandler) ApproveItem(c *gin.Context) {
 	if remaining == nil {
 		if approval.ModuleKey == "membership" {
 			_ = h.repo.UpdateMember(approval.ItemID, map[string]any{"status": "Active"})
+		}
+		if approval.ModuleKey == "reports" {
+			_ = h.repo.UpdateReportDocument(approval.ItemID, map[string]any{"status": "published", "updated_at": time.Now()})
+			_ = h.repo.CreateReportReview(&models.ReportReview{
+				ID:         uuid.New(),
+				ReportID:   approval.ItemID,
+				Action:     "approve",
+				ReviewerID: userID,
+				CreatedAt:  time.Now(),
+			})
 		}
 		utils.JSON(c, http.StatusOK, gin.H{"success": true, "message": "Approved — workflow complete"})
 		return
@@ -381,11 +404,11 @@ func (h *ModuleConfigHandler) RejectItem(c *gin.Context) {
 	}
 
 	if currentStep != nil {
-		if string(role) != currentStep.ApproverRole && !h.canOverride(role) {
+		if string(role) != currentStep.ApproverRole && !h.canOverride(c) {
 			utils.Forbidden(c, "Only "+currentStep.ApproverRole+" can reject this step")
 			return
 		}
-		if !currentStep.CanReject && !h.canOverride(role) {
+		if !currentStep.CanReject && !h.canOverride(c) {
 			utils.Forbidden(c, "This step does not allow rejection")
 			return
 		}
@@ -422,6 +445,16 @@ func (h *ModuleConfigHandler) RejectItem(c *gin.Context) {
 	if approval.ModuleKey == "membership" {
 		_ = h.repo.UpdateMember(approval.ItemID, map[string]any{"status": "Suspended"})
 	}
+	if approval.ModuleKey == "reports" {
+		_ = h.repo.UpdateReportDocument(approval.ItemID, map[string]any{"status": "rejected", "updated_at": time.Now()})
+		_ = h.repo.CreateReportReview(&models.ReportReview{
+			ID:         uuid.New(),
+			ReportID:   approval.ItemID,
+			Action:     "reject",
+			ReviewerID: userID,
+			CreatedAt:  time.Now(),
+		})
+	}
 
 	utils.JSON(c, http.StatusOK, gin.H{"success": true, "message": "Rejected"})
 }
@@ -429,12 +462,9 @@ func (h *ModuleConfigHandler) RejectItem(c *gin.Context) {
 func (h *ModuleConfigHandler) getUserContext(c *gin.Context) (uuid.UUID, models.UserRole) {
 	userID, _ := auth.GetUserID(c)
 	role, _ := auth.GetUserRole(c)
-	if role == "" {
-		role = models.RoleRegularUser
-	}
 	return userID, role
 }
 
-func (h *ModuleConfigHandler) canOverride(role models.UserRole) bool {
-	return role == models.RoleSuperAdmin || role == models.RoleAdmin
+func (h *ModuleConfigHandler) canOverride(c *gin.Context) bool {
+	return auth.HasFeature(c, models.FeatureSettings) || auth.HasFeature(c, models.FeatureUsers)
 }

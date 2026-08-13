@@ -1,28 +1,51 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  LuUsers, LuUserCheck, LuFolderOpen, LuFileText, LuActivity,
-  LuTrendingUp, LuPlus, LuClock, LuMapPin, LuCalendar,
+  LuUsers, LuUserCheck, LuFolderOpen, LuFileText,
+  LuTrendingUp, LuPlus, LuClock, LuMapPin, LuCalendar, LuZap,
 } from "react-icons/lu";
 import { partyAPI } from "../../api/party";
 import { adminAPI } from "../../api/admin";
 import { membershipAPI } from "../../api/membership";
 import { useAuth } from "../../hooks/useAuth";
 import { canAccess, FEATURES } from "../../utils/permissions";
+import { unwrapZone } from "../../utils/zone";
+import { useRoleOptions } from "../../hooks/useRoleOptions";
 
 export default function Dashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { roleLabelMap } = useRoleOptions();
   const [stats, setStats] = useState(null);
   const [recent, setRecent] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [zoneLabel, setZoneLabel] = useState(user?.zone_name || user?.zone_code || "—");
+
+  useEffect(() => {
+    const zCode = user?.zone_code;
+    if (!zCode) {
+      setZoneLabel(user?.zone_name || "—");
+      return;
+    }
+    let active = true;
+    partyAPI.getZones({ code: zCode })
+      .then((res) => {
+        if (!active) return;
+        const zone = unwrapZone(res);
+        setZoneLabel(zone?.name_kh || user?.zone_name || zCode);
+      })
+      .catch(() => {
+        if (active) setZoneLabel(user?.zone_name || zCode);
+      });
+    return () => { active = false; };
+  }, [user?.zone_code, user?.zone_name]);
 
   useEffect(() => {
     if (!user) return;
     setLoading(true);
     const fetchAll = async () => {
       try {
-        const isAdmin = user.role === "admin" || user.role === "super_admin";
+        const isAdmin = canAccess(user, FEATURES.users) || canAccess(user, FEATURES.settings);
         let mainStats;
 
         if (isAdmin) {
@@ -45,11 +68,11 @@ export default function Dashboard() {
           const res = await membershipAPI.search({ limit: 5, sort_by: "join_date", sort_order: "desc" });
           const data = res.data?.data || res.data;
           recentList = data.members || data || [];
-        } catch {}
+        } catch { /* ignore */ }
 
         setStats(mainStats);
         setRecent(recentList.slice(0, 5));
-      } catch {} finally { setLoading(false); }
+      } catch { /* ignore */ } finally { setLoading(false); }
     };
     fetchAll();
   }, [user]);
@@ -84,12 +107,6 @@ export default function Dashboard() {
     },
   ];
 
-  const quickActions = [
-    { label: "បន្ថែមសមាជិក", icon: <LuPlus size={18} />, to: "/membership/create", feature: FEATURES.membership_write, color: "#4f46e5" },
-    { label: "ស្វែងរកសមាជិក", icon: <LuUsers size={18} />, to: "/membership", feature: FEATURES.members, color: "#059669" },
-    { label: "បង្កើតរបាយការណ៍", icon: <LuFileText size={18} />, to: "/reports", feature: FEATURES.reports, color: "#d97706" },
-    { label: "បញ្ចូលលទ្ធផល", icon: <LuTrendingUp size={18} />, to: "/performance", feature: FEATURES.performance, color: "#0891b2" },
-  ];
 
   if (loading) {
     return (
@@ -99,7 +116,7 @@ export default function Dashboard() {
           <div style={{ width: 140, height: 16, borderRadius: 4, background: "#f1f5f9", marginTop: "0.5rem", animation: "pulse 1.5s infinite" }} />
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "0.85rem", marginBottom: "1.5rem" }}>
-          {[1,2,3,4].map((i) => (
+          {[1, 2, 3, 4].map((i) => (
             <div key={i} style={{ height: 100, borderRadius: 14, background: "#f8fafc", animation: "pulse 1.5s infinite" }} />
           ))}
         </div>
@@ -123,7 +140,7 @@ export default function Dashboard() {
             <>
               <span style={{ color: "#cbd5e1" }}>·</span>
               <LuMapPin size={14} style={{ color: "#94a3b8" }} />
-              <span style={{ fontSize: "0.82rem", color: "#94a3b8" }}>{user.zone_code}</span>
+              <span style={{ fontSize: "0.82rem", color: "#94a3b8" }}>{zoneLabel}</span>
             </>
           )}
         </div>
@@ -162,30 +179,7 @@ export default function Dashboard() {
         ))}
       </div>
 
-      {/* Quick Actions */}
-      <div style={{ display: "flex", gap: "0.6rem", marginBottom: "1.5rem", flexWrap: "wrap" }}>
-        {quickActions.map((a) =>
-          canAccess(user, a.feature) ? (
-            <button
-              key={a.to}
-              onClick={() => navigate(a.to)}
-              style={{
-                display: "flex", alignItems: "center", gap: "0.45rem",
-                padding: "0.5rem 0.9rem", borderRadius: 10,
-                border: `1.5px solid ${a.color}20`, background: `${a.color}08`,
-                color: a.color, fontWeight: 600, fontSize: "0.8rem",
-                cursor: "pointer", transition: "all 0.15s",
-              }}
-              onMouseEnter={(e) => { e.currentTarget.style.background = `${a.color}18`; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = `${a.color}08`; }}
-            >
-              {a.icon} {a.label}
-            </button>
-          ) : null
-        )}
-      </div>
-
-      {/* Main Grid: Recent Members + User Stats */}
+      {/* Main Grid: Recent Members + Quick Action Sidebar */}
       <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "0.85rem" }}>
         {/* Recent Members */}
         <div style={{ background: "#fff", borderRadius: 16, border: "1px solid #f1f5f9", overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,0.03)" }}>
@@ -245,31 +239,113 @@ export default function Dashboard() {
           )}
         </div>
 
-        {/* Admin Stats */}
-        {(user?.role === "admin" || user?.role === "super_admin") && stats?.users_by_role ? (
-          <div style={{ background: "#fff", borderRadius: 16, border: "1px solid #f1f5f9", overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,0.03)" }}>
-            <div style={{ padding: "0.9rem 1.15rem", borderBottom: "1px solid #f1f5f9" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                <LuUsers size={16} style={{ color: "#4f46e5" }} />
-                <span style={{ fontWeight: 700, fontSize: "0.88rem", color: "#0f172a" }}>អ្នកប្រើប្រាស់</span>
-              </div>
+        {/* Right Column: Quick Action Hub & User Role Stats */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "0.85rem" }}>
+          {/* Quick Action Hub Card */}
+          <div style={{
+            background: "#ffffff", borderRadius: "16px", border: "1px solid #f1f5f9",
+            padding: "1.15rem", boxShadow: "0 1px 3px rgba(0,0,0,0.03)",
+            display: "flex", flexDirection: "column", gap: "0.85rem"
+          }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid #f8fafc", paddingBottom: "0.5rem" }}>
+              <span style={{ fontWeight: 700, fontSize: "0.88rem", color: "#0f172a", display: "flex", alignItems: "center", gap: "0.45rem" }}>
+                <LuZap size={16} style={{ color: "#f59e0b" }} /> ផ្លូវកាត់រហ័ស (Quick Actions)
+              </span>
             </div>
-            {Object.entries(stats.users_by_role).map(([role, count]) => (
-              <div key={role} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0.55rem 1.15rem", borderBottom: "1px solid #f8fafc" }}>
-                <span style={{ fontSize: "0.82rem", color: "#334155", fontWeight: 500 }}>{role}</span>
-                <span style={{ fontSize: "0.82rem", fontWeight: 700, color: "#4f46e5", background: "#eef2ff", padding: "0.15rem 0.55rem", borderRadius: 8 }}>{count}</span>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div style={{ background: "#fff", borderRadius: 16, border: "1px solid #f1f5f9", overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,0.03)", padding: "1.15rem", display: "flex", flexDirection: "column", gap: "0.8rem" }}>
-            <div style={{ fontWeight: 700, fontSize: "0.88rem", color: "#0f172a" }}>ព័ត៌មានគណនី</div>
-            <div style={{ fontSize: "0.82rem", color: "#64748b" }}>
-              <div style={{ marginBottom: "0.3rem" }}>តួនាទី: <strong style={{ color: "#0f172a" }}>{user?.role || "—"}</strong></div>
-              <div>តំបន់: <strong style={{ color: "#0f172a" }}>{user?.zone_code || "—"}</strong></div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.6rem" }}>
+              {canAccess(user, FEATURES.membership_write) && (
+                <button
+                  type="button"
+                  onClick={() => navigate("/membership/create")}
+                  style={{
+                    display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+                    padding: "0.75rem 0.5rem", borderRadius: "12px", border: "1px solid #e0e7ff",
+                    background: "#eef2ff", color: "#3730a3", cursor: "pointer", transition: "all 0.15s",
+                    fontSize: "0.75rem", fontWeight: "700", gap: "0.35rem", textAlign: "center"
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.transform = "translateY(-1px)"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.transform = ""; }}
+                >
+                  <LuPlus size={18} style={{ color: "#4f46e5" }} />
+                  <span>+ សមាជិកថ្មី</span>
+                </button>
+              )}
+
+              {canAccess(user, FEATURES.reports) && (
+                <button
+                  type="button"
+                  onClick={() => navigate("/reports")}
+                  style={{
+                    display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+                    padding: "0.75rem 0.5rem", borderRadius: "12px", border: "1px solid #fef3c7",
+                    background: "#fffbeb", color: "#92400e", cursor: "pointer", transition: "all 0.15s",
+                    fontSize: "0.75rem", fontWeight: "700", gap: "0.35rem", textAlign: "center"
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.transform = "translateY(-1px)"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.transform = ""; }}
+                >
+                  <LuFileText size={18} style={{ color: "#d97706" }} />
+                  <span>របាយការណ៍</span>
+                </button>
+              )}
+
+              {canAccess(user, FEATURES.performance) && (
+                <button
+                  type="button"
+                  onClick={() => navigate("/performance")}
+                  style={{
+                    display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+                    padding: "0.75rem 0.5rem", borderRadius: "12px", border: "1px solid #cff4fc",
+                    background: "#ecfeff", color: "#0891b2", cursor: "pointer", transition: "all 0.15s",
+                    fontSize: "0.75rem", fontWeight: "700", gap: "0.35rem", textAlign: "center"
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.transform = "translateY(-1px)"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.transform = ""; }}
+                >
+                  <LuTrendingUp size={18} style={{ color: "#0891b2" }} />
+                  <span>លទ្ធផលការងារ</span>
+                </button>
+              )}
+
+              {canAccess(user, FEATURES.files) && (
+                <button
+                  type="button"
+                  onClick={() => navigate("/files")}
+                  style={{
+                    display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+                    padding: "0.75rem 0.5rem", borderRadius: "12px", border: "1px solid #d1fae5",
+                    background: "#ecfdf5", color: "#065f46", cursor: "pointer", transition: "all 0.15s",
+                    fontSize: "0.75rem", fontWeight: "700", gap: "0.35rem", textAlign: "center"
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.transform = "translateY(-1px)"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.transform = ""; }}
+                >
+                  <LuFolderOpen size={18} style={{ color: "#059669" }} />
+                  <span>បណ្ណសារឯកសារ</span>
+                </button>
+              )}
             </div>
           </div>
-        )}
+
+          {/* Users by Role Stats (if admin/super_admin) */}
+          {canAccess(user, FEATURES.users) && stats?.users_by_role && (
+            <div style={{ background: "#fff", borderRadius: "16px", border: "1px solid #f1f5f9", overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,0.03)" }}>
+              <div style={{ padding: "0.85rem 1.15rem", borderBottom: "1px solid #f1f5f9" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                  <LuUsers size={16} style={{ color: "#4f46e5" }} />
+                  <span style={{ fontWeight: 700, fontSize: "0.88rem", color: "#0f172a" }}>អ្នកប្រើប្រាស់តាមតួនាទី</span>
+                </div>
+              </div>
+              {Object.entries(stats.users_by_role).map(([role, count]) => (
+                <div key={role} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0.55rem 1.15rem", borderBottom: "1px solid #f8fafc" }}>
+                  <span style={{ fontSize: "0.82rem", color: "#334155", fontWeight: 500 }}>{roleLabelMap[role] || role}</span>
+                  <span style={{ fontSize: "0.82rem", fontWeight: 700, color: "#4f46e5", background: "#eef2ff", padding: "0.15rem 0.55rem", borderRadius: 8 }}>{count}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

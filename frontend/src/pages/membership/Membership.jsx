@@ -75,7 +75,9 @@ export default function Membership() {
   const [submitting, setSubmitting] = useState(false);
   const [profile, setProfile] = useState(null);
 
-  const canApprove = canAccess(user, FEATURES.membership_admin) || user?.role === "district_chief" || user?.role === "province_chief" || user?.role === "admin" || user?.role === "super_admin";
+  const canApprove = canAccess(user, FEATURES.membership_admin) || canAccess(user, FEATURES.members, "update");
+  const canCreateMember = canAccess(user, FEATURES.members, "create");
+  const canUpdateMember = canAccess(user, FEATURES.members, "update");
 
   const memberZone = useZoneCascade({
     userZone: "",
@@ -268,9 +270,9 @@ export default function Membership() {
           )}
           <button className="btn btn-secondary" onClick={() => navigate("/membership/stats")}>ស្ថិតិ</button>
           <button className="btn btn-secondary" onClick={() => navigate("/membership/import")}>នាំចូល</button>
-          <button className="btn btn-primary" onClick={() => navigate("/membership/create")}>
+          {canCreateMember && <button className="btn btn-primary" onClick={() => navigate("/membership/create")}>
             <LuPlus /> បន្ថែមសមាជិក
-          </button>
+          </button>}
         </div>
       </div>
 
@@ -298,6 +300,7 @@ export default function Membership() {
               total={total}
               loading={loading}
               canApprove={canApprove}
+              canUpdate={canUpdateMember}
               onRefresh={fetchMembers}
             />
           )}

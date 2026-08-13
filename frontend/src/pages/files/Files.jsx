@@ -1,8 +1,12 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { LuPlus, LuTrash2, LuExternalLink, LuSearch, LuX } from "react-icons/lu";
+import { LuPlus, LuTrash2, LuExternalLink, LuSearch, LuFileText } from "react-icons/lu";
 import { partyAPI } from "../../api/party";
 import { TWO_MINUTE_TIMEOUT } from "../../api/client";
 import { readFileAsBase64, mimeTypeForFile, base64ToBlob, openBlobFile } from "../../utils/file";
+import Modal from "../settings/Modal";
+import DataTable from "../../components/DataTable";
+import { useAuth } from "../../hooks/useAuth";
+import { canAccess, FEATURES } from "../../utils/permissions";
 
 function getFileExtension(fileRow) {
   const name = fileRow.file_name || fileRow.filename || "";
@@ -52,6 +56,9 @@ function getExtensionBadgeStyle(ext) {
 }
 
 export default function Files() {
+  const { user } = useAuth();
+  const canCreate = canAccess(user, FEATURES.files, "create");
+  const canDelete = canAccess(user, FEATURES.files, "delete");
   const [files, setFiles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [openingId, setOpeningId] = useState(null);
@@ -104,7 +111,7 @@ export default function Files() {
       if (fileInputRef.current) fileInputRef.current.value = "";
       await fetchFiles();
     } catch (err) {
-      setError(err.response?.data?.error || err.response?.data?.message || "Upload failed.");
+      setError(err.response?.data?.error || err.response?.data?.message || "បង្ហោះមិនបានសម្រេច");
     } finally {
       setSubmitting(false);
     }
@@ -143,20 +150,108 @@ export default function Files() {
 
   const totalPages = Math.ceil(total / 20);
 
-  return (
-    <div className="page">
-      <div className="page-header">
-        <h2 className="section-title">ឯកសារ</h2>
-        <button className="btn btn-primary" onClick={() => setShowUpload(true)}>
-          <LuPlus /> បង្ហោះឯកសារ
+  const columns = [
+    {
+      key: "file_name",
+      label: "ឈ្មោះឯកសារ",
+      render: (_, row) => (
+        <button
+          type="button"
+          className="link-button"
+          onClick={() => handleOpenFile(row)}
+          disabled={openingId === row.id}
+          title="បើកឯកសារ"
+          style={{ fontWeight: "700", color: "#1d4ed8" }}
+        >
+          {openingId === row.id ? "កំពុងបើក..." : (row.file_name || row.filename || "-")}
         </button>
+      ),
+    },
+    {
+      key: "description",
+      label: "ការពិពណ៌នា",
+      render: (val) => <span style={{ color: "#475569" }}>{val || "—"}</span>,
+    },
+    {
+      key: "file_size",
+      label: "ទំហំ",
+      render: (val) => <span style={{ color: "#64748b", fontWeight: "500" }}>{val ? `${(val / 1024).toFixed(1)} KB` : "—"}</span>,
+    },
+    {
+      key: "mime_type",
+      label: "ប្រភេទ",
+      render: (_, row) => {
+        const ext = getFileExtension(row);
+        return (
+          <span
+            style={{
+              padding: "0.2rem 0.55rem",
+              borderRadius: "6px",
+              fontSize: "0.75rem",
+              fontWeight: "700",
+              letterSpacing: "0.05em",
+              display: "inline-block",
+              boxShadow: "0 1px 2px rgba(0,0,0,0.02)",
+              ...getExtensionBadgeStyle(ext)
+            }}
+          >
+            {ext.toUpperCase()}
+          </span>
+        );
+      },
+    },
+    {
+      key: "created_at",
+      label: "កាលបរិច្ឆេទ",
+      render: (val) => <span style={{ color: "#64748b" }}>{val?.slice(0, 10) || "—"}</span>,
+    },
+    {
+      key: "actions",
+      label: "សកម្មភាព",
+      align: "right",
+      width: "90px",
+      render: (_, row) => (
+        <div className="actions" style={{ display: "flex", justifyContent: "flex-end", gap: "0.35rem" }}>
+          <button
+            type="button"
+            className="btn-icon"
+            onClick={() => handleOpenFile(row)}
+            disabled={openingId === row.id}
+            title="បើកមើលឯកសារ"
+          >
+            <LuExternalLink />
+          </button>
+          {canDelete && <button className="btn-icon btn-danger" onClick={() => handleDelete(row.id)} title="លុបឯកសារ"><LuTrash2 /></button>}
+        </div>
+      ),
+    },
+  ];
+
+  return (
+    <div className="page" style={{ maxWidth: "1200px", margin: "0 auto" }}>
+      <div className="page-header" style={{ marginBottom: "1.25rem" }}>
+        <div>
+          <h2 className="section-title" style={{ margin: 0, fontSize: "1.35rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+            <LuFileText style={{ color: "var(--primary)" }} /> បណ្ណសារឯកសារ (Document Archive)
+          </h2>
+          <span style={{ fontSize: "0.82rem", color: "#64748b" }}>
+            គ្រប់គ្រង និងរក្សាទុកឯកសារផ្លូវការប្រព័ន្ធស្រុកជើងព្រៃ
+          </span>
+        </div>
+        {canCreate && <button
+          className="btn btn-primary"
+          onClick={() => setShowUpload(true)}
+          style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem", borderRadius: "10px", padding: "0.6rem 1.2rem", fontWeight: "600" }}
+        >
+          <LuPlus size={18} /> បង្ហោះឯកសារ (Upload File)
+        </button>}
       </div>
 
-      <div className="search-bar">
+      <div className="search-bar" style={{ marginBottom: "1.25rem" }}>
         <LuSearch className="search-icon" />
         <input
           type="text"
-          placeholder="ស្វែងរកឯកសារ..."
+          placeholder="ស្វែងរកតាមឈ្មោះ ឬការពិពណ៌នាឯកសារ..."
           value={search}
           onChange={(e) => { setSearch(e.target.value); setPage(1); }}
         />
@@ -164,129 +259,67 @@ export default function Files() {
 
       {error && !showUpload && <div className="alert alert-error">{error}</div>}
 
-      {loading ? (
-        <div className="loading">កំពុងផ្ទុក...</div>
-      ) : (
-        <>
-          <div className="table-responsive">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>ឈ្មោះឯកសារ</th>
-                  <th>ការពិពណ៌នា</th>
-                  <th>ទំហំ</th>
-                  <th>ប្រភេទ</th>
-                  <th>កាលបរិច្ឆេទ</th>
-                  <th>សកម្មភាព</th>
-                </tr>
-              </thead>
-              <tbody>
-                {files.length === 0 ? (
-                  <tr><td colSpan={6} className="text-center">គ្មានទិន្នន័យ</td></tr>
-                ) : (
-                  files.map((f) => (
-                    <tr key={f.id}>
-                      <td>
-                        <button
-                          type="button"
-                          className="link-button"
-                          onClick={() => handleOpenFile(f)}
-                          disabled={openingId === f.id}
-                          title="បើកឯកសារ"
-                        >
-                          {openingId === f.id ? "កំពុងបើក..." : (f.file_name || f.filename || "-")}
-                        </button>
-                      </td>
-                      <td>{f.description || "-"}</td>
-                      <td>{f.file_size ? `${(f.file_size / 1024).toFixed(1)} KB` : "-"}</td>
-                      <td>
-                        <span
-                          style={{
-                            padding: "0.25rem 0.55rem",
-                            borderRadius: "6px",
-                            fontSize: "0.78rem",
-                            fontWeight: "700",
-                            letterSpacing: "0.05em",
-                            display: "inline-block",
-                            boxShadow: "0 1px 2px rgba(0,0,0,0.02)",
-                            ...getExtensionBadgeStyle(getFileExtension(f))
-                          }}
-                        >
-                          {getFileExtension(f).toUpperCase()}
-                        </span>
-                      </td>
-                      <td>{f.created_at?.slice(0, 10) || "-"}</td>
-                      <td>
-                        <div className="actions">
-                          <button
-                            type="button"
-                            className="btn-icon"
-                            onClick={() => handleOpenFile(f)}
-                            disabled={openingId === f.id}
-                            title="បើកឯកសារ"
-                          >
-                            <LuExternalLink />
-                          </button>
-                          <button className="btn-icon btn-danger" onClick={() => handleDelete(f.id)} title="លុប">
-                            <LuTrash2 />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+      <DataTable
+        columns={columns}
+        data={files}
+        loading={loading}
+        emptyMessage="គ្មានទិន្នន័យឯកសារ"
+        pagination={{
+          page,
+          totalPages,
+          total,
+          onPageChange: (p) => setPage(p),
+        }}
+      />
 
-          {totalPages > 1 && (
-            <div className="pagination">
-              <button disabled={page <= 1} onClick={() => setPage(page - 1)}>មុន</button>
-              <span>ទំព័រ {page} / {totalPages}</span>
-              <button disabled={page >= totalPages} onClick={() => setPage(page + 1)}>បន្ទាប់</button>
-            </div>
-          )}
-        </>
-      )}
-
-      {showUpload && (
-        <div className="modal-overlay" onClick={() => setShowUpload(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3>បង្ហោះឯកសារថ្មី</h3>
-              <button className="btn-icon" onClick={() => setShowUpload(false)}><LuX /></button>
-            </div>
-            <form onSubmit={handleUpload}>
-              <div className="modal-body">
-                <div className="form-group">
-                  <label>ឯកសារ *</label>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    onChange={(e) => setFile(e.target.files[0])}
-                    required
-                  />
-                </div>
-                <div className="form-group">
-                  <label>ការពិពណ៌នា</label>
-                  <input
-                    type="text"
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    placeholder="បរិយាយអំពីឯកសារ"
-                  />
-                </div>
-                {error && <div className="alert alert-error">{error}</div>}
+      {canCreate && showUpload && (
+        <Modal
+          open={showUpload}
+          onClose={() => setShowUpload(false)}
+          title="📁 បង្ហោះឯកសារថ្មី (Upload New File)"
+        >
+          <form onSubmit={handleUpload}>
+            <div style={{ display: "flex", flexDirection: "column", gap: "1rem", padding: "0.5rem 0" }}>
+              <div>
+                <label style={{ fontWeight: 700, fontSize: "0.85rem", color: "#334155", marginBottom: "0.35rem", display: "block" }}>
+                  ជ្រើសរើសឯកសារ / Select File <span style={{ color: "#dc2626" }}>*</span>
+                </label>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  className="modern-form-input"
+                  onChange={(e) => setFile(e.target.files[0])}
+                  required
+                  style={{ width: "100%" }}
+                />
               </div>
-              <div className="modal-footer">
-                <button type="button" className="btn btn-secondary" onClick={() => setShowUpload(false)}>បោះបង់</button>
+              <div>
+                <label style={{ fontWeight: 700, fontSize: "0.85rem", color: "#334155", marginBottom: "0.35rem", display: "block" }}>
+                  ការពិពណ៌នា / Description
+                </label>
+                <input
+                  type="text"
+                  className="modern-form-input"
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="បញ្ចូលការពិពណ៌នាសង្ខេបអំពីឯកសារ..."
+                  style={{ width: "100%" }}
+                />
+              </div>
+
+              {error && <div className="alert alert-error" style={{ fontSize: "0.85rem" }}>{error}</div>}
+
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem", marginTop: "0.5rem" }}>
+                <button type="button" className="btn btn-secondary" onClick={() => setShowUpload(false)}>
+                  បោះបង់
+                </button>
                 <button type="submit" className="btn btn-primary" disabled={submitting || !file}>
-                  {submitting ? "កំពុងបង្ហោះ..." : "បង្ហោះ"}
+                  {submitting ? "កំពុងបង្ហោះ..." : "បង្ហោះឯកសារ"}
                 </button>
               </div>
-            </form>
-          </div>
-        </div>
+            </div>
+          </form>
+        </Modal>
       )}
     </div>
   );

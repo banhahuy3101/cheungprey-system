@@ -4,7 +4,6 @@ import ErrorBoundary from "./ErrorBoundary";
 import {
   LuLayoutDashboard,
   LuUsers,
-  LuUserCheck,
   LuFolderOpen,
   LuFileText,
   LuScrollText,
@@ -17,6 +16,7 @@ import {
 import { useAuth } from "../hooks/useAuth";
 import { useModules } from "../hooks/useModules";
 import { canAccess, FEATURES } from "../utils/permissions";
+import { useRoleOptions } from "../hooks/useRoleOptions";
 
 const mainNavItems = [
   { to: "/", icon: LuLayoutDashboard, label: "ទំព័រដើម", end: true, feature: FEATURES.dashboard, module: "dashboard" },
@@ -36,8 +36,9 @@ const settingsNavItem = {
 };
 
 export default function Layout() {
-  const { user, loading, logout } = useAuth();
+  const { user, logout } = useAuth();
   const { isEnabled } = useModules();
+  const { roleLabelMap } = useRoleOptions();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -52,8 +53,8 @@ export default function Layout() {
   const showSettings = canAccess(user, settingsNavItem.feature) && isEnabled(settingsNavItem.module);
 
   const roleLabel = user?.roles?.length
-    ? user.roles.join(", ")
-    : user?.role || "";
+    ? user.roles.map((r) => roleLabelMap[r] || r).join(", ")
+    : roleLabelMap[user?.role] || user?.role || "";
 
   return (
     <div className="layout">
@@ -102,11 +103,19 @@ export default function Layout() {
             className="user-info"
             onClick={() => { navigate("/profile"); setSidebarOpen(false); }}
             title="មើលប្រវត្តិរូប"
+            style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: "0.2rem", cursor: "pointer", width: "100%" }}
           >
-            <LuUser className="nav-icon" />
-            <span>{user?.full_name || user?.name || user?.email || "User"}</span>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.45rem", fontWeight: "700", fontSize: "0.88rem", color: "#ffffff" }}>
+              <LuUser className="nav-icon" style={{ flexShrink: 0 }} />
+              <span>{user?.full_name || user?.name || user?.email || "User"}</span>
+            </div>
+            {roleLabel && (
+              <span style={{ fontSize: "0.72rem", color: "rgba(255,255,255,0.75)", paddingLeft: "1.35rem", fontWeight: "500" }}>
+                {roleLabel}
+              </span>
+            )}
           </div>
-          <button onClick={handleLogout} className="btn-logout">
+          <button onClick={handleLogout} className="btn-logout" style={{ marginTop: "0.6rem" }}>
             <LuLogOut />
             <span>ចាកចេញ</span>
           </button>

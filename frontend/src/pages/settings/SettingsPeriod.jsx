@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { LuPlus, LuTrash2, LuPencil, LuArrowLeft } from "react-icons/lu";
-import { performanceAPI } from "../api/performance";
+import { performanceAPI } from "../../api/performance";
 
 export default function SettingsPeriod() {
   const navigate = useNavigate();

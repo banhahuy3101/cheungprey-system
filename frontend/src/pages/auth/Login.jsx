@@ -118,10 +118,6 @@ export default function Login() {
             {submitting ? "កំពុងចូល..." : "ចូលប្រព័ន្ធ / Login"}
           </button>
         </form>
-        <p className="login-footer">
-          មិនទាន់មានគណនី? <Link to="/register">បង្កើតគណនីថ្មី</Link>
-        </p>
-
       </div>
     </div>
   );

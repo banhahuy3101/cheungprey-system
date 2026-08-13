@@ -37,10 +37,24 @@ export function useModules() {
   }, [fetch]);
 
   const isEnabled = (moduleKey) => {
-    if (moduleKey === "dashboard" || moduleKey === "settings") return true;
+    if (moduleKey === "dashboard") return true;
     const m = modules.find((m) => m.module_key === moduleKey);
     return m ? m.enabled : true;
   };
 
-  return { modules, loading, isEnabled, refresh };
+  const needsApproval = (moduleKey) => {
+    const m = modules.find((m) => m.module_key === moduleKey);
+    return m ? !!m.need_approval : false;
+  };
+
+  const canEditInTransaction = (moduleKey) => {
+    const m = modules.find((m) => m.module_key === moduleKey);
+    return m ? (m.allow_edit !== false) : true;
+  };
+
+  const getModuleConfig = (moduleKey) => {
+    return modules.find((m) => m.module_key === moduleKey) || null;
+  };
+
+  return { modules, loading, isEnabled, needsApproval, canEditInTransaction, getModuleConfig, refresh };
 }

@@ -20,9 +20,6 @@ func NewPermissionHandler(repo *repository.Repository) *PermissionHandler {
 }
 
 func (h *PermissionHandler) ListRolePermissions(c *gin.Context) {
-	if !auth.RequireFeatureHandler(c, models.FeatureUsers) {
-		return
-	}
 	list, err := h.repo.ListRolePermissions()
 	if err != nil {
 		utils.InternalError(c, "Failed to load role permissions")
@@ -67,9 +64,6 @@ func (h *PermissionHandler) ListFeatures(c *gin.Context) {
 }
 
 func (h *PermissionHandler) ListRoles(c *gin.Context) {
-	if !auth.RequireFeatureHandler(c, models.FeatureUsers) {
-		return
-	}
 	list, err := h.repo.ListRoles()
 	if err != nil {
 		utils.InternalError(c, "Failed to load roles")

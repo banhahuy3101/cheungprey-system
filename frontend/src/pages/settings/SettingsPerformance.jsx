@@ -1,11 +1,11 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { LuArrowLeft } from "react-icons/lu";
-import DomainManager from "./settings/DomainManager";
-import SubDomainManager from "./settings/SubDomainManager";
-import IndicatorManager from "./settings/IndicatorManager";
-import PeriodManager from "./settings/PeriodManager";
-import TabErrorBoundary from "./settings/TabErrorBoundary";
+import DomainManager from "./DomainManager";
+import SubDomainManager from "./SubDomainManager";
+import IndicatorManager from "./IndicatorManager";
+import PeriodManager from "./PeriodManager";
+import TabErrorBoundary from "./TabErrorBoundary";
 
 const TABS = [
   { key: "domains", label: "ដែន (Domains)" },

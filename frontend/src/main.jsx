@@ -8,6 +8,7 @@ import './style/editor.css'
 import './style/performance.css'
 import './style/profile.css'
 import './style/reports.css'
+import './style/rbac.css'
 import App from './App.jsx'
 
 createRoot(document.getElementById('root')).render(

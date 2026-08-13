@@ -175,7 +175,11 @@ func (h *ReportDocumentHandler) Create(c *gin.Context) {
 		return
 	}
 
+	cfg, _ := h.repo.GetModuleConfig("reports")
 	doc := reportDocumentFromRequest(req, userID, time.Now())
+	if cfg != nil && !cfg.NeedApproval {
+		doc.Status = "published"
+	}
 	if err := h.repo.CreateReportDocument(doc); err != nil {
 		log.Printf("ERROR create report document: %v", err)
 		utils.InternalError(c, "Failed to create report")
@@ -200,7 +204,11 @@ func (h *ReportDocumentHandler) CreateSimple(c *gin.Context) {
 		zoneCode = *profile.ZoneCode
 	}
 
+	cfg, _ := h.repo.GetModuleConfig("reports")
 	doc := simpleReportDocumentFromRequest(req, userID, zoneCode, time.Now())
+	if cfg != nil && !cfg.NeedApproval {
+		doc.Status = "published"
+	}
 	if err := h.repo.CreateReportDocument(doc); err != nil {
 		log.Printf("ERROR create simple report document: %v", err)
 		utils.InternalError(c, "Failed to create report")
@@ -425,12 +433,51 @@ func (h *ReportDocumentHandler) Submit(c *gin.Context) {
 		return
 	}
 
+	cfg, _ := h.repo.GetModuleConfig("reports")
+	needApproval := cfg == nil || cfg.NeedApproval
+
+	if !needApproval {
+		if err := h.repo.UpdateReportDocument(id, map[string]any{
+			"status":     "published",
+			"updated_at": time.Now(),
+		}); err != nil {
+			utils.InternalError(c, "Failed to submit report")
+			return
+		}
+
+		review := &models.ReportReview{
+			ID:         uuid.New(),
+			ReportID:   id,
+			Action:     "approve",
+			ReviewerID: userID,
+			CreatedAt:  time.Now(),
+		}
+		_ = h.repo.CreateReportReview(review)
+
+		utils.JSON(c, http.StatusOK, gin.H{"message": "បានអនុម័តដោយស្វ័យប្រវត្តិ", "status": "published"})
+		return
+	}
+
 	if err := h.repo.UpdateReportDocument(id, map[string]any{
 		"status":     "pending_review",
 		"updated_at": time.Now(),
 	}); err != nil {
 		utils.InternalError(c, "Failed to submit report")
 		return
+	}
+
+	steps, _ := h.repo.ListWorkflowSteps("reports")
+	if len(steps) > 0 {
+		for _, step := range steps {
+			approval := &models.WorkflowApproval{
+				ID:        uuid.New(),
+				ModuleKey: "reports",
+				ItemID:    doc.ID,
+				StepOrder: step.StepOrder,
+				Status:    "pending",
+			}
+			_ = h.repo.CreateWorkflowApproval(approval)
+		}
 	}
 
 	review := &models.ReportReview{
@@ -442,7 +489,7 @@ func (h *ReportDocumentHandler) Submit(c *gin.Context) {
 	}
 	_ = h.repo.CreateReportReview(review)
 
-	utils.JSON(c, http.StatusOK, gin.H{"message": "បានដាក់ស្នើ"})
+	utils.JSON(c, http.StatusOK, gin.H{"message": "បានដាក់ស្នើតាម Workflow", "status": "pending_review"})
 }
 
 func (h *ReportDocumentHandler) Reject(c *gin.Context) {

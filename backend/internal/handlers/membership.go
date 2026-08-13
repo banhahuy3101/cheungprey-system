@@ -34,14 +34,7 @@ func (h *MembershipHandler) SearchMembers(c *gin.Context) {
 
 	if filter.ZoneCode == "" {
 		if profile, err := auth.GetProfile(c); err == nil && profile.ZoneCode != nil {
-			roles, _ := auth.GetUserRoles(c)
-			isAdmin := false
-			for _, r := range roles {
-				if r == models.RoleSuperAdmin || r == models.RoleAdmin {
-					isAdmin = true
-					break
-				}
-			}
+			isAdmin := auth.HasFeature(c, models.FeatureMembers) || auth.HasFeature(c, models.FeatureMembershipAdmin)
 			if !isAdmin {
 				filter.ZoneCode = *profile.ZoneCode
 			}
@@ -884,11 +877,9 @@ func (h *MembershipHandler) resolveApprovalContext(c *gin.Context) (uuid.UUID, u
 		return uuid.Nil, userID, member
 	}
 
-	role, _ := auth.GetUserRole(c)
 	perms, _ := auth.GetPermissions(c)
-	isAdmin := perms != nil && perms[models.FeatureMembershipAdmin]
-	isDistrictOrHigher := role == models.RoleSuperAdmin || role == models.RoleAdmin || role == models.RoleDistrictChief
-	if !isAdmin && !isDistrictOrHigher {
+	isAdmin := perms != nil && (perms[models.FeatureMembershipAdmin] || perms[models.FeatureMembers] || perms[models.FeatureMembersUpdate])
+	if !isAdmin {
 		utils.Forbidden(c, "Insufficient permissions")
 		return uuid.Nil, userID, member
 	}

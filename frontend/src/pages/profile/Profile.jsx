@@ -260,8 +260,43 @@ export default function Profile() {
     showVillage: true,
   });
 
+  useEffect(() => {
+    if (user && !editing) {
+      setForm({
+        full_name: user?.full_name || user?.name || "",
+        email: user?.email || "",
+        phone_number: user?.phone_number || "",
+        zone_code: user?.zone_code || "",
+        role: user?.role || "",
+        signature: user?.signature || "",
+        password: "",
+      });
+    }
+  }, [user, editing]);
+
   const handleChange = (e) => {
-    setForm({ ...form, [e.target.name]: e.target.value });
+    setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+  };
+
+  const startEditing = () => {
+    const freshZone = user?.zone_code || "";
+    setForm({
+      full_name: user?.full_name || user?.name || "",
+      email: user?.email || "",
+      phone_number: user?.phone_number || "",
+      zone_code: freshZone,
+      role: user?.role || "",
+      signature: user?.signature || "",
+      password: "",
+    });
+    setError("");
+    setSuccess("");
+    if (freshZone) {
+      zoneHook.loadFromZoneCode(freshZone);
+    } else {
+      zoneHook.resetSelection();
+    }
+    setEditing(true);
   };
 
   const handleSave = async () => {
@@ -269,12 +304,13 @@ export default function Profile() {
     setError("");
     setSuccess("");
     try {
+      const resolvedZone = zoneHook.resolvedZone || form.zone_code;
       if (isAdmin) {
         await adminAPI.updateUser(user.id, {
           full_name: form.full_name,
           email: form.email,
           phone_number: form.phone_number || undefined,
-          zone_code: zoneHook.resolvedZone || undefined,
+          zone_code: resolvedZone || undefined,
           role: user.role,
           signature: form.signature || undefined,
         });
@@ -289,12 +325,12 @@ export default function Profile() {
       if (form.password) {
         await adminAPI.resetUserPassword(user.id, form.password);
       }
-      setSuccess("បានរក្សាទុកដោយជោគជ័យ");
+      setSuccess("បានរក្សាទុកប្រវត្តិរូបដោយជោគជ័យ!");
       setEditing(false);
-      if (refreshProfile) refreshProfile();
-      setTimeout(() => setSuccess(""), 2500);
+      if (refreshProfile) await refreshProfile();
+      setTimeout(() => setSuccess(""), 3000);
     } catch (err) {
-      setError(err.response?.data?.message || "ការរក្សាទុកបរាជ័យ");
+      setError(err.response?.data?.message || "ការរក្សាទុកប្រវត្តិរូបបរាជ័យ");
     } finally {
       setSaving(false);
     }
@@ -384,7 +420,7 @@ export default function Profile() {
 
           <div style={{ display: "flex", gap: "0.5rem" }}>
             {!editing ? (
-              <button className="btn btn-primary" onClick={() => setEditing(true)}>
+              <button className="btn btn-primary" onClick={startEditing}>
                 <LuPencil size={15} /> កែប្រែប្រវត្តិរូប
               </button>
             ) : (

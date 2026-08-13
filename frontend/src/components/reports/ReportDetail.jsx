@@ -24,6 +24,7 @@ import TextEditor from "../TextEditor";
 import Modal from "../../pages/settings/Modal";
 import { clearDraft } from "../../utils/editorAutoSave";
 import { docToSimpleForm } from "../../utils/reportForm";
+import PendingWorkflowCard from "../workflow/PendingWorkflowCard";
 
 function formatDate(iso) {
   if (!iso) return "—";
@@ -187,11 +188,7 @@ export default function ReportDetail({ reportId }) {
     }
   };
 
-  const canReview =
-    user?.role === "district_chief" ||
-    user?.role === "commune_chief" ||
-    user?.role === "admin" ||
-    user?.role === "super_admin";
+  const canReview = canAccess(user, FEATURES.reports, "update") || canAccess(user, FEATURES.reports, "create");
   const status = doc?.status || "draft";
 
   if (loading) {
@@ -368,6 +365,14 @@ export default function ReportDetail({ reportId }) {
 
       {message && <div className="alert alert-success" style={{ marginBottom: "1.25rem", borderRadius: "10px", boxShadow: "0 2px 6px rgba(16, 185, 129, 0.08)" }}>{message}</div>}
       {error && <div className="alert alert-error" style={{ marginBottom: "1.25rem", borderRadius: "10px", boxShadow: "0 2px 6px rgba(239, 68, 68, 0.08)" }}>{error}</div>}
+
+      {/* ---- PENDING WORKFLOW STEPPER CARD ---- */}
+      <PendingWorkflowCard
+        moduleKey="reports"
+        itemId={reportId}
+        status={status}
+        onStatusChange={() => window.location.reload()}
+      />
 
       {/* ---- 70/30 SPLIT CONTAINER ---- */}
       <div style={{ display: "flex", gap: "1.75rem", flexWrap: "wrap", alignItems: "flex-start" }}>

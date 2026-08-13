@@ -10,7 +10,9 @@ type ModuleConfig struct {
 	ModuleKey    string                 `json:"module_key"`
 	Enabled      bool                   `json:"enabled"`
 	NeedApproval bool                   `json:"need_approval"`
+	AllowEdit    bool                   `json:"allow_edit"`
 	Settings     map[string]interface{} `json:"settings,omitempty"`
+	Steps        []WorkflowStep         `json:"steps,omitempty"`
 	CreatedAt    time.Time              `json:"created_at"`
 	UpdatedAt    time.Time              `json:"updated_at"`
 }
@@ -18,6 +20,7 @@ type ModuleConfig struct {
 type UpdateModuleConfigRequest struct {
 	Enabled      *bool                  `json:"enabled,omitempty"`
 	NeedApproval *bool                  `json:"need_approval,omitempty"`
+	AllowEdit    *bool                  `json:"allow_edit,omitempty"`
 	Settings     map[string]interface{} `json:"settings,omitempty"`
 }
 

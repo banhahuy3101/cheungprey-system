@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { LuSave, LuArrowLeft } from "react-icons/lu";
-import { performanceAPI } from "../api/performance";
+import { performanceAPI } from "../../api/performance";
 
 export default function SettingsPeriodForm() {
   const navigate = useNavigate();

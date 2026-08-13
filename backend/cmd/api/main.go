@@ -13,8 +13,8 @@ import (
 	"github.com/banhahuy/cheungprey-system/backend/internal/handlers"
 	"github.com/banhahuy/cheungprey-system/backend/internal/models"
 	"github.com/banhahuy/cheungprey-system/backend/internal/repository"
-	"github.com/banhahuy/cheungprey-system/backend/internal/services"
 	"github.com/banhahuy/cheungprey-system/backend/internal/service"
+	"github.com/banhahuy/cheungprey-system/backend/internal/services"
 	"github.com/banhahuy/cheungprey-system/backend/pkg/config"
 	"github.com/banhahuy/cheungprey-system/backend/pkg/middleware"
 )
@@ -22,17 +22,12 @@ import (
 func membershipApprovalMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		perms, _ := auth.GetPermissions(c)
-		isAdmin := perms != nil && perms[models.FeatureMembershipAdmin]
+		isAdmin := perms != nil && (perms[models.FeatureMembershipAdmin] || perms[models.FeatureMembers])
 		if isAdmin {
 			c.Next()
 			return
 		}
-		role, _ := auth.GetUserRole(c)
-		if role == models.RoleSuperAdmin || role == models.RoleAdmin || role == models.RoleDistrictChief {
-			c.Next()
-			return
-		}
-		c.AbortWithStatusJSON(403, gin.H{"error": "Requires district chief or higher"})
+		c.AbortWithStatusJSON(403, gin.H{"error": "Requires membership permission"})
 	}
 }
 
@@ -126,42 +121,45 @@ func main() {
 			protected.GET("/hierarchy/districts/:district_id/communes", hierarchyHandler.GetCommunes)
 			protected.GET("/hierarchy/communes/:commune_id/villages", hierarchyHandler.GetVillages)
 
+			// Roles and permissions listing accessible by all authenticated users
+			protected.GET("/admin/roles", permissionHandler.ListRoles)
+			protected.GET("/admin/role-permissions", permissionHandler.ListRolePermissions)
+			protected.GET("/settings/catalog", adminHandler.GetSettingsCatalog)
+
 			admin := protected.Group("/admin")
 			admin.Use(auth.RequireFeature(models.FeatureUsers))
 			{
-				admin.GET("/users", adminHandler.GetUsers)
-				admin.GET("/users/:id", adminHandler.GetUserByID)
-				admin.POST("/users", adminHandler.CreateUser)
-				admin.PUT("/users/:id", adminHandler.UpdateUser)
-				admin.DELETE("/users/:id", adminHandler.DeleteUser)
-				admin.PUT("/users/:id/roles", adminHandler.UpdateUserRoles)
-				admin.PUT("/users/:id/role", adminHandler.UpdateUserRole)
-				admin.PUT("/users/:id/password", adminHandler.ResetUserPassword)
-				admin.GET("/settings", adminHandler.GetSettings)
-				admin.GET("/statistics", adminHandler.GetStatistics)
-				admin.GET("/role-permissions", permissionHandler.ListRolePermissions)
-				admin.PUT("/role-permissions/:role", permissionHandler.UpdateRolePermissions)
-				admin.GET("/roles", permissionHandler.ListRoles)
-				admin.POST("/roles", permissionHandler.CreateRole)
-				admin.PUT("/roles/:role", permissionHandler.UpdateRole)
-				admin.DELETE("/roles/:role", permissionHandler.DeleteRole)
+				admin.GET("/users", auth.RequireFeatureAction(models.FeatureUsers, "read"), adminHandler.GetUsers)
+				admin.GET("/users/:id", auth.RequireFeatureAction(models.FeatureUsers, "read"), adminHandler.GetUserByID)
+				admin.POST("/users", auth.RequireFeatureAction(models.FeatureUsers, "create"), adminHandler.CreateUser)
+				admin.PUT("/users/:id", auth.RequireFeatureAction(models.FeatureUsers, "update"), adminHandler.UpdateUser)
+				admin.DELETE("/users/:id", auth.RequireFeatureAction(models.FeatureUsers, "delete"), adminHandler.DeleteUser)
+				admin.PUT("/users/:id/roles", auth.RequireFeatureAction(models.FeatureUsers, "update"), adminHandler.UpdateUserRoles)
+				admin.PUT("/users/:id/role", auth.RequireFeatureAction(models.FeatureUsers, "update"), adminHandler.UpdateUserRole)
+				admin.PUT("/users/:id/password", auth.RequireFeatureAction(models.FeatureUsers, "update"), adminHandler.ResetUserPassword)
+				admin.GET("/settings", auth.RequireFeatureAction(models.FeatureUsers, "read"), adminHandler.GetSettings)
+				admin.GET("/statistics", auth.RequireFeatureAction(models.FeatureUsers, "read"), adminHandler.GetStatistics)
+				admin.PUT("/role-permissions/:role", auth.RequireFeatureAction(models.FeatureUsers, "update"), permissionHandler.UpdateRolePermissions)
+				admin.POST("/roles", auth.RequireFeatureAction(models.FeatureUsers, "create"), permissionHandler.CreateRole)
+				admin.PUT("/roles/:role", auth.RequireFeatureAction(models.FeatureUsers, "update"), permissionHandler.UpdateRole)
+				admin.DELETE("/roles/:role", auth.RequireFeatureAction(models.FeatureUsers, "delete"), permissionHandler.DeleteRole)
 				admin.GET("/cron/status", cronHandler.Status)
 				admin.POST("/cron/run", cronHandler.RunNow)
-				admin.GET("/zone-chiefs", zoneChiefHandler.ListAssignments)
-				admin.GET("/zone-chiefs/:zoneCode", zoneChiefHandler.GetAssignment)
-				admin.POST("/zone-chiefs", zoneChiefHandler.Assign)
-				admin.DELETE("/zone-chiefs", zoneChiefHandler.Remove)
+				admin.GET("/zone-chiefs", auth.RequireFeatureAction(models.FeatureUsers, "read"), zoneChiefHandler.ListAssignments)
+				admin.GET("/zone-chiefs/:zoneCode", auth.RequireFeatureAction(models.FeatureUsers, "read"), zoneChiefHandler.GetAssignment)
+				admin.POST("/zone-chiefs", auth.RequireFeatureAction(models.FeatureUsers, "update"), zoneChiefHandler.Assign)
+				admin.DELETE("/zone-chiefs", auth.RequireFeatureAction(models.FeatureUsers, "delete"), zoneChiefHandler.Remove)
 			}
 
 			records := protected.Group("/records")
 			records.Use(moduleEnabled(repo, "records"))
 			records.Use(auth.RequireFeature(models.FeatureRecords))
 			{
-				records.POST("", recordHandler.CreateRecord)
-				records.GET("", recordHandler.GetRecords)
-				records.GET("/:id", recordHandler.GetRecordByID)
-				records.PUT("/:id", recordHandler.UpdateRecord)
-				records.DELETE("/:id", recordHandler.DeleteRecord)
+				records.POST("", auth.RequireFeatureAction(models.FeatureRecords, "create"), recordHandler.CreateRecord)
+				records.GET("", auth.RequireFeatureAction(models.FeatureRecords, "read"), recordHandler.GetRecords)
+				records.GET("/:id", auth.RequireFeatureAction(models.FeatureRecords, "read"), recordHandler.GetRecordByID)
+				records.PUT("/:id", auth.RequireFeatureAction(models.FeatureRecords, "update"), recordHandler.UpdateRecord)
+				records.DELETE("/:id", auth.RequireFeatureAction(models.FeatureRecords, "delete"), recordHandler.DeleteRecord)
 			}
 
 			party := protected.Group("/party")
@@ -174,28 +172,28 @@ func main() {
 				members := party.Group("")
 				members.Use(auth.RequireFeature(models.FeatureMembers))
 				{
-					members.POST("/members", partyHandler.CreateMember)
-					members.GET("/members", partyHandler.GetMembers)
-					members.GET("/members/:id", partyHandler.GetMemberByID)
-					members.PUT("/members/:id", partyHandler.UpdateMember)
-					members.DELETE("/members/:id", partyHandler.DeleteMember)
+					members.POST("/members", auth.RequireFeatureAction(models.FeatureMembers, "create"), partyHandler.CreateMember)
+					members.GET("/members", auth.RequireFeatureAction(models.FeatureMembers, "read"), partyHandler.GetMembers)
+					members.GET("/members/:id", auth.RequireFeatureAction(models.FeatureMembers, "read"), partyHandler.GetMemberByID)
+					members.PUT("/members/:id", auth.RequireFeatureAction(models.FeatureMembers, "update"), partyHandler.UpdateMember)
+					members.DELETE("/members/:id", auth.RequireFeatureAction(models.FeatureMembers, "delete"), partyHandler.DeleteMember)
 				}
 
 				voters := party.Group("")
 				voters.Use(auth.RequireFeature(models.FeatureVoters))
 				{
-					voters.POST("/voters", partyHandler.CreateVoter)
-					voters.GET("/voters", partyHandler.GetVoters)
+					voters.POST("/voters", auth.RequireFeatureAction(models.FeatureVoters, "create"), partyHandler.CreateVoter)
+					voters.GET("/voters", auth.RequireFeatureAction(models.FeatureVoters, "read"), partyHandler.GetVoters)
 				}
 
 				files := party.Group("")
 				files.Use(moduleEnabled(repo, "files"))
 				files.Use(auth.RequireFeature(models.FeatureFiles))
 				{
-					files.POST("/files", partyHandler.UploadFile)
-					files.GET("/files", partyHandler.GetFiles)
-					files.GET("/files/:id", partyHandler.GetFileByID)
-					files.DELETE("/files/:id", partyHandler.DeleteFile)
+					files.POST("/files", auth.RequireFeatureAction(models.FeatureFiles, "create"), partyHandler.UploadFile)
+					files.GET("/files", auth.RequireFeatureAction(models.FeatureFiles, "read"), partyHandler.GetFiles)
+					files.GET("/files/:id", auth.RequireFeatureAction(models.FeatureFiles, "read"), partyHandler.GetFileByID)
+					files.DELETE("/files/:id", auth.RequireFeatureAction(models.FeatureFiles, "delete"), partyHandler.DeleteFile)
 				}
 			}
 
@@ -203,32 +201,32 @@ func main() {
 			membership.Use(moduleEnabled(repo, "membership"))
 			membership.Use(auth.RequireFeature(models.FeatureMembers))
 			{
-				membership.GET("", membershipHandler.SearchMembers)
-				membership.GET("/stats", membershipHandler.GetStats)
-				membership.GET("/export", membershipHandler.Export)
+				membership.GET("", auth.RequireFeatureAction(models.FeatureMembers, "read"), membershipHandler.SearchMembers)
+				membership.GET("/stats", auth.RequireFeatureAction(models.FeatureMembers, "read"), membershipHandler.GetStats)
+				membership.GET("/export", auth.RequireFeatureAction(models.FeatureMembers, "read"), membershipHandler.Export)
 
-				membership.GET("/:id/profile", membershipHandler.GetProfile)
-				membership.GET("/:id/demographics", membershipHandler.GetDemographics)
-				membership.PUT("/:id/demographics", membershipHandler.UpdateDemographics)
-				membership.GET("/:id/history", membershipHandler.GetStatusHistory)
-				membership.GET("/:id/activity", membershipHandler.ListActivity)
-				membership.GET("/:id/dues", membershipHandler.ListDues)
-				membership.GET("/:id/positions", membershipHandler.ListPositions)
-				membership.GET("/:id/cards", membershipHandler.ListCards)
-				membership.POST("/:id/check-in", membershipHandler.CheckIn)
+				membership.GET("/:id/profile", auth.RequireFeatureAction(models.FeatureMembers, "read"), membershipHandler.GetProfile)
+				membership.GET("/:id/demographics", auth.RequireFeatureAction(models.FeatureMembers, "read"), membershipHandler.GetDemographics)
+				membership.PUT("/:id/demographics", auth.RequireFeatureAction(models.FeatureMembers, "update"), membershipHandler.UpdateDemographics)
+				membership.GET("/:id/history", auth.RequireFeatureAction(models.FeatureMembers, "read"), membershipHandler.GetStatusHistory)
+				membership.GET("/:id/activity", auth.RequireFeatureAction(models.FeatureMembers, "read"), membershipHandler.ListActivity)
+				membership.GET("/:id/dues", auth.RequireFeatureAction(models.FeatureMembers, "read"), membershipHandler.ListDues)
+				membership.GET("/:id/positions", auth.RequireFeatureAction(models.FeatureMembers, "read"), membershipHandler.ListPositions)
+				membership.GET("/:id/cards", auth.RequireFeatureAction(models.FeatureMembers, "read"), membershipHandler.ListCards)
+				membership.POST("/:id/check-in", auth.RequireFeatureAction(models.FeatureMembers, "update"), membershipHandler.CheckIn)
 
 				write := membership.Group("")
 				write.Use(auth.RequireFeature(models.FeatureMembershipWrite))
 				{
-					write.POST("/:id/activity", membershipHandler.RecordActivity)
-					write.POST("/:id/positions", membershipHandler.AssignPosition)
-					write.POST("/import", membershipHandler.BulkImport)
+					write.POST("/:id/activity", auth.RequireFeatureAction(models.FeatureMembers, "update"), membershipHandler.RecordActivity)
+					write.POST("/:id/positions", auth.RequireFeatureAction(models.FeatureMembers, "update"), membershipHandler.AssignPosition)
+					write.POST("/import", auth.RequireFeatureAction(models.FeatureMembers, "create"), membershipHandler.BulkImport)
 				}
 
 				dues := membership.Group("")
 				dues.Use(auth.RequireFeature(models.FeatureMembershipDues))
 				{
-					dues.POST("/:id/dues", membershipHandler.RecordDue)
+					dues.POST("/:id/dues", auth.RequireFeatureAction(models.FeatureMembers, "update"), membershipHandler.RecordDue)
 				}
 
 				admin := membership.Group("")
@@ -248,7 +246,7 @@ func main() {
 				delete := membership.Group("")
 				delete.Use(auth.RequireFeature(models.FeatureMembershipDelete))
 				{
-					delete.DELETE("/:id", partyHandler.DeleteMember)
+					delete.DELETE("/:id", auth.RequireFeatureAction(models.FeatureMembers, "delete"), partyHandler.DeleteMember)
 				}
 
 				cards := membership.Group("")
@@ -260,15 +258,19 @@ func main() {
 			}
 
 			modules := protected.Group("/modules")
-			modules.Use(auth.RequireFeature(models.FeatureTechnical))
 			{
 				modules.GET("", moduleConfigHandler.ListModules)
-				modules.PUT("/:key", moduleConfigHandler.UpdateModule)
 				modules.GET("/:key/steps", moduleConfigHandler.ListSteps)
-				modules.POST("/:key/steps", moduleConfigHandler.CreateStep)
-				modules.PUT("/:key/steps/:stepId", moduleConfigHandler.UpdateStep)
-				modules.DELETE("/:key/steps/:stepId", moduleConfigHandler.DeleteStep)
-				modules.PUT("/:key/steps/reorder", moduleConfigHandler.ReorderSteps)
+
+				adminModules := modules.Group("")
+				adminModules.Use(auth.RequireAnyFeature(models.FeatureTechnical, models.FeatureUsers))
+				{
+					adminModules.PUT("/:key", moduleConfigHandler.UpdateModule)
+					adminModules.POST("/:key/steps", moduleConfigHandler.CreateStep)
+					adminModules.PUT("/:key/steps/:stepId", moduleConfigHandler.UpdateStep)
+					adminModules.DELETE("/:key/steps/:stepId", moduleConfigHandler.DeleteStep)
+					adminModules.PUT("/:key/steps/reorder", moduleConfigHandler.ReorderSteps)
+				}
 			}
 
 			approvals := protected.Group("/approvals")
@@ -283,62 +285,62 @@ func main() {
 			reports.Use(moduleEnabled(repo, "reports"))
 			reports.Use(auth.RequireFeature(models.FeatureReports))
 			{
-				reports.GET("/members", reportHandler.MemberReport)
-				reports.GET("/performance/:zone_id/:period_id", performanceHandler.PerformanceReport)
+				reports.GET("/members", auth.RequireFeatureAction(models.FeatureReports, "read"), reportHandler.MemberReport)
+				reports.GET("/performance/:zone_id/:period_id", auth.RequireFeatureAction(models.FeatureReports, "read"), performanceHandler.PerformanceReport)
 			}
 
 			reportDocs := protected.Group("/report-documents")
 			reportDocs.Use(auth.RequireFeature(models.FeatureReports))
 			{
-				reportDocs.GET("/:id/pdf", reportDocumentHandler.DownloadPDF)
-				reportDocs.POST("/simple", reportDocumentHandler.CreateSimple)
-				reportDocs.PUT("/:id/simple", reportDocumentHandler.UpdateSimple)
-				reportDocs.PUT("/:id/status", reportDocumentHandler.UpdateStatus)
-				reportDocs.PUT("/:id/restore", reportDocumentHandler.Restore)
-				reportDocs.PUT("/:id/submit", reportDocumentHandler.Submit)
-				reportDocs.PUT("/:id/reject", reportDocumentHandler.Reject)
-				reportDocs.GET("/:id/reviews", reportDocumentHandler.ListReviews)
-				reportDocs.POST("", reportDocumentHandler.Create)
-				reportDocs.GET("", reportDocumentHandler.List)
-				reportDocs.GET("/:id", reportDocumentHandler.GetByID)
-				reportDocs.PUT("/:id", reportDocumentHandler.Update)
-				reportDocs.DELETE("/:id", reportDocumentHandler.Delete)
+				reportDocs.GET("/:id/pdf", auth.RequireFeatureAction(models.FeatureReports, "read"), reportDocumentHandler.DownloadPDF)
+				reportDocs.POST("/simple", auth.RequireFeatureAction(models.FeatureReports, "create"), reportDocumentHandler.CreateSimple)
+				reportDocs.PUT("/:id/simple", auth.RequireFeatureAction(models.FeatureReports, "update"), reportDocumentHandler.UpdateSimple)
+				reportDocs.PUT("/:id/status", auth.RequireFeatureAction(models.FeatureReports, "update"), reportDocumentHandler.UpdateStatus)
+				reportDocs.PUT("/:id/restore", auth.RequireFeatureAction(models.FeatureReports, "update"), reportDocumentHandler.Restore)
+				reportDocs.PUT("/:id/submit", auth.RequireFeatureAction(models.FeatureReports, "update"), reportDocumentHandler.Submit)
+				reportDocs.PUT("/:id/reject", auth.RequireFeatureAction(models.FeatureReports, "update"), reportDocumentHandler.Reject)
+				reportDocs.GET("/:id/reviews", auth.RequireFeatureAction(models.FeatureReports, "read"), reportDocumentHandler.ListReviews)
+				reportDocs.POST("", auth.RequireFeatureAction(models.FeatureReports, "create"), reportDocumentHandler.Create)
+				reportDocs.GET("", auth.RequireFeatureAction(models.FeatureReports, "read"), reportDocumentHandler.List)
+				reportDocs.GET("/:id", auth.RequireFeatureAction(models.FeatureReports, "read"), reportDocumentHandler.GetByID)
+				reportDocs.PUT("/:id", auth.RequireFeatureAction(models.FeatureReports, "update"), reportDocumentHandler.Update)
+				reportDocs.DELETE("/:id", auth.RequireFeatureAction(models.FeatureReports, "delete"), reportDocumentHandler.Delete)
 			}
 
 			reportTemplates := protected.Group("/report-templates")
 			reportTemplates.Use(auth.RequireFeature(models.FeatureReports))
 			{
-				reportTemplates.GET("", reportTemplateHandler.List)
-				reportTemplates.POST("", reportTemplateHandler.Upload)
-				reportTemplates.POST("/:id/duplicate", reportTemplateHandler.Duplicate)
-				reportTemplates.GET("/:id", reportTemplateHandler.GetByID)
-				reportTemplates.PUT("/:id", reportTemplateHandler.Update)
-				reportTemplates.GET("/:id/download", reportTemplateHandler.Download)
-				reportTemplates.GET("/filled", reportTemplateHandler.DownloadFilled)
-				reportTemplates.DELETE("/:id", reportTemplateHandler.Delete)
-				reportTemplates.POST("/:id/fill", reportTemplateHandler.Fill)
-				reportTemplates.POST("/:id/create-report", reportTemplateHandler.CreateReportFromTemplate)
-				reportTemplates.POST("/:id/keys", reportTemplateHandler.AddKey)
+				reportTemplates.GET("", auth.RequireFeatureAction(models.FeatureReports, "read"), reportTemplateHandler.List)
+				reportTemplates.POST("", auth.RequireFeatureAction(models.FeatureReports, "create"), reportTemplateHandler.Upload)
+				reportTemplates.POST("/:id/duplicate", auth.RequireFeatureAction(models.FeatureReports, "create"), reportTemplateHandler.Duplicate)
+				reportTemplates.GET("/:id", auth.RequireFeatureAction(models.FeatureReports, "read"), reportTemplateHandler.GetByID)
+				reportTemplates.PUT("/:id", auth.RequireFeatureAction(models.FeatureReports, "update"), reportTemplateHandler.Update)
+				reportTemplates.GET("/:id/download", auth.RequireFeatureAction(models.FeatureReports, "read"), reportTemplateHandler.Download)
+				reportTemplates.GET("/filled", auth.RequireFeatureAction(models.FeatureReports, "read"), reportTemplateHandler.DownloadFilled)
+				reportTemplates.DELETE("/:id", auth.RequireFeatureAction(models.FeatureReports, "delete"), reportTemplateHandler.Delete)
+				reportTemplates.POST("/:id/fill", auth.RequireFeatureAction(models.FeatureReports, "create"), reportTemplateHandler.Fill)
+				reportTemplates.POST("/:id/create-report", auth.RequireFeatureAction(models.FeatureReports, "create"), reportTemplateHandler.CreateReportFromTemplate)
+				reportTemplates.POST("/:id/keys", auth.RequireFeatureAction(models.FeatureReports, "update"), reportTemplateHandler.AddKey)
 			}
 
 			performance := protected.Group("/performance")
 			performance.Use(moduleEnabled(repo, "performance"))
-			performance.Use(auth.RequireFeature(models.FeaturePerformance))
+			performance.Use(auth.RequireAnyFeature(models.FeaturePerformance, models.FeaturePerformanceAdmin))
 			{
-				performance.GET("/domains", performanceHandler.ListDomains)
-				performance.GET("/domains/full", performanceHandler.ListDomainsFull)
-				performance.GET("/domains/:id/sub-domains", performanceHandler.ListSubDomains)
-				performance.GET("/sub-domains/:id/indicators", performanceHandler.ListIndicators)
-				performance.GET("/indicators", performanceHandler.ListAllIndicators)
-				performance.POST("/data", performanceHandler.CreatePerformanceData)
-				performance.POST("/data/bulk", performanceHandler.BulkCreatePerformanceData)
-				performance.GET("/data", performanceHandler.GetPerformanceData)
-				performance.GET("/data/submissions", performanceHandler.ListSubmissions)
-				performance.GET("/data/compare", performanceHandler.ComparePerformance)
-				performance.DELETE("/data/:id", performanceHandler.DeletePerformanceData)
-				performance.DELETE("/data", performanceHandler.DeletePerformanceDataByZoneAndPeriod)
-				performance.GET("/periods", performanceHandler.ListPeriods)
-				performance.POST("/submissions", performanceHandler.CreateSubmission)
+				performance.GET("/domains", auth.RequireFeatureAction(models.FeaturePerformance, "read"), performanceHandler.ListDomains)
+				performance.GET("/domains/full", auth.RequireFeatureAction(models.FeaturePerformance, "read"), performanceHandler.ListDomainsFull)
+				performance.GET("/domains/:id/sub-domains", auth.RequireFeatureAction(models.FeaturePerformance, "read"), performanceHandler.ListSubDomains)
+				performance.GET("/sub-domains/:id/indicators", auth.RequireFeatureAction(models.FeaturePerformance, "read"), performanceHandler.ListIndicators)
+				performance.GET("/indicators", auth.RequireFeatureAction(models.FeaturePerformance, "read"), performanceHandler.ListAllIndicators)
+				performance.POST("/data", auth.RequireFeatureAction(models.FeaturePerformance, "create"), performanceHandler.CreatePerformanceData)
+				performance.POST("/data/bulk", auth.RequireFeatureAction(models.FeaturePerformance, "create"), performanceHandler.BulkCreatePerformanceData)
+				performance.GET("/data", auth.RequireFeatureAction(models.FeaturePerformance, "read"), performanceHandler.GetPerformanceData)
+				performance.GET("/data/submissions", auth.RequireFeatureAction(models.FeaturePerformance, "read"), performanceHandler.ListSubmissions)
+				performance.GET("/data/compare", auth.RequireFeatureAction(models.FeaturePerformance, "read"), performanceHandler.ComparePerformance)
+				performance.DELETE("/data/:id", auth.RequireFeatureAction(models.FeaturePerformance, "delete"), performanceHandler.DeletePerformanceData)
+				performance.DELETE("/data", auth.RequireFeatureAction(models.FeaturePerformance, "delete"), performanceHandler.DeletePerformanceDataByZoneAndPeriod)
+				performance.GET("/periods", auth.RequireFeatureAction(models.FeaturePerformance, "read"), performanceHandler.ListPeriods)
+				performance.POST("/submissions", auth.RequireFeatureAction(models.FeaturePerformance, "create"), performanceHandler.CreateSubmission)
 			}
 
 			performanceAdmin := protected.Group("/performance")
@@ -366,30 +368,30 @@ func main() {
 			fms.Use(auth.RequireFeature(models.FeatureFinances))
 			{
 				// Chart of Accounts
-				fms.GET("/coa", fmsHandler.ListCoA)
-				fms.GET("/coa/:code", fmsHandler.GetCoA)
-				fms.POST("/coa", fmsHandler.CreateCoA)
-				fms.PUT("/coa/:code", fmsHandler.UpdateCoA)
+				fms.GET("/coa", auth.RequireFeatureAction(models.FeatureFinances, "read"), fmsHandler.ListCoA)
+				fms.GET("/coa/:code", auth.RequireFeatureAction(models.FeatureFinances, "read"), fmsHandler.GetCoA)
+				fms.POST("/coa", auth.RequireFeatureAction(models.FeatureFinances, "create"), fmsHandler.CreateCoA)
+				fms.PUT("/coa/:code", auth.RequireFeatureAction(models.FeatureFinances, "update"), fmsHandler.UpdateCoA)
 
 				// Budgets
-				fms.GET("/budgets", fmsHandler.ListFMSBudgets)
-				fms.POST("/budgets", fmsHandler.CreateFMSBudget)
-				fms.GET("/budgets/:id", fmsHandler.GetFMSBudget)
-				fms.PUT("/budgets/:id", fmsHandler.UpdateFMSBudget)
+				fms.GET("/budgets", auth.RequireFeatureAction(models.FeatureFinances, "read"), fmsHandler.ListFMSBudgets)
+				fms.POST("/budgets", auth.RequireFeatureAction(models.FeatureFinances, "create"), fmsHandler.CreateFMSBudget)
+				fms.GET("/budgets/:id", auth.RequireFeatureAction(models.FeatureFinances, "read"), fmsHandler.GetFMSBudget)
+				fms.PUT("/budgets/:id", auth.RequireFeatureAction(models.FeatureFinances, "update"), fmsHandler.UpdateFMSBudget)
 
 				// Transactions
-				fms.POST("/transactions", fmsHandler.CreateFMSTransaction)
-				fms.GET("/transactions", fmsHandler.ListFMSTransactions)
-				fms.GET("/transactions/:id", fmsHandler.GetFMSTransaction)
-				fms.POST("/transactions/:id/approve", fmsHandler.ApproveFMSTransaction)
-				fms.POST("/transactions/:id/reject", fmsHandler.RejectFMSTransaction)
-				fms.POST("/transactions/:id/reverse", fmsHandler.ReverseFMSTransaction)
+				fms.POST("/transactions", auth.RequireFeatureAction(models.FeatureFinances, "create"), fmsHandler.CreateFMSTransaction)
+				fms.GET("/transactions", auth.RequireFeatureAction(models.FeatureFinances, "read"), fmsHandler.ListFMSTransactions)
+				fms.GET("/transactions/:id", auth.RequireFeatureAction(models.FeatureFinances, "read"), fmsHandler.GetFMSTransaction)
+				fms.POST("/transactions/:id/approve", auth.RequireFeatureAction(models.FeatureFinances, "update"), fmsHandler.ApproveFMSTransaction)
+				fms.POST("/transactions/:id/reject", auth.RequireFeatureAction(models.FeatureFinances, "update"), fmsHandler.RejectFMSTransaction)
+				fms.POST("/transactions/:id/reverse", auth.RequireFeatureAction(models.FeatureFinances, "delete"), fmsHandler.ReverseFMSTransaction)
 
 				// Dashboard
-				fms.GET("/dashboard", fmsHandler.GetFMSDashboard)
+				fms.GET("/dashboard", auth.RequireFeatureAction(models.FeatureFinances, "read"), fmsHandler.GetFMSDashboard)
 
 				// Audit Log
-				fms.GET("/audit", fmsHandler.ListFMSAuditLog)
+				fms.GET("/audit", auth.RequireFeatureAction(models.FeatureFinances, "read"), fmsHandler.ListFMSAuditLog)
 			}
 		}
 	}

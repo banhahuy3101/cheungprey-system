@@ -16,12 +16,9 @@ type RecordAccessContext struct {
 }
 
 func RecordAccessFromProfile(userID uuid.UUID, profile *models.Profile) RecordAccessContext {
-	ctx := RecordAccessContext{UserID: userID, Role: models.RoleRegularUser}
+	ctx := RecordAccessContext{UserID: userID}
 	if profile != nil {
 		ctx.Role = profile.Role
-		if ctx.Role == "" {
-			ctx.Role = models.RoleRegularUser
-		}
 		ctx.CommuneID = profile.CommuneID
 		ctx.VillageID = profile.VillageID
 	}
@@ -29,39 +26,30 @@ func RecordAccessFromProfile(userID uuid.UUID, profile *models.Profile) RecordAc
 }
 
 func (s *RecordService) CanCreateRecord(ctx RecordAccessContext) bool {
-	switch ctx.Role {
-	case models.RoleSuperAdmin, models.RoleAdmin,
-		models.RoleDistrictChief, models.RoleCommuneChief, models.RoleCommuneClerk,
-		models.RoleVillageChief, models.RoleRecorder:
-		return true
-	default:
-		return false
-	}
+	return ctx.Role != ""
 }
 
 func (s *RecordService) CanAccessRecord(ctx RecordAccessContext, record *models.Record, write bool) bool {
 	if record == nil {
 		return false
 	}
-	switch ctx.Role {
-	case models.RoleSuperAdmin, models.RoleAdmin:
+	r := string(ctx.Role)
+	switch r {
+	case "super_admin", "admin":
 		return true
-	case models.RoleDistrictChief:
+	case "district_chief":
 		if ctx.CommuneID == nil || record.CommuneID == nil {
 			return false
 		}
 		return s.recordInUserDistrict(ctx, *record.CommuneID)
-	case models.RoleCommuneChief, models.RoleCommuneClerk:
+	case "commune_chief", "commune_clerk":
 		return ctx.CommuneID != nil && record.CommuneID != nil && *record.CommuneID == *ctx.CommuneID
-	case models.RoleVillageChief:
+	case "village_chief":
 		if ctx.VillageID != nil && record.VillageID != nil && *record.VillageID == *ctx.VillageID {
 			return true
 		}
 		return ctx.CommuneID != nil && record.CommuneID != nil && *record.CommuneID == *ctx.CommuneID
-	case models.RoleRecorder:
-		if write {
-			return record.CreatedBy == ctx.UserID
-		}
+	case "recorder":
 		return record.CreatedBy == ctx.UserID
 	default:
 		return record.CreatedBy == ctx.UserID
@@ -84,10 +72,11 @@ func (s *RecordService) recordInUserDistrict(ctx RecordAccessContext, recordComm
 }
 
 func (s *RecordService) GetRecords(ctx RecordAccessContext) ([]models.Record, error) {
-	switch ctx.Role {
-	case models.RoleSuperAdmin, models.RoleAdmin:
+	r := string(ctx.Role)
+	switch r {
+	case "super_admin", "admin":
 		return s.repo.GetAllRecords()
-	case models.RoleDistrictChief:
+	case "district_chief":
 		if ctx.CommuneID == nil {
 			return []models.Record{}, nil
 		}
@@ -96,12 +85,12 @@ func (s *RecordService) GetRecords(ctx RecordAccessContext) ([]models.Record, er
 			return nil, fmt.Errorf("get user commune: %w", err)
 		}
 		return s.repo.GetRecordsByDistrict(userCommune.DistrictID)
-	case models.RoleCommuneChief, models.RoleCommuneClerk:
+	case "commune_chief", "commune_clerk":
 		if ctx.CommuneID == nil {
 			return []models.Record{}, nil
 		}
 		return s.repo.GetRecordsByCommune(*ctx.CommuneID)
-	case models.RoleVillageChief:
+	case "village_chief":
 		if ctx.VillageID != nil {
 			return s.repo.GetRecordsByVillage(*ctx.VillageID)
 		}
@@ -110,9 +99,6 @@ func (s *RecordService) GetRecords(ctx RecordAccessContext) ([]models.Record, er
 		}
 		return []models.Record{}, nil
 	default:
-		if models.RoleHierarchy[ctx.Role] < models.RoleHierarchy[models.RoleRecorder] {
-			return []models.Record{}, nil
-		}
 		return s.repo.GetRecordsByUser(ctx.UserID)
 	}
 }

@@ -1,5 +1,5 @@
 const STORAGE_KEY = "default_user_password";
-export const FALLBACK_DEFAULT_PASSWORD = "Demo123!";
+export const FALLBACK_DEFAULT_PASSWORD = "123456";
 
 export function getDefaultUserPassword() {
   return localStorage.getItem(STORAGE_KEY) || FALLBACK_DEFAULT_PASSWORD;
@@ -17,7 +17,7 @@ export function createUserFormDefaults() {
     name: "",
     email: "",
     password: getDefaultUserPassword(),
-    role: "recorder",
-    roles: ["recorder"],
+    role: "",
+    roles: [],
   };
 }

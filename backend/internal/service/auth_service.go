@@ -19,9 +19,6 @@ func NewAuthService(repo *repository.Repository) *AuthService {
 
 func (s *AuthService) CreateProfile(userID uuid.UUID, req *models.RegisterRequest) (*models.Profile, error) {
 	role := req.Role
-	if role == "" {
-		role = models.RoleRecorder
-	}
 
 	profile := &models.Profile{
 		ID:        userID,

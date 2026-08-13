@@ -72,7 +72,20 @@ export default function ReportSimpleForm({ mode = "create", reportId, initialDoc
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (isView) return;
-    setError(""); setFieldErrors({}); setSaving(true);
+    setError(""); setFieldErrors({});
+
+    const errs = {};
+    if (!form.title?.trim()) errs.title = "សូមបញ្ចូលចំណងជើងរបាយការណ៍";
+    if (!form.description?.trim()) errs.description = "សូមបញ្ចូលការពិពណ៌នា";
+    if (isEmptyContent(form.content)) errs.content = "សូមបញ្ចូលខ្លឹមសាររបាយការណ៍";
+
+    if (Object.keys(errs).length > 0) {
+      setFieldErrors(errs);
+      setValidationPopup(errs);
+      return;
+    }
+
+    setSaving(true);
     try {
       const payload = buildSimpleReportPayload(form);
       if (isEdit) {
@@ -163,44 +176,44 @@ export default function ReportSimpleForm({ mode = "create", reportId, initialDoc
           />
         </div>
 
-      {error && Object.keys(fieldErrors).length === 0 && <div className="alert alert-error report-flash">{error}</div>}
+        {error && Object.keys(fieldErrors).length === 0 && <div className="alert alert-error report-flash">{error}</div>}
 
-      {validationPopup && (
-        <Modal
-          open={!!validationPopup}
-          onClose={() => setValidationPopup(null)}
-          title="⚠️ សូមបំពេញព័ត៌មានឲ្យបានគ្រប់"
-        >
-          <div style={{ display: "flex", flexDirection: "column", gap: "1rem", padding: "0.5rem 0" }}>
-            <div style={{ color: "#7f1d1d", fontSize: "0.9rem" }}>
-              សូមពិនិត្យ និងបំពេញព័ត៌មានដែលខ្វះចន្លោះខាងក្រោម៖
+        {validationPopup && (
+          <Modal
+            open={!!validationPopup}
+            onClose={() => setValidationPopup(null)}
+            title="⚠️ សូមបំពេញព័ត៌មានឲ្យបានគ្រប់"
+          >
+            <div style={{ display: "flex", flexDirection: "column", gap: "1rem", padding: "0.5rem 0" }}>
+              <div style={{ color: "#7f1d1d", fontSize: "0.9rem" }}>
+                សូមពិនិត្យ និងបំពេញព័ត៌មានដែលខ្វះចន្លោះខាងក្រោម៖
+              </div>
+              <ul style={{ margin: 0, paddingLeft: "1.25rem", fontSize: "0.9rem", color: "#991b1b", display: "flex", flexDirection: "column", gap: "0.4rem" }}>
+                {Object.entries(validationPopup).map(([k, v]) => (
+                  <li key={k} style={{ fontWeight: "500" }}>{v}</li>
+                ))}
+              </ul>
+              <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "0.5rem" }}>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() => setValidationPopup(null)}
+                  style={{ minWidth: "90px" }}
+                >
+                  បិទ
+                </button>
+              </div>
             </div>
-            <ul style={{ margin: 0, paddingLeft: "1.25rem", fontSize: "0.9rem", color: "#991b1b", display: "flex", flexDirection: "column", gap: "0.4rem" }}>
-              {Object.entries(validationPopup).map(([k, v]) => (
-                <li key={k} style={{ fontWeight: "500" }}>{v}</li>
-              ))}
-            </ul>
-            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "0.5rem" }}>
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={() => setValidationPopup(null)}
-                style={{ minWidth: "90px" }}
-              >
-                បិទ
-              </button>
-            </div>
-          </div>
-        </Modal>
-      )}
+          </Modal>
+        )}
 
         <div className="card report-view-card">
           <div className="report-view-meta">
             <span className="report-status-badge" data-status={meta?.status || "draft"}>
               {meta?.status === "pending_review" ? "កំពុងពិនិត្យ"
                 : meta?.status === "rejected" ? "បានបដិសេធ"
-                : meta?.status === "published" ? "បានចេញ"
-                : "ព្រាង"}
+                  : meta?.status === "published" ? "បានចេញ"
+                    : "ព្រាង"}
             </span>
             <span className="report-view-date">
               <LuCalendar size={14} aria-hidden />

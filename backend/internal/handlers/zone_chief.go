@@ -122,13 +122,13 @@ func (h *ZoneChiefHandler) Remove(c *gin.Context) {
 func roleForZoneType(zoneType string) models.UserRole {
 	switch zoneType {
 	case "Province":
-		return models.RoleProvinceChief
+		return models.UserRole("province_chief")
 	case "District":
-		return models.RoleDistrictChief
+		return models.UserRole("district_chief")
 	case "Commune":
-		return models.RoleCommuneChief
+		return models.UserRole("commune_chief")
 	case "Village":
-		return models.RoleVillageChief
+		return models.UserRole("village_chief")
 	default:
 		return ""
 	}

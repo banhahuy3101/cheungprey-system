@@ -77,6 +77,8 @@ export default function MembershipProfile({ profile: initialProfile, onBack, onE
   const cards = profile?.cards || [];
   const activity = profile?.activity || [];
   const canAdmin = canAccess(user, FEATURES.membership_admin);
+  const canUpdate = canAccess(user, FEATURES.members, "update");
+  const canDelete = canAccess(user, FEATURES.members, "delete");
   const currentPosition = positions.find((p) => p.is_current);
 
   const loadHistory = () => {
@@ -189,11 +191,11 @@ export default function MembershipProfile({ profile: initialProfile, onBack, onE
             </div>
           </div>
           <div className="member-hero-actions">
-            <button className="btn" onClick={onEdit}><LuPencil /> កែប្រែ</button>
+            {canUpdate && <button className="btn" onClick={onEdit}><LuPencil /> កែប្រែ</button>}
             {canAdmin && (
               <>
                 <button className="btn" onClick={() => setShowStatusModal(true)}><LuRefreshCw /> ស្ថានភាព</button>
-                <button className="btn btn-danger" onClick={() => setShowConfirmDelete(true)}><LuTrash2 /></button>
+                {canDelete && <button className="btn btn-danger" onClick={() => setShowConfirmDelete(true)}><LuTrash2 /></button>}
               </>
             )}
           </div>
@@ -256,6 +258,7 @@ export default function MembershipProfile({ profile: initialProfile, onBack, onE
 
         {/* Tab Content */}
         <div className="member-tab-content">
+          <>
           {activeTab === "overview" && (
             <div className="member-section">
               {/* Current Position */}
@@ -569,6 +572,7 @@ export default function MembershipProfile({ profile: initialProfile, onBack, onE
               </button>
             </div>
           )}
+          </>
 
           {activeTab === "history" && (
             <div>

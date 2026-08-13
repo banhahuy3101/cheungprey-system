@@ -1,16 +1,54 @@
 export const FEATURES = {
   dashboard: "dashboard",
   members: "members",
+  members_create: "members_create",
+  members_read: "members_read",
+  members_update: "members_update",
+  members_delete: "members_delete",
+
   voters: "voters",
+  voters_create: "voters_create",
+  voters_read: "voters_read",
+  voters_update: "voters_update",
+  voters_delete: "voters_delete",
   finances: "finances",
+  finances_create: "finances_create",
+  finances_read: "finances_read",
+  finances_update: "finances_update",
+  finances_delete: "finances_delete",
+
   files: "files",
+  files_create: "files_create",
+  files_read: "files_read",
+  files_update: "files_update",
+  files_delete: "files_delete",
+
   records: "records",
+  records_create: "records_create",
+  records_read: "records_read",
+  records_update: "records_update",
+  records_delete: "records_delete",
+
   reports: "reports",
+  reports_create: "reports_create",
+  reports_read: "reports_read",
+  reports_update: "reports_update",
+  reports_delete: "reports_delete",
+
   performance: "performance",
+  performance_create: "performance_create",
+  performance_read: "performance_read",
+  performance_update: "performance_update",
+  performance_delete: "performance_delete",
   performance_admin: "performance_admin",
   settings: "settings",
   users: "users",
+  users_create: "users_create",
+  users_read: "users_read",
+  users_update: "users_update",
+  users_delete: "users_delete",
   technical: "technical",
+
   membership_write: "membership_write",
   membership_dues: "membership_dues",
   membership_admin: "membership_admin",
@@ -21,16 +59,38 @@ export const FEATURES = {
 export const FEATURE_LABELS = {
   dashboard: "ទំព័រដើម",
   members: "សមាជិក",
+  members_create: "បង្កើតសមាជិក (Create)",
+  members_read: "មើលសមាជិក (Read)",
+  members_update: "កែប្រែសមាជិក (Update)",
+  members_delete: "លុបសមាជិក (Delete)",
+
   voters: "អ្នកបោះឆ្នោត",
   finances: "ហិរញ្ញវត្ថុ",
+
   files: "ឯកសារ",
+  files_create: "បង្កើតឯកសារ (Create)",
+  files_read: "មើលឯកសារ (Read)",
+  files_update: "កែប្រែឯកសារ (Update)",
+  files_delete: "លុបឯកសារ (Delete)",
+
   records: "កំណត់ត្រា",
+  records_create: "បង្កើតកំណត់ត្រា (Create)",
+  records_read: "មើលកំណត់ត្រា (Read)",
+  records_update: "កែប្រែកំណត់ត្រា (Update)",
+  records_delete: "លុបកំណត់ត្រា (Delete)",
+
   reports: "របាយការណ៍",
+  reports_create: "បង្កើតរបាយការណ៍ (Create)",
+  reports_read: "មើលរបាយការណ៍ (Read)",
+  reports_update: "កែប្រែរបាយការណ៍ (Update)",
+  reports_delete: "លុបរបាយការណ៍ (Delete)",
+
   performance: "លទ្ធផលការងារ",
   performance_admin: "គ្រប់គ្រង Performance",
   settings: "ការកំណត់",
   users: "គ្រប់គ្រងអ្នកប្រើ",
   technical: "Technical",
+
   membership_write: "សរសេរសមាជិក",
   membership_dues: "តារាងសមាជិក",
   membership_admin: "គ្រប់គ្រងសមាជិក",
@@ -38,11 +98,30 @@ export const FEATURE_LABELS = {
   membership_delete: "លុបសមាជិក",
 };
 
-export function canAccess(user, feature) {
+export function canAccess(user, feature, action) {
   if (!user) return false;
-  if (user.permissions && feature in user.permissions) {
-    return !!user.permissions[feature];
+
+  const perms = user.permissions || {};
+
+  if (action) {
+    const specificKey = `${feature}_${action}`;
+    if (specificKey in perms) {
+      return !!perms[specificKey];
+    }
   }
+
+  if (feature in perms && perms[feature]) {
+    return true;
+  }
+
+  // Check if any granular sub-permission (e.g. feature_read, feature_create, feature_update, feature_delete) is enabled
+  const prefix = `${feature}_`;
+  for (const k in perms) {
+    if ((k.startsWith(prefix) || k === feature) && perms[k]) {
+      return true;
+    }
+  }
+
   return false;
 }
 

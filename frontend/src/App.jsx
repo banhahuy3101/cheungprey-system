@@ -13,11 +13,11 @@ import Files from "./pages/files/Files";
 import Records from "./pages/records/Records";
 import Reports from "./pages/reports/Reports";
 import Performance from "./pages/performance/Performance";
-import Settings from "./pages/Settings";
-import SettingsPeriod from "./pages/SettingsPeriod";
-import SettingsPeriodForm from "./pages/SettingsPeriodForm";
-import SettingsPerformance from "./pages/SettingsPerformance";
-import SettingsRolePermissions from "./pages/SettingsRolePermissions";
+import Settings from "./pages/settings/Settings";
+import SettingsPeriod from "./pages/settings/SettingsPeriod";
+import SettingsPeriodForm from "./pages/settings/SettingsPeriodForm";
+import SettingsPerformance from "./pages/settings/SettingsPerformance";
+import SettingsRolePermissions from "./pages/settings/SettingsRolePermissions";
 import SettingsTechnical from "./pages/settings/SettingsTechnical";
 import SettingsSystem from "./pages/settings/SettingsSystem";
 import SettingsReportTemplates from "./pages/settings/SettingsReportTemplates";
@@ -26,13 +26,14 @@ import SettingsReportTemplateDetail from "./pages/settings/SettingsReportTemplat
 import SettingsReportTemplateEdit from "./pages/settings/SettingsReportTemplateEdit";
 import SettingsZoneChief from "./pages/settings/SettingsZoneChief";
 import ModuleSettings from "./pages/settings/ModuleSettings";
+import Forbidden from "./pages/Forbidden";
 import ReportCreateFromTemplate from "./pages/reports/ReportCreateFromTemplate";
 import Admin from "./pages/admin/Admin";
 import Profile from "./pages/profile/Profile";
 import { FEATURES } from "./utils/permissions";
 
-function FeatureRoute({ feature, children }) {
-  return <ProtectedRoute feature={feature}>{children}</ProtectedRoute>;
+function FeatureRoute({ feature, action = "read", children }) {
+  return <ProtectedRoute feature={feature} action={action}>{children}</ProtectedRoute>;
 }
 
 function App() {
@@ -42,7 +43,7 @@ function App() {
       <AuthProvider>
         <Routes>
           <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} />
+          <Route path="/register" element={<Navigate to="/login" replace />} />
 
           <Route
             element={
@@ -55,11 +56,11 @@ function App() {
             <Route index element={<Dashboard />} />
 
             <Route path="membership" element={<FeatureRoute feature={FEATURES.members}><Membership /></FeatureRoute>} />
-            <Route path="membership/create" element={<FeatureRoute feature={FEATURES.members}><MembershipCreate /></FeatureRoute>} />
-            <Route path="membership/import" element={<FeatureRoute feature={FEATURES.membership_write}><Membership /></FeatureRoute>} />
+            <Route path="membership/create" element={<FeatureRoute feature={FEATURES.members} action="create"><MembershipCreate /></FeatureRoute>} />
+            <Route path="membership/import" element={<FeatureRoute feature={FEATURES.membership_write} action={null}><Membership /></FeatureRoute>} />
             <Route path="membership/stats" element={<FeatureRoute feature={FEATURES.members}><Membership /></FeatureRoute>} />
             <Route path="membership/:id" element={<FeatureRoute feature={FEATURES.members}><Membership /></FeatureRoute>} />
-            <Route path="membership/:id/edit" element={<FeatureRoute feature={FEATURES.members}><Membership /></FeatureRoute>} />
+            <Route path="membership/:id/edit" element={<FeatureRoute feature={FEATURES.members} action="update"><Membership /></FeatureRoute>} />
             <Route path="membership/:id/demographics" element={<FeatureRoute feature={FEATURES.members}><Membership /></FeatureRoute>} />
             <Route path="membership/:id/dues" element={<FeatureRoute feature={FEATURES.members}><Membership /></FeatureRoute>} />
             <Route path="membership/:id/activity" element={<FeatureRoute feature={FEATURES.members}><Membership /></FeatureRoute>} />
@@ -71,18 +72,18 @@ function App() {
             <Route path="files" element={<FeatureRoute feature={FEATURES.files}><Files /></FeatureRoute>} />
             <Route path="records" element={<FeatureRoute feature={FEATURES.records}><Records /></FeatureRoute>} />
             <Route path="reports" element={<FeatureRoute feature={FEATURES.reports}><Reports /></FeatureRoute>} />
-            <Route path="reports/create" element={<FeatureRoute feature={FEATURES.reports}><Reports /></FeatureRoute>} />
-            <Route path="reports/create-template" element={<FeatureRoute feature={FEATURES.reports}><ReportCreateFromTemplate /></FeatureRoute>} />
-            <Route path="reports/:id/edit" element={<FeatureRoute feature={FEATURES.reports}><Reports /></FeatureRoute>} />
+            <Route path="reports/create" element={<FeatureRoute feature={FEATURES.reports} action="create"><Reports /></FeatureRoute>} />
+            <Route path="reports/create-template" element={<FeatureRoute feature={FEATURES.reports} action="create"><ReportCreateFromTemplate /></FeatureRoute>} />
+            <Route path="reports/:id/edit" element={<FeatureRoute feature={FEATURES.reports} action="update"><Reports /></FeatureRoute>} />
             <Route path="reports/:id" element={<FeatureRoute feature={FEATURES.reports}><Reports /></FeatureRoute>} />
             <Route path="performance" element={<FeatureRoute feature={FEATURES.performance}><Performance /></FeatureRoute>} />
-            <Route path="performance/create" element={<FeatureRoute feature={FEATURES.performance}><Performance /></FeatureRoute>} />
-            <Route path="performance/edit" element={<FeatureRoute feature={FEATURES.performance}><Performance /></FeatureRoute>} />
+            <Route path="performance/create" element={<FeatureRoute feature={FEATURES.performance} action="create"><Performance /></FeatureRoute>} />
+            <Route path="performance/edit" element={<FeatureRoute feature={FEATURES.performance} action="update"><Performance /></FeatureRoute>} />
             <Route path="performance/:id" element={<FeatureRoute feature={FEATURES.performance}><Performance /></FeatureRoute>} />
 
             <Route path="settings" element={<FeatureRoute feature={FEATURES.settings}><Settings /></FeatureRoute>} />
-            <Route path="settings/users" element={<ProtectedRoute adminOnly><Admin /></ProtectedRoute>} />
-            <Route path="settings/role-permissions" element={<ProtectedRoute adminOnly><SettingsRolePermissions /></ProtectedRoute>} />
+            <Route path="settings/users" element={<ProtectedRoute adminOnly feature={FEATURES.users} action="read"><Admin /></ProtectedRoute>} />
+            <Route path="settings/role-permissions" element={<ProtectedRoute adminOnly feature={FEATURES.users} action="read"><SettingsRolePermissions /></ProtectedRoute>} />
             <Route path="settings/technical" element={<ProtectedRoute feature={FEATURES.technical}><SettingsTechnical /></ProtectedRoute>} />
             <Route path="settings/technical/system" element={<ProtectedRoute feature={FEATURES.technical}><SettingsSystem /></ProtectedRoute>} />
             <Route path="settings/performance_period" element={<ProtectedRoute feature={FEATURES.performance_admin}><SettingsPeriod /></ProtectedRoute>} />
@@ -94,8 +95,9 @@ function App() {
             <Route path="settings/report-templates/:id/edit" element={<ProtectedRoute feature={FEATURES.reports}><SettingsReportTemplateEdit /></ProtectedRoute>} />
             <Route path="settings/report-templates/:id" element={<ProtectedRoute feature={FEATURES.reports}><SettingsReportTemplateDetail /></ProtectedRoute>} />
             <Route path="settings/zone-chiefs" element={<ProtectedRoute adminOnly><SettingsZoneChief /></ProtectedRoute>} />
-            <Route path="settings/modules" element={<ProtectedRoute feature={FEATURES.technical}><ModuleSettings /></ProtectedRoute>} />
+            <Route path="settings/modules" element={<ProtectedRoute features={[FEATURES.technical, FEATURES.users]}><ModuleSettings /></ProtectedRoute>} />
             <Route path="admin" element={<ProtectedRoute adminOnly><Admin /></ProtectedRoute>} />
+            <Route path="403" element={<Forbidden />} />
           </Route>
 
           <Route path="*" element={<Navigate to="/" replace />} />

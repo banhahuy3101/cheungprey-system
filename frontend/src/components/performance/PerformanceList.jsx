@@ -4,6 +4,7 @@ import { performanceAPI } from "../../api/performance";
 import { partyAPI } from "../../api/party";
 import { zoneCodeOf, loadZoneHierarchy, unwrapList } from "../../utils/zone";
 import { formatPerformancePeriodLabel } from "../../utils/periodLabel";
+import DataTable from "../DataTable";
 
 const normalizeId = (id) => String(id || "").toLowerCase();
 
@@ -414,107 +415,109 @@ export default function PerformanceList({ onView, onEdit, onCreate }) {
         </div>
       </div>
 
-      <div className="card" style={{ marginTop: "1rem" }}>
-        <div className="table-responsive">
-          <table className="table">
-            <thead>
-              {loading && (
-                <tr>
-                  <th colSpan={9} style={{ padding: 0, height: "4px", border: "none", background: "transparent" }}>
-                    <div className="report-linear-loader" style={{ position: "relative", borderRadius: 0 }}>
-                      <div className="report-linear-loader-fill" />
-                    </div>
-                  </th>
-                </tr>
-              )}
-              <tr>
-                <th style={{ width: "40px" }}>#</th>
-                <th>រាជធានី/ខេត្ត</th>
-                <th>ក្រុង/ស្រុក/ខណ្ឌ</th>
-                <th>ឃុំ/សង្កាត់</th>
-                <th>ភូមិ</th>
-                <th>រយៈពេល</th>
-                <th>ចំនួនសូចនាករ</th>
-                <th>ស្ថានភាព</th>
-                <th>សកម្មភាព</th>
-              </tr>
-            </thead>
-            <tbody style={{ opacity: loading ? 0.6 : 1, transition: "opacity 0.2s" }}>
-              {records.length === 0 && !loading ? (
-                <tr>
-                  <td colSpan={9} className="text-center" style={{ padding: "3rem" }}>
-                    គ្មានទិន្នន័យ — ចុច "បង្កើតថ្មី" ដើម្បីបន្ថែម
-                  </td>
-                </tr>
-              ) : (
-                records.map((r, idx) => (
-                  <tr
-                    key={`${r.zone_code}-${r.period_id}`}
-                    onClick={() => onView(r.zone_code, r.period_id)}
-                    style={{ cursor: "pointer" }}
-                    className="clickable-row"
-                  >
-                    <td>{idx + 1}</td>
-                    <td>{r.province_name}</td>
-                    <td>{r.district_name}</td>
-                    <td>{r.commune_name}</td>
-                    <td>{r.village_name}</td>
-                    <td>{r.period_label}</td>
-                    <td>{r.indicator_count}</td>
-                    <td>
-                      <span className={`badge ${r.status === "approved" || r.status === "published"
-                        ? "badge-success"
-                        : r.status === "submitted" || r.status === "pending"
-                          ? "badge-warning"
-                          : "badge-secondary"
-                        }`}>
-                        {r.status === "approved" || r.status === "published"
-                          ? "បានអនុម័ត"
-                          : r.status === "submitted" || r.status === "pending"
-                            ? "រង់ចាំពិនិត្យ"
-                            : "សេចក្តីព្រាង"}
-                      </span>
-                    </td>
-                    <td onClick={(e) => e.stopPropagation()}>
-                      <div className="actions">
-                        <button
-                          className="btn-icon"
-                          onClick={() => onView(r.zone_code, r.period_id)}
-                          title="មើល"
-                        >
-                          <LuEye />
-                        </button>
-                        <button
-                          className="btn-icon"
-                          onClick={() => onEdit(r.zone_code, r.period_id)}
-                          title="កែប្រែ"
-                        >
-                          <LuPencil />
-                        </button>
-                        <button
-                          className="btn-icon btn-danger"
-                          onClick={() => setDeleteTarget(r)}
-                          title="លុប"
-                        >
-                          <LuTrash2 />
-                        </button>
-                        <button
-                          className="btn-icon"
-                          onClick={() => handleDownload(r)}
-                          disabled={downloadTarget?.zone_code === r.zone_code && downloadTarget?.period_id === r.period_id}
-                          title="ទាញយក PDF"
-                        >
-                          <LuDownload />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      {/* Performance DataTable */}
+      <DataTable
+        columns={[
+          {
+            key: "idx",
+            label: "#",
+            width: "40px",
+            render: (_, __, i) => i + 1,
+          },
+          {
+            key: "province_name",
+            label: "រាជធានី/ខេត្ត",
+            render: (val) => val || "—",
+          },
+          {
+            key: "district_name",
+            label: "ក្រុង/ស្រុក/ខណ្ឌ",
+            render: (val) => val || "—",
+          },
+          {
+            key: "commune_name",
+            label: "ឃុំ/សង្កាត់",
+            render: (val) => val || "—",
+          },
+          {
+            key: "village_name",
+            label: "ភូមិ",
+            render: (val) => val || "—",
+          },
+          {
+            key: "period_label",
+            label: "រយៈពេល",
+            render: (val) => <span style={{ fontWeight: "600", color: "#0f172a" }}>{val || "—"}</span>,
+          },
+          {
+            key: "indicator_count",
+            label: "ចំនួនសូចនាករ",
+            align: "center",
+            render: (val) => <span style={{ fontWeight: "700", color: "#4f46e5" }}>{val || 0}</span>,
+          },
+          {
+            key: "status",
+            label: "ស្ថានភាព",
+            render: (val) => (
+              <span className={`badge ${val === "approved" || val === "published"
+                ? "badge-success"
+                : val === "submitted" || val === "pending"
+                  ? "badge-warning"
+                  : "badge-secondary"
+                }`}>
+                {val === "approved" || val === "published"
+                  ? "បានអនុម័ត"
+                  : val === "submitted" || val === "pending"
+                    ? "រង់ចាំពិនិត្យ"
+                    : "សេចក្តីព្រាង"}
+              </span>
+            ),
+          },
+          {
+            key: "actions",
+            label: "សកម្មភាព",
+            align: "right",
+            width: "140px",
+            render: (_, r) => (
+              <div className="actions" style={{ display: "flex", justifyContent: "flex-end", gap: "0.25rem" }} onClick={(e) => e.stopPropagation()}>
+                <button
+                  className="btn-icon"
+                  onClick={() => onView(r.zone_code, r.period_id)}
+                  title="មើល"
+                >
+                  <LuEye />
+                </button>
+                <button
+                  className="btn-icon"
+                  onClick={() => onEdit(r.zone_code, r.period_id)}
+                  title="កែប្រែ"
+                >
+                  <LuPencil />
+                </button>
+                <button
+                  className="btn-icon btn-danger"
+                  onClick={() => setDeleteTarget(r)}
+                  title="លុប"
+                >
+                  <LuTrash2 />
+                </button>
+                <button
+                  className="btn-icon"
+                  onClick={() => handleDownload(r)}
+                  disabled={downloadTarget?.zone_code === r.zone_code && downloadTarget?.period_id === r.period_id}
+                  title="ទាញយក PDF"
+                >
+                  <LuDownload />
+                </button>
+              </div>
+            ),
+          },
+        ]}
+        data={records}
+        loading={loading}
+        emptyMessage="គ្មានទិន្នន័យ — ចុច «បង្កើតថ្មី» ដើម្បីបន្ថែម"
+        onRowClick={(r) => onView(r.zone_code, r.period_id)}
+      />
 
       {downloadTarget && (
         <div className="modal-overlay modal-overlay-top">
