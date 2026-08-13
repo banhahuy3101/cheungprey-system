@@ -139,5 +139,8 @@ func RequireRole(allowedRoles ...models.UserRole) gin.HandlerFunc {
 }
 
 func ValidateRoleAssignment(assignerRole, targetRole models.UserRole) error {
+	if targetRole == models.RoleSuperAdmin && assignerRole != models.RoleSuperAdmin {
+		return fmt.Errorf("only a super admin can assign the super_admin role")
+	}
 	return nil
 }

@@ -76,6 +76,16 @@ func (h *PermissionHandler) CreateRole(c *gin.Context) {
 	if !auth.RequireFeatureHandler(c, models.FeatureUsers) {
 		return
 	}
+	roles, _ := auth.GetUserRoles(c)
+	if len(roles) == 0 {
+		if r, err := auth.GetUserRole(c); err == nil && r != "" {
+			roles = []models.UserRole{r}
+		}
+	}
+	if !h.repo.IsUserSystem(roles) {
+		utils.Forbidden(c, "Only system roles (is_system = true) are allowed to create roles")
+		return
+	}
 	var req models.CreateRoleRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, err.Error())

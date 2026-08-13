@@ -1,11 +1,14 @@
 package handlers
 
 import (
+	"crypto/rand"
+	"encoding/base64"
 	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	qrcode "github.com/skip2/go-qrcode"
 	gotrue "github.com/supabase-community/gotrue-go/types"
 
 	"github.com/banhahuy/cheungprey-system/backend/internal/auth"
@@ -66,6 +69,55 @@ func (h *AdminHandler) GetUserByID(c *gin.Context) {
 	utils.JSON(c, http.StatusOK, profile)
 }
 
+func (h *AdminHandler) GetUserQRCode(c *gin.Context) {
+	if !h.requireAdmin(c) {
+		return
+	}
+
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		utils.BadRequest(c, "Invalid user ID")
+		return
+	}
+
+	profile, err := h.repo.GetProfileByID(id)
+	if err != nil || profile == nil {
+		utils.Error(c, http.StatusNotFound, "User not found")
+		return
+	}
+
+	raw := make([]byte, 32)
+	if _, err := rand.Read(raw); err != nil {
+		utils.InternalError(c, "Failed to generate QR code")
+		return
+	}
+	token := base64.RawURLEncoding.EncodeToString(raw)
+
+	createdBy, _ := auth.GetUserID(c)
+	var createdByPtr *uuid.UUID
+	if createdBy != uuid.Nil {
+		createdByPtr = &createdBy
+	}
+	if err := h.repo.CreateQRLoginToken(id, token, time.Now().Add(24*time.Hour), createdByPtr); err != nil {
+		utils.InternalError(c, "Failed to generate QR code")
+		return
+	}
+
+	loginURL := h.cfg.FrontendURL + "/login?qr_token=" + token
+
+	png, err := qrcode.Encode(loginURL, qrcode.Medium, 320)
+	if err != nil {
+		utils.InternalError(c, "Failed to generate QR code")
+		return
+	}
+
+	utils.JSON(c, http.StatusOK, gin.H{
+		"qr_data_uri": "data:image/png;base64," + base64.StdEncoding.EncodeToString(png),
+		"login_url":   loginURL,
+		"expires_at":  time.Now().Add(24 * time.Hour).UTC().Format(time.RFC3339),
+	})
+}
+
 func (h *AdminHandler) CreateUser(c *gin.Context) {
 	if !h.requireAdmin(c) {
 		return
@@ -82,6 +134,10 @@ func (h *AdminHandler) CreateUser(c *gin.Context) {
 	if targetRole == "" && len(req.Roles) > 0 {
 		targetRole = models.PrimaryRole(req.Roles)
 	}
+	if targetRole == "" {
+		utils.BadRequest(c, "Please select at least one role for the user")
+		return
+	}
 	if err := auth.ValidateRoleAssignment(assignerRole, targetRole); err != nil {
 		utils.Forbidden(c, err.Error())
 		return
@@ -93,6 +149,33 @@ func (h *AdminHandler) CreateUser(c *gin.Context) {
 	for _, role := range roles {
 		if err := auth.ValidateRoleAssignment(assignerRole, role); err != nil {
 			utils.Forbidden(c, err.Error())
+			return
+		}
+	}
+
+	if req.Email != "" {
+		existing, err := h.repo.GetProfileByEmail(req.Email)
+		if err != nil {
+			utils.InternalError(c, "Failed to validate email")
+			return
+		}
+		if existing != nil {
+			utils.BadRequest(c, "An account with this email already exists")
+			return
+		}
+	}
+	if req.PhoneNumber != "" {
+		if len(req.PhoneNumber) > 13 || !phonePattern.MatchString(req.PhoneNumber) {
+			utils.BadRequest(c, "Phone number must be in Cambodian 0xx or +855 format (9-13 digits)")
+			return
+		}
+		existing, err := h.repo.GetProfileByPhone(req.PhoneNumber)
+		if err != nil {
+			utils.InternalError(c, "Failed to validate phone number")
+			return
+		}
+		if existing != nil {
+			utils.BadRequest(c, "A user with this phone number already exists")
 			return
 		}
 	}
@@ -216,6 +299,11 @@ func (h *AdminHandler) DeleteUser(c *gin.Context) {
 	}
 
 	assignerRole, _ := auth.GetUserRole(c)
+	currentUserID, _ := auth.GetUserID(c)
+	if id == currentUserID {
+		utils.BadRequest(c, "You cannot delete your own account")
+		return
+	}
 	target, err := h.repo.GetProfileByID(id)
 	if err != nil || target == nil {
 		utils.Error(c, http.StatusNotFound, "User not found")
@@ -231,6 +319,8 @@ func (h *AdminHandler) DeleteUser(c *gin.Context) {
 		utils.InternalError(c, "Failed to delete user")
 		return
 	}
+
+	_ = h.repo.AdminClient.Auth.WithToken(h.cfg.SupabaseServiceKey).AdminDeleteUser(gotrue.AdminDeleteUserRequest{UserID: id})
 
 	utils.JSON(c, http.StatusOK, gin.H{"message": "User deleted"})
 }

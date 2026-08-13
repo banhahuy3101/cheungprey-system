@@ -43,7 +43,7 @@ func (r *Repository) UpsertSystemSetting(key string, value any, description stri
 		payload["description"] = description
 	}
 	_, _, err := r.AdminClient.From("system_settings").
-		Upsert(payload, "", "*", "").
+		Upsert(payload, "", "representation", "").
 		Execute()
 	if err != nil {
 		return fmt.Errorf("upsert system setting %s: %w", key, err)

@@ -105,6 +105,7 @@ func main() {
 			authRoutes.POST("/login", authHandler.Login)
 			authRoutes.POST("/register", authHandler.Register)
 			authRoutes.POST("/refresh", authHandler.RefreshToken)
+			authRoutes.POST("/qr-login", authHandler.QRLogin)
 		}
 
 		protected := api.Group("")
@@ -131,6 +132,7 @@ func main() {
 			{
 				admin.GET("/users", auth.RequireFeatureAction(models.FeatureUsers, "read"), adminHandler.GetUsers)
 				admin.GET("/users/:id", auth.RequireFeatureAction(models.FeatureUsers, "read"), adminHandler.GetUserByID)
+				admin.GET("/users/:id/qrcode", auth.RequireFeatureAction(models.FeatureUsers, "read"), adminHandler.GetUserQRCode)
 				admin.POST("/users", auth.RequireFeatureAction(models.FeatureUsers, "create"), adminHandler.CreateUser)
 				admin.PUT("/users/:id", auth.RequireFeatureAction(models.FeatureUsers, "update"), adminHandler.UpdateUser)
 				admin.DELETE("/users/:id", auth.RequireFeatureAction(models.FeatureUsers, "delete"), adminHandler.DeleteUser)
@@ -204,6 +206,25 @@ func main() {
 				membership.GET("", auth.RequireFeatureAction(models.FeatureMembers, "read"), membershipHandler.SearchMembers)
 				membership.GET("/stats", auth.RequireFeatureAction(models.FeatureMembers, "read"), membershipHandler.GetStats)
 				membership.GET("/export", auth.RequireFeatureAction(models.FeatureMembers, "read"), membershipHandler.Export)
+
+				registrations := membership.Group("/registrations")
+				{
+					registrations.POST("", auth.RequireFeatureAction(models.FeatureMembers, "create"), membershipHandler.CreateRegistration)
+					registrations.GET("", auth.RequireFeatureAction(models.FeatureMembers, "read"), membershipHandler.ListRegistrations)
+					registrations.GET("/:registrationId", auth.RequireFeatureAction(models.FeatureMembers, "read"), membershipHandler.GetRegistration)
+					registrations.GET("/:registrationId/documents/:documentType", auth.RequireFeatureAction(models.FeatureMembers, "read"), membershipHandler.GetRegistrationDocument)
+					registrations.PUT("/:registrationId", auth.RequireFeatureAction(models.FeatureMembers, "create"), membershipHandler.UpdateRegistration)
+					registrations.POST("/:registrationId/documents", auth.RequireFeatureAction(models.FeatureMembers, "create"), membershipHandler.UploadRegistrationDocument)
+					registrations.POST("/:registrationId/submit", auth.RequireFeatureAction(models.FeatureMembers, "create"), membershipHandler.SubmitRegistration)
+				}
+
+				registrationReview := membership.Group("/registrations")
+				registrationReview.Use(auth.RequireFeature(models.FeatureMembershipAdmin))
+				{
+					registrationReview.POST("/:registrationId/verify", membershipHandler.VerifyRegistration)
+					registrationReview.POST("/:registrationId/approve", membershipHandler.ApproveRegistration)
+					registrationReview.POST("/:registrationId/reject", membershipHandler.RejectRegistration)
+				}
 
 				membership.GET("/:id/profile", auth.RequireFeatureAction(models.FeatureMembers, "read"), membershipHandler.GetProfile)
 				membership.GET("/:id/demographics", auth.RequireFeatureAction(models.FeatureMembers, "read"), membershipHandler.GetDemographics)

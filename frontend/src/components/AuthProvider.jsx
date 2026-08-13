@@ -108,6 +108,30 @@ export default function AuthProvider({ children }) {
     return data;
   };
 
+  const loginWithQR = async (qrToken) => {
+    localStorage.removeItem("access_token");
+    localStorage.removeItem("refresh_token");
+    localStorage.removeItem("cached_user_profile");
+
+    const { data } = await authAPI.qrLogin(qrToken);
+    const inner = data.data || data;
+    if (!inner?.access_token) {
+      const msg = inner?.error || data?.error || "QR login failed";
+      throw Object.assign(new Error(msg), { response: { data: { error: msg } } });
+    }
+    localStorage.setItem("access_token", inner.access_token);
+    if (inner.refresh_token) {
+      localStorage.setItem("refresh_token", inner.refresh_token);
+    }
+    const loggedUser = inner.user || null;
+    if (loggedUser) {
+      localStorage.setItem("cached_user_profile", JSON.stringify(loggedUser));
+    }
+    setUser(loggedUser);
+    fetchRolePermissions().catch(() => {});
+    return inner;
+  };
+
   const logout = () => {
     localStorage.removeItem("access_token");
     localStorage.removeItem("refresh_token");
@@ -141,6 +165,7 @@ export default function AuthProvider({ children }) {
         rolePermissions,
         loading,
         login,
+        loginWithQR,
         register,
         logout,
         updateProfile,

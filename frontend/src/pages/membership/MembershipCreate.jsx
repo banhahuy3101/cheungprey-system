@@ -1,533 +1,278 @@
-import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import {
-  LuArrowLeft, LuArrowRight, LuCheck, LuUser, LuPhone, LuMapPin, LuAward, LuClipboardCheck, LuFileText,
+  LuArrowLeft, LuBuilding2, LuCheck, LuEye, LuFileCheck2, LuFileText,
+  LuIdCard, LuImage, LuMapPin, LuSave, LuSend, LuUser,
 } from "react-icons/lu";
 import ZoneCascadeSelect from "../../components/ZoneCascadeSelect";
 import Select from "../../components/Select";
-import { partyAPI } from "../../api/party";
 import { membershipAPI } from "../../api/membership";
 import { useZoneCascade } from "../../hooks/useZoneCascade";
 import { useToast } from "../../components/Toast";
 
-const STEPS = [
-  { key: 1, label: "មូលដ្ឋាន", icon: LuUser },
-  { key: 2, label: "ទំនាក់ទំនង", icon: LuPhone },
-  { key: 3, label: "ទីតាំង គណបក្ស", icon: LuMapPin },
-  { key: 4, label: "ប្រភេទសមាជិក", icon: LuAward },
-  { key: 5, label: "ទិន្នន័យផ្ទាល់ខ្លួន", icon: LuFileText },
-  { key: 6, label: "ពិនិត្យ រក្សាទុក", icon: LuClipboardCheck },
+const DOCUMENTS = [
+  { type: "portrait", label: "រូបថត 4x6", hint: "JPEG ឬ PNG, អតិបរមា 5 MB", icon: LuImage, accept: "image/jpeg,image/png" },
+  { type: "national_id_front", label: "អត្តសញ្ញាណប័ណ្ណ ខាងមុខ", hint: "JPEG, PNG ឬ PDF", icon: LuIdCard, accept: "image/jpeg,image/png,application/pdf" },
+  { type: "national_id_back", label: "អត្តសញ្ញាណប័ណ្ណ ខាងក្រោយ", hint: "JPEG, PNG ឬ PDF", icon: LuIdCard, accept: "image/jpeg,image/png,application/pdf" },
+  { type: "application_form", label: "ពាក្យសុំចូលជាសមាជិក", hint: "JPEG, PNG ឬ PDF", icon: LuFileText, accept: "image/jpeg,image/png,application/pdf" },
 ];
 
 const initialForm = {
-  membership_card_no: "",
-  national_id: "",
-  last_name_kh: "",
-  first_name_kh: "",
-  last_name_en: "",
-  first_name_en: "",
-  gender: "Male",
-  date_of_birth: "",
-  phone_number: "",
-  email: "",
-  telegram_username: "",
-  registered_village_code: "",
-  current_address_details: "",
-  structure_id: "",
-  party_role: "Member",
-  join_date: new Date().toISOString().slice(0, 10),
-  membership_type: "Full",
-  membership_tier: "Basic",
-  exempt_from_dues: false,
-  // demographics
-  marital_status: "",
-  occupation: "",
-  education_level: "",
-  ethnicity: "",
-  religion: "",
-  blood_type: "",
-  emergency_contact_name: "",
-  emergency_contact_phone: "",
+  registration_pathway: "Geographical", institutional_unit: "", national_id: "",
+  last_name_kh: "", first_name_kh: "", last_name_en: "", first_name_en: "",
+  gender: "Male", date_of_birth: "", phone_number: "", email: "",
+  current_address_details: "", registered_village_code: "", party_role: "Member",
+  join_date: new Date().toISOString().slice(0, 10), membership_type: "Full",
+  membership_tier: "Basic", exempt_from_dues: false, marital_status: "",
+  occupation: "", education_level: "", ethnicity: "", religion: "", blood_type: "",
+  emergency_contact_name: "", emergency_contact_phone: "",
 };
 
+const unwrap = (response) => response.data?.data || response.data;
+
 export default function MembershipCreate() {
+  const { registrationId } = useParams();
   const navigate = useNavigate();
   const toast = useToast();
-  const [step, setStep] = useState(1);
+  const showLoadError = toast.error;
   const [form, setForm] = useState(initialForm);
-  const [error, setError] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [fieldErrors, setFieldErrors] = useState({});
+  const [saved, setSaved] = useState(null);
+  const [existingDocuments, setExistingDocuments] = useState([]);
+  const [files, setFiles] = useState({});
+  const [errors, setErrors] = useState({});
+  const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(Boolean(registrationId));
 
-  const memberZone = useZoneCascade({
-    userZone: "",
-    isAdmin: true,
-    initialZoneCode: "",
-    showVillage: true,
-  });
+  const zone = useZoneCascade({ userZone: "", isAdmin: true, initialZoneCode: "", showVillage: true });
+  const loadZoneFromCode = zone.loadFromZoneCode;
+  const editable = !saved || saved.status === "DRAFT" || saved.status === "REJECTED";
+  const documentTypes = useMemo(() => new Set(existingDocuments.map((document) => document.document_type)), [existingDocuments]);
 
   useEffect(() => {
-    partyAPI.getZones({ type: "Province" }).then((res) => {
-      const list = Array.isArray(res.data?.data) ? res.data.data
-        : Array.isArray(res.data) ? res.data : [];
-      if (list.length) {
-        memberZone.applyHierarchy({
-          provinces: list, province: "", district: "", commune: "", village: "",
-          districts: [], communes: [], villages: [],
-        });
-      }
-    }).catch(() => {});
-  }, []);
+    if (!registrationId) return;
+    membershipAPI.getRegistration(registrationId).then((response) => {
+      const detail = unwrap(response);
+      const registration = detail.registration;
+      setSaved(registration);
+      setExistingDocuments(detail.documents || []);
+      setForm({ ...initialForm, ...registration });
+      if (registration.registered_village_code) loadZoneFromCode(registration.registered_village_code);
+    }).catch(() => showLoadError("មិនអាចផ្ទុកពាក្យសុំបានទេ")).finally(() => setLoading(false));
+  }, [loadZoneFromCode, registrationId, showLoadError]);
 
-  const handleChange = (e) => {
-    const { name, value, type, checked } = e.target;
-    setForm({ ...form, [name]: type === "checkbox" ? checked : value });
-    if (fieldErrors[name]) setFieldErrors({ ...fieldErrors, [name]: "" });
+  const onChange = (event) => {
+    const { name, value, checked, type } = event.target;
+    setForm((current) => ({ ...current, [name]: type === "checkbox" ? checked : value }));
+    setErrors((current) => ({ ...current, [name]: "" }));
   };
 
-  const getVillageCode = () => {
-    return memberZone.selectedVillage || memberZone.selectedCommune ||
-      memberZone.selectedDistrict || memberZone.selectedProvince ||
-      form.registered_village_code || "";
-  };
+  const payload = () => ({
+    ...form,
+    registered_village_code: zone.resolvedZone || form.registered_village_code,
+  });
 
-  const validateStep = (s) => {
-    const errs = {};
-    if (s === 1) {
-      if (!form.membership_card_no.trim()) errs.membership_card_no = "សូមបញ្ចូលលេខសមាជិក";
-      if (!form.last_name_kh.trim()) errs.last_name_kh = "សូមបញ្ចូលនាមត្រកូលខ្មែរ";
-      if (!form.first_name_kh.trim()) errs.first_name_kh = "សូមបញ្ចូលនាមខ្មែរ";
-      if (!form.last_name_en.trim()) errs.last_name_en = "សូមបញ្ចូល Last Name";
-      if (!form.first_name_en.trim()) errs.first_name_en = "សូមបញ្ចូល First Name";
-      if (!form.date_of_birth) errs.date_of_birth = "សូមបញ្ចូលថ្ងៃខែឆ្នាំកំណើត";
+  const validateForSubmit = () => {
+    const next = {};
+    const required = ["national_id", "last_name_kh", "first_name_kh", "last_name_en", "first_name_en", "date_of_birth", "phone_number"];
+    required.forEach((key) => { if (!String(form[key] || "").trim()) next[key] = "ត្រូវបំពេញ"; });
+    if (!/^\d{9,10}$/.test(form.national_id)) next.national_id = "ត្រូវមាន 9 ឬ 10 ខ្ទង់";
+    if (form.date_of_birth) {
+      const adultDate = new Date(form.date_of_birth);
+      adultDate.setFullYear(adultDate.getFullYear() + 18);
+      if (adultDate > new Date()) next.date_of_birth = "បេក្ខជនត្រូវមានអាយុយ៉ាងតិច 18 ឆ្នាំ";
     }
-    if (s === 2) {
-      if (!form.phone_number.trim()) errs.phone_number = "សូមបញ្ចូលលេខទូរសព្ទ";
-    }
-    if (s === 3) {
-      const vc = getVillageCode();
-      if (!vc) errs._zone = "សូមជ្រើសរើសទីតាំង";
-      if (!form.join_date) errs.join_date = "សូមបញ្ចូលថ្ងៃចុះឈ្មោះ";
-    }
-    setFieldErrors(errs);
-    return Object.keys(errs).length === 0;
+    if (!(zone.resolvedZone || form.registered_village_code)) next.registered_village_code = "សូមជ្រើសរើសទីតាំង";
+    if (form.registration_pathway === "Institutional" && !form.institutional_unit.trim()) next.institutional_unit = "សូមបញ្ចូលអង្គភាព";
+    DOCUMENTS.forEach(({ type }) => {
+      if (!files[type] && !documentTypes.has(type)) next[type] = "ត្រូវភ្ជាប់ឯកសារ";
+    });
+    setErrors(next);
+    return Object.keys(next).length === 0;
   };
 
-  const next = () => {
-    if (validateStep(step)) setStep(step + 1);
+  const persist = async () => {
+    const response = saved
+      ? await membershipAPI.updateRegistration(saved.id, payload())
+      : await membershipAPI.createRegistration(payload());
+    const registration = unwrap(response);
+    setSaved(registration);
+    const uploaded = [...existingDocuments];
+    for (const definition of DOCUMENTS) {
+      const file = files[definition.type];
+      if (!file) continue;
+      const document = unwrap(await membershipAPI.uploadRegistrationDocument(registration.id, {
+        document_type: definition.type,
+        file_name: file.name,
+        mime_type: file.type,
+        base64_data: await readFile(file),
+      }));
+      const index = uploaded.findIndex((item) => item.document_type === definition.type);
+      if (index >= 0) uploaded[index] = document;
+      else uploaded.push(document);
+    }
+    setExistingDocuments(uploaded);
+    setFiles({});
+    return registration;
   };
-  const prev = () => setStep(step - 1);
 
-  const handleSubmit = async () => {
-    if (!validateStep(step)) return;
-    setError("");
-    setSubmitting(true);
+  const saveDraft = async () => {
+    setBusy(true);
     try {
-      const res = await partyAPI.createMember({ ...form, registered_village_code: getVillageCode() });
-      const newMember = res.data?.data || res.data;
-      const memberId = newMember?.id || newMember?.member_id;
-      const hasDemos = form.marital_status || form.occupation || form.education_level
-        || form.ethnicity || form.religion || form.blood_type
-        || form.emergency_contact_name || form.emergency_contact_phone;
-      if (memberId && hasDemos) {
-        try {
-          await membershipAPI.updateDemographics(memberId, {
-            marital_status: form.marital_status,
-            occupation: form.occupation,
-            education_level: form.education_level,
-            ethnicity: form.ethnicity,
-            religion: form.religion,
-            blood_type: form.blood_type,
-            emergency_contact_name: form.emergency_contact_name,
-            emergency_contact_phone: form.emergency_contact_phone,
-          });
-        } catch {
-          // demographics save is optional
-        }
-      }
-      toast.success("បានដាក់សំណើបង្កើតសមាជិក — រង់ចាំការយល់ព្រមពីថ្នាក់ស្រុក");
-      navigate("/membership");
-    } catch (err) {
-      setError(err.response?.data?.error || err.response?.data?.message || "ការរក្សាទុកបរាជ័យ");
+      const registration = await persist();
+      toast.success(`បានរក្សាទុកព្រាង ${registration.registration_no}`);
+      if (!registrationId) navigate(`/membership/registrations/${registration.id}/edit`, { replace: true });
+    } catch (error) {
+      toast.error(apiError(error, "ការរក្សាទុកព្រាងបរាជ័យ"));
     } finally {
-      setSubmitting(false);
+      setBusy(false);
     }
   };
 
-  const StepIcon = STEPS[step - 1]?.icon || LuUser;
+  const submit = async () => {
+    if (!validateForSubmit()) {
+      toast.error("សូមបំពេញព័ត៌មាន និងឯកសារដែលត្រូវការ");
+      return;
+    }
+    setBusy(true);
+    try {
+      const registration = await persist();
+      await membershipAPI.submitRegistration(registration.id);
+      toast.success("បានដាក់ពាក្យសុំសម្រាប់ការផ្ទៀងផ្ទាត់");
+      navigate("/membership");
+    } catch (error) {
+      toast.error(apiError(error, "ការដាក់ពាក្យសុំបរាជ័យ"));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const viewDocument = async (documentType) => {
+    try {
+      const file = unwrap(await membershipAPI.getRegistrationDocument(saved.id, documentType));
+      const bytes = Uint8Array.from(atob(file.base64_content), (character) => character.charCodeAt(0));
+      const url = URL.createObjectURL(new Blob([bytes], { type: file.mime_type }));
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.target = "_blank";
+      anchor.rel = "noopener noreferrer";
+      anchor.click();
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    } catch {
+      toast.error("មិនអាចបើកឯកសារបានទេ");
+    }
+  };
+
+  if (loading) return <div className="loading">កំពុងផ្ទុក...</div>;
 
   return (
-    <div className="page">
-      <div className="page-header">
-        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-          <button className="btn-icon" onClick={() => navigate("/membership")}>
-            <LuArrowLeft />
+    <div className="page registration-page">
+      <header className="registration-header">
+        <div>
+          <button className="registration-back" type="button" onClick={() => navigate("/membership")}>
+            <LuArrowLeft /> ត្រឡប់ទៅបញ្ជីសមាជិក
           </button>
-          <h2 className="section-title">បន្ថែមសមាជិកថ្មី</h2>
+          <h2>{saved ? "កែសម្រួលពាក្យសុំ" : "ចុះឈ្មោះសមាជិកថ្មី"}</h2>
+          <p>{saved?.registration_no || "បញ្ចូលព័ត៌មាន ផ្ទៀងផ្ទាត់ឯកសារ និងដាក់ស្នើ"}</p>
         </div>
-        <span style={{ color: "var(--text-muted)" }}>
-          <StepIcon style={{ marginRight: "0.25rem", verticalAlign: "middle" }} />
-          ជំហានទី {step}/6: {STEPS[step - 1]?.label}
-        </span>
-      </div>
+        {saved && <StatusBadge status={saved.status} />}
+      </header>
 
-      {/* Step indicator */}
-      <div className="card" style={{ marginBottom: "1.5rem", padding: "1rem" }}>
-        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "center", position: "relative", gap: 0 }}>
-          {STEPS.map((s, i) => (
-            <div
-              key={s.key}
-              style={{
-                display: "flex", flexDirection: "column", alignItems: "center",
-                gap: "0.35rem",                 flex: "0 0 16.66%", position: "relative",
-                cursor: s.key < step ? "pointer" : "default",
-              }}
-              onClick={() => { if (s.key < step) setStep(s.key); }}
-            >
-              {/* Connector line between steps */}
-              {i > 0 && (
-                <div style={{
-                  position: "absolute", top: "16px", right: "50%", width: "100%", height: "2px",
-                  background: s.key <= step ? "var(--primary)" : "var(--border)",
-                  zIndex: 0,
-                }} />
-              )}
-              <div style={{
-                width: "32px", height: "32px", borderRadius: "50%",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                background: s.key <= step ? "var(--primary)" : "var(--bg)",
-                color: s.key <= step ? "#fff" : "var(--text-muted)",
-                fontWeight: 700, fontSize: "0.85rem", zIndex: 1, transition: "0.3s",
-                border: s.key > step ? "2px solid var(--border)" : "2px solid transparent",
-              }}>
-                {s.key < step ? <LuCheck size={16} /> : s.key}
-              </div>
-              <span style={{
-                fontSize: "0.7rem", color: s.key <= step ? "var(--primary)" : "var(--text-muted)",
-                textAlign: "center", fontWeight: s.key === step ? 600 : 400,
-                whiteSpace: "nowrap", lineHeight: "1.2",
-              }}>
-                {s.label}
-              </span>
-            </div>
-          ))}
-        </div>
-      </div>
+      {saved?.rejection_reason && <div className="registration-rejection"><strong>មូលហេតុបដិសេធ:</strong> {saved.rejection_reason}</div>}
+      {!editable && <div className="registration-notice">ពាក្យសុំនេះត្រូវបានដាក់ស្នើរួច ហើយមិនអាចកែប្រែបានទេ។</div>}
 
-      {/* Steps */}
-      <div className="card" style={{ maxWidth: "780px", margin: "0 auto", padding: "2rem" }}>
-        <form onSubmit={(e) => { e.preventDefault(); step < 6 ? next() : handleSubmit(); }}>
-          {step === 1 && (
-            <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-              <h3 style={{ margin: "0 0 0.5rem 0", color: "var(--primary)" }}>ព័ត៌មានមូលដ្ឋាន</h3>
-              <div className="form-row">
-                <div className="form-group">
-                  <label>លេខសមាជិក *</label>
-                  <input name="membership_card_no" value={form.membership_card_no} onChange={handleChange} />
-                  {fieldErrors.membership_card_no && <span className="field-error">{fieldErrors.membership_card_no}</span>}
-                </div>
-                <div className="form-group">
-                  <label>អត្តសញ្ញាណប័ណ្ណ</label>
-                  <input name="national_id" value={form.national_id} onChange={handleChange} />
-                </div>
-              </div>
-              <div className="form-row">
-                <div className="form-group">
-                  <label>នាមខ្មែរ *</label>
-                  <input name="first_name_kh" value={form.first_name_kh} onChange={handleChange} />
-                  {fieldErrors.first_name_kh && <span className="field-error">{fieldErrors.first_name_kh}</span>}
-                </div>
-                <div className="form-group">
-                  <label>នាមត្រកូលខ្មែរ *</label>
-                  <input name="last_name_kh" value={form.last_name_kh} onChange={handleChange} />
-                  {fieldErrors.last_name_kh && <span className="field-error">{fieldErrors.last_name_kh}</span>}
-                </div>
-              </div>
-              <div className="form-row">
-                <div className="form-group">
-                  <label>First Name *</label>
-                  <input name="first_name_en" value={form.first_name_en} onChange={handleChange} />
-                  {fieldErrors.first_name_en && <span className="field-error">{fieldErrors.first_name_en}</span>}
-                </div>
-                <div className="form-group">
-                  <label>Last Name *</label>
-                  <input name="last_name_en" value={form.last_name_en} onChange={handleChange} />
-                  {fieldErrors.last_name_en && <span className="field-error">{fieldErrors.last_name_en}</span>}
-                </div>
-              </div>
-              <div className="form-row">
-                <div className="form-group">
-                  <label>ភេទ *</label>
-                  <Select name="gender" value={form.gender} onChange={handleChange}>
-                    <option value="Male">ប្រុស</option>
-                    <option value="Female">ស្រី</option>
-                    <option value="Other">ផ្សេងៗ</option>
-                  </Select>
-                </div>
-                <div className="form-group">
-                  <label>ថ្ងៃខែឆ្នាំកំណើត *</label>
-                  <input type="date" name="date_of_birth" value={form.date_of_birth} onChange={handleChange} />
-                  {fieldErrors.date_of_birth && <span className="field-error">{fieldErrors.date_of_birth}</span>}
-                </div>
-              </div>
+      <div className="registration-layout">
+        <main className="registration-form-stack">
+          <FormSection icon={LuUser} title="ព័ត៌មានអត្តសញ្ញាណ" description="ព័ត៌មានផ្ទាល់ខ្លួនត្រូវតែត្រូវគ្នានឹងអត្តសញ្ញាណប័ណ្ណ">
+            <div className="registration-fields two-column">
+              <Field label="នាមត្រកូល (ខ្មែរ)" error={errors.last_name_kh}><input name="last_name_kh" value={form.last_name_kh} onChange={onChange} disabled={!editable} /></Field>
+              <Field label="នាម (ខ្មែរ)" error={errors.first_name_kh}><input name="first_name_kh" value={form.first_name_kh} onChange={onChange} disabled={!editable} /></Field>
+              <Field label="Last name (Latin)" error={errors.last_name_en}><input name="last_name_en" value={form.last_name_en} onChange={onChange} disabled={!editable} style={{ textTransform: "uppercase" }} /></Field>
+              <Field label="First name (Latin)" error={errors.first_name_en}><input name="first_name_en" value={form.first_name_en} onChange={onChange} disabled={!editable} style={{ textTransform: "uppercase" }} /></Field>
+              <Field label="លេខអត្តសញ្ញាណប័ណ្ណ" error={errors.national_id}><input inputMode="numeric" name="national_id" maxLength={10} value={form.national_id} onChange={onChange} disabled={!editable} /></Field>
+              <Field label="ភេទ"><Select name="gender" value={form.gender} onChange={onChange} disabled={!editable}><option value="Male">ប្រុស</option><option value="Female">ស្រី</option><option value="Other">ផ្សេងៗ</option></Select></Field>
+              <Field label="ថ្ងៃខែឆ្នាំកំណើត" error={errors.date_of_birth}><input type="date" name="date_of_birth" value={form.date_of_birth} onChange={onChange} disabled={!editable} /></Field>
+              <Field label="លេខទូរសព្ទ" error={errors.phone_number}><input name="phone_number" value={form.phone_number} onChange={onChange} disabled={!editable} placeholder="0xx xxx xxx" /></Field>
+              <Field label="អ៊ីមែល"><input type="email" name="email" value={form.email} onChange={onChange} disabled={!editable} /></Field>
+              <Field label="ថ្ងៃចុះឈ្មោះ"><input type="date" name="join_date" value={form.join_date} onChange={onChange} disabled={!editable} /></Field>
             </div>
-          )}
+          </FormSection>
 
-          {step === 2 && (
-            <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-              <h3 style={{ margin: "0 0 0.5rem 0", color: "var(--primary)" }}>ព័ត៌មានទំនាក់ទំនង</h3>
-              <div className="form-group">
-                <label>លេខទូរសព្ទ *</label>
-                <input name="phone_number" value={form.phone_number} onChange={handleChange} />
-                {fieldErrors.phone_number && <span className="field-error">{fieldErrors.phone_number}</span>}
-              </div>
-              <div className="form-row">
-                <div className="form-group">
-                  <label>អ៊ីមែល</label>
-                  <input type="email" name="email" value={form.email} onChange={handleChange} />
-                </div>
-                <div className="form-group">
-                  <label>Telegram</label>
-                  <input name="telegram_username" value={form.telegram_username} onChange={handleChange} />
-                </div>
-              </div>
-              <div className="form-group">
-                <label>អាសយដ្ឋានបច្ចុប្បន្ន</label>
-                <textarea
-                  name="current_address_details"
-                  value={form.current_address_details}
-                  onChange={handleChange}
-                  rows={3}
-                  style={{ width: "100%", padding: "0.5rem", border: "1px solid var(--border)", borderRadius: "var(--radius)" }}
-                />
-              </div>
+          <FormSection icon={LuMapPin} title="ខ្សែចុះឈ្មោះ និងទីតាំង" description="ជ្រើសរើសតាមភូមិសាស្ត្រ ឬតាមស្ថាប័ន">
+            <div className="pathway-control">
+              <button type="button" className={form.registration_pathway === "Geographical" ? "active" : ""} onClick={() => editable && setForm({ ...form, registration_pathway: "Geographical" })}><LuMapPin /> ភូមិសាស្ត្រ</button>
+              <button type="button" className={form.registration_pathway === "Institutional" ? "active" : ""} onClick={() => editable && setForm({ ...form, registration_pathway: "Institutional" })}><LuBuilding2 /> ស្ថាប័ន</button>
             </div>
-          )}
+            {form.registration_pathway === "Institutional" && <Field label="ក្រសួង សាកលវិទ្យាល័យ ឬអង្គភាព" error={errors.institutional_unit}><input name="institutional_unit" value={form.institutional_unit} onChange={onChange} disabled={!editable} /></Field>}
+            <Field label="ទីតាំងចុះឈ្មោះ" error={errors.registered_village_code}><ZoneCascadeSelect hook={zone} disabled={!editable} /></Field>
+            <Field label="អាសយដ្ឋានបច្ចុប្បន្ន"><textarea name="current_address_details" rows={3} value={form.current_address_details} onChange={onChange} disabled={!editable} /></Field>
+          </FormSection>
 
-          {step === 3 && (
-            <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-              <h3 style={{ margin: "0 0 0.5rem 0", color: "var(--primary)" }}>ទីតាំង និង គណបក្ស</h3>
-              <div className="form-group">
-                <label>ទីតាំង *</label>
-                <ZoneCascadeSelect
-                  provinces={memberZone.provinces}
-                  districts={memberZone.districts}
-                  communes={memberZone.communes}
-                  villages={memberZone.villages}
-                  selectedProvince={memberZone.selectedProvince}
-                  selectedDistrict={memberZone.selectedDistrict}
-                  selectedCommune={memberZone.selectedCommune}
-                  selectedVillage={memberZone.selectedVillage}
-                  onProvinceChange={(code) => memberZone.setProvince(code)}
-                  onDistrictChange={(code) => memberZone.setDistrict(code)}
-                  onCommuneChange={(code) => memberZone.setCommune(code)}
-                  onVillageChange={(code) => memberZone.setSelectedVillage(code)}
-                  isLocked={() => false}
-                />
-                {fieldErrors._zone && <span className="field-error">{fieldErrors._zone}</span>}
-              </div>
-              <div className="form-row">
-                <div className="form-group">
-                  <label>ឋានៈ</label>
-                  <Select name="party_role" value={form.party_role} onChange={handleChange}>
-                    <option value="Member">Member</option>
-                    <option value="Board Member">Board Member</option>
-                    <option value="Committee Member">Committee Member</option>
-                    <option value="Officer">Officer</option>
-                    <option value="Advisor">Advisor</option>
-                  </Select>
-                </div>
-                <div className="form-group">
-                  <label>ថ្ងៃចុះឈ្មោះ *</label>
-                  <input type="date" name="join_date" value={form.join_date} onChange={handleChange} />
-                  {fieldErrors.join_date && <span className="field-error">{fieldErrors.join_date}</span>}
-                </div>
-              </div>
+          <FormSection icon={LuFileCheck2} title="ឯកសារភ្ជាប់" description="ឯកសារទាំងបួនត្រូវបានទាមទារនៅពេលដាក់ស្នើ">
+            <div className="document-grid">
+              {DOCUMENTS.map((definition) => <DocumentField key={definition.type} definition={definition} file={files[definition.type]} existing={existingDocuments.find((item) => item.document_type === definition.type)} error={errors[definition.type]} disabled={!editable} onView={() => viewDocument(definition.type)} onChange={(file) => setFiles((current) => ({ ...current, [definition.type]: file }))} />)}
             </div>
-          )}
+          </FormSection>
+        </main>
 
-          {step === 4 && (
-            <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-              <h3 style={{ margin: "0 0 0.5rem 0", color: "var(--primary)" }}>ប្រភេទសមាជិក</h3>
-              <div className="form-row">
-                <div className="form-group">
-                  <label>ប្រភេទ</label>
-                  <Select name="membership_type" value={form.membership_type} onChange={handleChange}>
-                    <option value="Full">Full</option>
-                    <option value="Associate">Associate</option>
-                    <option value="Youth">Youth</option>
-                    <option value="Honorary">Honorary</option>
-                    <option value="Probationary">Probationary</option>
-                  </Select>
-                </div>
-                <div className="form-group">
-                  <label>កម្រិត</label>
-                  <Select name="membership_tier" value={form.membership_tier} onChange={handleChange}>
-                    <option value="Basic">Basic</option>
-                    <option value="Silver">Silver</option>
-                    <option value="Gold">Gold</option>
-                    <option value="Platinum">Platinum</option>
-                  </Select>
-                </div>
-              </div>
-              <div className="form-group">
-                <label className="checkbox-field">
-                <input type="checkbox" name="exempt_from_dues" checked={form.exempt_from_dues} onChange={handleChange} />
-                <div>
-                  <div className="checkbox-text">លើកលែងកាតព្វកិច្ចបង់រំលោះ</div>
-                  <div className="checkbox-hint">សមាជិកនេះនឹងមិនត្រូវបានតម្រូវឱ្យបង់រំលោះប្រចាំខែទេ</div>
-                </div>
-              </label>
-              </div>
-            </div>
-          )}
-
-          {step === 5 && (
-            <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-              <h3 style={{ margin: "0 0 0.5rem 0", color: "var(--primary)" }}>ទិន្នន័យផ្ទាល់ខ្លួន (ស្រេចចិត្ត)</h3>
-              <div className="form-row">
-                <div className="form-group">
-                  <label>ស្ថានភាពអាពាហ៍ពិពាហ៍</label>
-                  <Select name="marital_status" value={form.marital_status} onChange={handleChange}>
-                    <option value="">-- ជ្រើសរើស --</option>
-                    <option value="Single">នៅលីវ</option>
-                    <option value="Married">រៀបការ</option>
-                    <option value="Divorced">លែងលះ</option>
-                    <option value="Widowed">មេម៉ាយ</option>
-                  </Select>
-                </div>
-                <div className="form-group">
-                  <label>មុខរបរ</label>
-                  <input name="occupation" value={form.occupation} onChange={handleChange} />
-                </div>
-              </div>
-              <div className="form-row">
-                <div className="form-group">
-                  <label>កម្រិតសិក្សា</label>
-                  <Select name="education_level" value={form.education_level} onChange={handleChange}>
-                    <option value="">-- ជ្រើសរើស --</option>
-                    <option value="None">គ្មាន</option>
-                    <option value="Primary">បឋមសិក្សា</option>
-                    <option value="Secondary">មធ្យមសិក្សា</option>
-                    <option value="HighSchool">វិទ្យាល័យ</option>
-                    <option value="Bachelor">បរិញ្ញាបត្រ</option>
-                    <option value="Master">អនុបណ្ឌិត</option>
-                    <option value="PhD">បណ្ឌិត</option>
-                  </Select>
-                </div>
-                <div className="form-group">
-                  <label>ជនជាតិ</label>
-                  <input name="ethnicity" value={form.ethnicity} onChange={handleChange} />
-                </div>
-              </div>
-              <div className="form-row">
-                <div className="form-group">
-                  <label>សាសនា</label>
-                  <Select name="religion" value={form.religion} onChange={handleChange}>
-                    <option value="">-- ជ្រើសរើស --</option>
-                    <option value="Buddhist">ព្រះពុទ្ធ</option>
-                    <option value="Muslim">ឥស្លាម</option>
-                    <option value="Christian">គ្រិស្ត</option>
-                    <option value="Other">ផ្សេងៗ</option>
-                  </Select>
-                </div>
-                <div className="form-group">
-                  <label>ប្រភេទឈាម</label>
-                  <Select name="blood_type" value={form.blood_type} onChange={handleChange}>
-                    <option value="">-- ជ្រើសរើស --</option>
-                    <option value="A">A</option>
-                    <option value="B">B</option>
-                    <option value="AB">AB</option>
-                    <option value="O">O</option>
-                  </Select>
-                </div>
-              </div>
-              <div className="form-row">
-                <div className="form-group">
-                  <label>ឈ្មោះទំនាក់ទំនងបន្ទាន់</label>
-                  <input name="emergency_contact_name" value={form.emergency_contact_name} onChange={handleChange} />
-                </div>
-                <div className="form-group">
-                  <label>លេខទូរសព្ទបន្ទាន់</label>
-                  <input name="emergency_contact_phone" value={form.emergency_contact_phone} onChange={handleChange} />
-                </div>
-              </div>
-            </div>
-          )}
-
-          {step === 6 && (
-            <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-              <h3 style={{ margin: "0 0 0.5rem 0", color: "var(--primary)" }}>ពិនិត្យមុនរក្សាទុក</h3>
-              <div className="card" style={{ padding: "1rem", background: "var(--bg)" }}>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
-                  <ReviewItem label="លេខសមាជិក" value={form.membership_card_no} />
-                  <ReviewItem label="អត្តសញ្ញាណប័ណ្ណ" value={form.national_id || "—"} />
-                  <ReviewItem label="ឈ្មោះខ្មែរ" value={`${form.last_name_kh} ${form.first_name_kh}`} />
-                  <ReviewItem label="ឈ្មោះឡាតាំង" value={`${form.last_name_en} ${form.first_name_en}`} />
-                  <ReviewItem label="ភេទ" value={form.gender === "Male" ? "ប្រុស" : form.gender === "Female" ? "ស្រី" : "ផ្សេងៗ"} />
-                  <ReviewItem label="ថ្ងៃខែឆ្នាំកំណើត" value={form.date_of_birth} />
-                  <ReviewItem label="លេខទូរសព្ទ" value={form.phone_number} />
-                  <ReviewItem label="អ៊ីមែល" value={form.email || "—"} />
-                  <ReviewItem label="Telegram" value={form.telegram_username || "—"} />
-                  <ReviewItem label="អាសយដ្ឋាន" value={form.current_address_details || "—"} />
-                  <ReviewItem label="ទីតាំង" value={getVillageCode() || "—"} />
-                  <ReviewItem label="ឋានៈ" value={form.party_role} />
-                  <ReviewItem label="ថ្ងៃចុះឈ្មោះ" value={form.join_date} />
-                  <ReviewItem label="ប្រភេទ" value={form.membership_type} />
-                  <ReviewItem label="កម្រិត" value={form.membership_tier} />
-                  <ReviewItem label="លើកលែងបង់រំលោះ" value={form.exempt_from_dues ? "បាទ/ចាស" : "ទេ"} />
-                  <ReviewItem label="ស្ថានភាពអាពាហ៍" value={form.marital_status || "—"} />
-                  <ReviewItem label="មុខរបរ" value={form.occupation || "—"} />
-                  <ReviewItem label="កម្រិតសិក្សា" value={form.education_level || "—"} />
-                  <ReviewItem label="ជនជាតិ" value={form.ethnicity || "—"} />
-                  <ReviewItem label="សាសនា" value={form.religion || "—"} />
-                  <ReviewItem label="ប្រភេទឈាម" value={form.blood_type || "—"} />
-                  <ReviewItem label="ទំនាក់ទំនងបន្ទាន់" value={form.emergency_contact_name || "—"} />
-                  <ReviewItem label="ទូរសព្ទបន្ទាន់" value={form.emergency_contact_phone || "—"} />
-                </div>
-                <button type="button" className="btn btn-secondary" style={{ marginTop: "0.75rem" }} onClick={() => setStep(1)}>
-                  កែប្រែព័ត៌មាន
-                </button>
-              </div>
-              {error && <div className="alert alert-error">{error}</div>}
-            </div>
-          )}
-
-          {/* Navigation Buttons */}
-          <div style={{ display: "flex", justifyContent: "space-between", marginTop: "2rem", paddingTop: "1rem", borderTop: "1px solid var(--border)" }}>
-            <div>
-              {step > 1 && (
-                <button type="button" className="btn btn-secondary" onClick={prev}>
-                  <LuArrowLeft /> មុន
-                </button>
-              )}
-            </div>
-            <div style={{ display: "flex", gap: "0.5rem" }}>
-              <button type="button" className="btn btn-secondary" onClick={() => navigate("/membership")}>
-                បោះបង់
-              </button>
-              {step < 6 ? (
-                <button type="button" className="btn btn-primary" onClick={next}>
-                  បន្ទាប់ <LuArrowRight />
-                </button>
-              ) : (
-                <button type="submit" className="btn btn-primary" disabled={submitting}>
-                  {submitting ? "កំពុងរក្សាទុក..." : <><LuCheck /> រក្សាទុក</>}
-                </button>
-              )}
-            </div>
+        <aside className="registration-summary">
+          <h3>សេចក្តីសង្ខេប</h3>
+          <SummaryRow label="ឈ្មោះខ្មែរ" value={`${form.last_name_kh} ${form.first_name_kh}`.trim()} />
+          <SummaryRow label="ឈ្មោះឡាតាំង" value={`${form.last_name_en} ${form.first_name_en}`.trim().toUpperCase()} />
+          <SummaryRow label="អត្តសញ្ញាណប័ណ្ណ" value={form.national_id} />
+          <SummaryRow label="ខ្សែចុះឈ្មោះ" value={form.registration_pathway === "Institutional" ? "ស្ថាប័ន" : "ភូមិសាស្ត្រ"} />
+          <SummaryRow label="ឯកសាររួចរាល់" value={`${DOCUMENTS.filter(({ type }) => files[type] || documentTypes.has(type)).length}/4`} />
+          <div className="registration-flow-mini">
+            <span className="done">ព្រាង</span><i /><span>ផ្ទៀងផ្ទាត់</span><i /><span>អនុម័ត</span><i /><span>ចេញកាត</span>
           </div>
-        </form>
+          {editable && <div className="registration-actions">
+            <button type="button" className="btn btn-secondary" disabled={busy} onClick={saveDraft}><LuSave /> រក្សាទុកព្រាង</button>
+            <button type="button" className="btn btn-primary" disabled={busy} onClick={submit}>{busy ? "កំពុងដំណើរការ..." : <><LuSend /> ដាក់ស្នើ</>}</button>
+          </div>}
+        </aside>
       </div>
     </div>
   );
 }
 
-function ReviewItem({ label, value }) {
-  return (
-    <div>
-      <span className="profile-detail-label">{label}</span>
-      <span className="profile-detail-value">{value}</span>
-    </div>
-  );
+function FormSection({ icon: Icon, title, description, children }) {
+  return <section className="registration-section"><header><span><Icon /></span><div><h3>{title}</h3><p>{description}</p></div></header><div className="registration-section-body">{children}</div></section>;
+}
+
+function Field({ label, error, children }) {
+  return <label className={`registration-field ${error ? "has-error" : ""}`}><span>{label}</span>{children}{error && <small>{error}</small>}</label>;
+}
+
+function DocumentField({ definition, file, existing, error, disabled, onChange, onView }) {
+  const Icon = definition.icon;
+  return <label className={`document-upload ${error ? "has-error" : ""} ${file || existing ? "complete" : ""}`}>
+    <input type="file" accept={definition.accept} disabled={disabled} onChange={(event) => onChange(event.target.files?.[0] || null)} />
+    <Icon />
+    <strong>{definition.label}</strong>
+    <span>{file?.name || existing?.file_name || definition.hint}</span>
+    {(file || existing) && <b><LuCheck /> រួចរាល់</b>}
+    {error && <small>{error}</small>}
+    {existing && <button type="button" className="document-view" title="មើលឯកសារ" onClick={(event) => { event.preventDefault(); onView(); }}><LuEye /> មើល</button>}
+  </label>;
+}
+
+function SummaryRow({ label, value }) {
+  return <div className="summary-row"><span>{label}</span><strong>{value || "-"}</strong></div>;
+}
+
+function StatusBadge({ status }) {
+  const labels = { DRAFT: "ព្រាង", PENDING_VERIFICATION: "រង់ចាំផ្ទៀងផ្ទាត់", VERIFIED: "បានផ្ទៀងផ្ទាត់", APPROVED: "បានអនុម័ត", REJECTED: "បានបដិសេធ" };
+  return <span className={`registration-status status-${status.toLowerCase()}`}>{labels[status] || status}</span>;
+}
+
+function readFile(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result).split(",")[1] || "");
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+function apiError(error, fallback) {
+  return error.response?.data?.error || error.response?.data?.message || fallback;
 }

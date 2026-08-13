@@ -285,9 +285,13 @@ func (r *Repository) roleExists(role string) (bool, error) {
 }
 
 func (r *Repository) UpdateRole(role, label string) error {
+	if r.IsSystemRole(role) {
+		return fmt.Errorf("cannot edit system role")
+	}
 	_, _, err := r.AdminClient.From("roles").
 		Update(map[string]any{"label": label, "updated_at": "now()"}, "", "").
 		Eq("role", role).
+		Eq("is_system", "false").
 		Execute()
 	if err != nil {
 		return fmt.Errorf("update role: %w", err)
@@ -296,7 +300,7 @@ func (r *Repository) UpdateRole(role, label string) error {
 }
 
 func (r *Repository) DeleteRole(role string) error {
-	if isSystemRole(role) {
+	if r.IsSystemRole(role) {
 		return fmt.Errorf("cannot delete system role")
 	}
 	_, _, _ = r.AdminClient.From("roles").
@@ -314,8 +318,28 @@ func (r *Repository) DeleteRole(role string) error {
 	return nil
 }
 
-func isSystemRole(role string) bool {
-	return models.UserRole(role) == models.RoleSuperAdmin
+func (r *Repository) IsSystemRole(role string) bool {
+	if models.UserRole(role) == models.RoleSuperAdmin {
+		return true
+	}
+	var dbRoles []models.Role
+	_, err := r.AdminClient.From("roles").
+		Select("is_system", "exact", false).
+		Eq("role", role).
+		ExecuteTo(&dbRoles)
+	if err == nil && len(dbRoles) > 0 && dbRoles[0].IsSystem {
+		return true
+	}
+	return false
+}
+
+func (r *Repository) IsUserSystem(roles []models.UserRole) bool {
+	for _, role := range roles {
+		if r.IsSystemRole(string(role)) {
+			return true
+		}
+	}
+	return false
 }
 
 func (r *Repository) SeedRolePermissionsIfEmpty() error {

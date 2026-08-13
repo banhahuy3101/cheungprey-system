@@ -100,6 +100,24 @@ func (r *Repository) GetMemberByID(id uuid.UUID) (*models.Member, error) {
 	return &members[0], nil
 }
 
+func (r *Repository) GetMemberByNationalID(nationalID string) (*models.Member, error) {
+	if nationalID == "" {
+		return nil, nil
+	}
+	var members []models.Member
+	_, err := r.AdminClient.From("members").
+		Select("*", "exact", false).
+		Eq("national_id", nationalID).
+		ExecuteTo(&members)
+	if err != nil {
+		return nil, fmt.Errorf("get member by national ID: %w", err)
+	}
+	if len(members) == 0 {
+		return nil, nil
+	}
+	return &members[0], nil
+}
+
 func (r *Repository) ListMembers(status string) ([]models.Member, error) {
 	var members []models.Member
 	q := r.AdminClient.From("members").Select("*", "exact", false)
@@ -194,5 +212,3 @@ func (r *Repository) DeleteFile(id uuid.UUID) error {
 		Execute()
 	return err
 }
-
-

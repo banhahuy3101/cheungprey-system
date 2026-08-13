@@ -1,4 +1,4 @@
-import { LuTrash2 } from "react-icons/lu";
+import { LuTrash2, LuPencil } from "react-icons/lu";
 
 export default function RoleList({
   roles,
@@ -6,6 +6,7 @@ export default function RoleList({
   setSelectedRole,
   canDeleteRole,
   setDeleteTarget,
+  onEditRole,
 }) {
   return (
     <div className="rbac-panel">
@@ -36,7 +37,7 @@ export default function RoleList({
                 {(r.label || r.role)[0].toUpperCase()}
               </div>
 
-              <div style={{ minWidth: 0 }}>
+              <div style={{ minWidth: 0, flex: 1 }}>
                 <div className="rbac-role-name">
                   {r.label || r.role}
                 </div>
@@ -46,20 +47,34 @@ export default function RoleList({
                 </div>
               </div>
 
-              {isCustom && canDeleteRole && (
-                <button
-                  type="button"
-                  className="btn-icon btn-danger"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setDeleteTarget(r);
-                  }}
-                  title="លុបតួនាទី"
-                  style={{ marginLeft: "auto", flexShrink: 0 }}
-                >
-                  <LuTrash2 size={15} />
-                </button>
-              )}
+              <div style={{ display: "flex", gap: "0.25rem", flexShrink: 0, marginLeft: "auto" }}>
+                {isCustom && onEditRole && (
+                  <button
+                    type="button"
+                    className="btn-icon"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onEditRole(r);
+                    }}
+                    title="កែប្រែឈ្មោះតួនាទី"
+                  >
+                    <LuPencil size={14} />
+                  </button>
+                )}
+                {isCustom && canDeleteRole && setDeleteTarget && (
+                  <button
+                    type="button"
+                    className="btn-icon btn-danger"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setDeleteTarget(r);
+                    }}
+                    title="លុបតួនាទី"
+                  >
+                    <LuTrash2 size={14} />
+                  </button>
+                )}
+              </div>
             </div>
           );
         })}

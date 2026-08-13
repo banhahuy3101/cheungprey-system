@@ -9,6 +9,7 @@ import './style/performance.css'
 import './style/profile.css'
 import './style/reports.css'
 import './style/rbac.css'
+import './style/membership-registration.css'
 import App from './App.jsx'
 
 createRoot(document.getElementById('root')).render(

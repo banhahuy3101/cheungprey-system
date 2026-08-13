@@ -4,7 +4,6 @@ import AuthProvider from "./components/AuthProvider";
 import ProtectedRoute from "./components/ProtectedRoute";
 import Layout from "./components/Layout";
 import Login from "./pages/auth/Login";
-import Register from "./pages/auth/Register";
 import Dashboard from "./pages/dashboard/Dashboard";
 import MembershipCreate from "./pages/membership/MembershipCreate";
 import Membership from "./pages/membership/Membership";
@@ -57,6 +56,7 @@ function App() {
 
             <Route path="membership" element={<FeatureRoute feature={FEATURES.members}><Membership /></FeatureRoute>} />
             <Route path="membership/create" element={<FeatureRoute feature={FEATURES.members} action="create"><MembershipCreate /></FeatureRoute>} />
+            <Route path="membership/registrations/:registrationId/edit" element={<FeatureRoute feature={FEATURES.members}><MembershipCreate /></FeatureRoute>} />
             <Route path="membership/import" element={<FeatureRoute feature={FEATURES.membership_write} action={null}><Membership /></FeatureRoute>} />
             <Route path="membership/stats" element={<FeatureRoute feature={FEATURES.members}><Membership /></FeatureRoute>} />
             <Route path="membership/:id" element={<FeatureRoute feature={FEATURES.members}><Membership /></FeatureRoute>} />

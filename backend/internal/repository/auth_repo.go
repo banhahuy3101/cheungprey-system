@@ -2,7 +2,9 @@ package repository
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"log"
 
 	"github.com/google/uuid"
@@ -41,6 +43,21 @@ func (r *Repository) GetProfileByEmail(email string) (*models.Profile, error) {
 	return &profiles[0], nil
 }
 
+func (r *Repository) GetProfileByPhone(phone string) (*models.Profile, error) {
+	var profiles []models.Profile
+	_, err := r.AdminClient.From("profiles").
+		Select("*", "exact", false).
+		Eq("phone_number", phone).
+		ExecuteTo(&profiles)
+	if err != nil {
+		return nil, fmt.Errorf("get profile by phone: %w", err)
+	}
+	if len(profiles) == 0 {
+		return nil, nil
+	}
+	return &profiles[0], nil
+}
+
 func (r *Repository) CreateProfile(profile *models.Profile) error {
 	payload := map[string]any{
 		"id":           profile.ID,
@@ -61,9 +78,18 @@ func (r *Repository) CreateProfile(profile *models.Profile) error {
 	}
 	var inserted []models.Profile
 	_, err := r.AdminClient.From("profiles").
-		Upsert(payload, "", "*", "").
+		Upsert(payload, "", "representation", "").
 		ExecuteTo(&inserted)
 	if err != nil {
+		// postgrest-go can return io.EOF when the upsert succeeds but the
+		// response body is empty; verify the row exists before surfacing it.
+		if errors.Is(err, io.EOF) {
+			existing, getErr := r.GetProfileByID(profile.ID)
+			if getErr == nil && existing != nil {
+				*profile = *existing
+				return nil
+			}
+		}
 		return err
 	}
 	if len(inserted) > 0 {

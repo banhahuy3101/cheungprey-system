@@ -1,6 +1,7 @@
-import { useState, useEffect } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useState, useEffect, useRef } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../hooks/useAuth";
+import Modal from "../settings/Modal";
 
 const LOGIN_ERROR_KEY = "login_error";
 
@@ -25,14 +26,45 @@ function storeLoginError(message) {
 }
 
 export default function Login() {
-  const { login } = useAuth();
+  const { login, loginWithQR } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [form, setForm] = useState({
     email: "",
     password: "",
   });
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [qrProcessing, setQrProcessing] = useState(false);
+  const [qrModalError, setQrModalError] = useState("");
+  const qrStartedRef = useRef(false);
+
+  useEffect(() => {
+    const qrToken = searchParams.get("qr_token");
+    if (!qrToken || qrStartedRef.current) return;
+    qrStartedRef.current = true;
+
+    setQrProcessing(true);
+    setError("");
+    setQrModalError("");
+
+    loginWithQR(qrToken)
+      .then((result) => {
+        if (!result?.access_token) {
+          throw new Error("QR login failed: no access token returned");
+        }
+        const next = searchParams.get("next") || "/";
+        navigate(next, { replace: true });
+      })
+      .catch((err) => {
+        const apiError = err.response?.data?.error || err.response?.data?.message;
+        setQrModalError(apiError || err.message || "QR login failed. Please try again.");
+        setQrProcessing(false);
+      });
+    // Run once on mount; loginWithQR is recreated on each AuthProvider render.
+    // qrStartedRef guards against React StrictMode double-invoking this effect.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     const saved = readStoredLoginError();
@@ -94,6 +126,7 @@ export default function Login() {
               onChange={handleChange}
               required
               autoComplete="username"
+              disabled={qrProcessing}
             />
           </div>
           <div className="form-group">
@@ -107,18 +140,51 @@ export default function Login() {
               onChange={handleChange}
               required
               autoComplete="current-password"
+              disabled={qrProcessing}
             />
           </div>
+          {qrProcessing && (
+            <div className="alert alert-info" role="status">
+              កំពុងចូលប្រព័ន្ធដោយ QR Code... សូមរង់ចាំមួយភ្លែត។
+            </div>
+          )}
           {error && (
             <div className="alert alert-error" role="alert">
               {error}
             </div>
           )}
-          <button type="submit" className="btn btn-primary btn-block" disabled={submitting}>
-            {submitting ? "កំពុងចូល..." : "ចូលប្រព័ន្ធ / Login"}
+          <button type="submit" className="btn btn-primary btn-block" disabled={submitting || qrProcessing}>
+            {qrProcessing ? "កំពុងចូលដោយ QR..." : submitting ? "កំពុងចូល..." : "ចូលប្រព័ន្ធ / Login"}
           </button>
         </form>
       </div>
+
+      {qrModalError && (
+        <Modal
+          open={!!qrModalError}
+          onClose={() => setQrModalError("")}
+          title="❌ បរាជ័យក្នុងការចូលដោយ QR Code"
+          maxWidth="420px"
+        >
+          <div style={{ display: "flex", flexDirection: "column", gap: "1rem", padding: "0.25rem 0", textAlign: "center" }}>
+            <div style={{ fontSize: "2.5rem", lineHeight: 1 }}>😕</div>
+            <p style={{ margin: 0, fontSize: "0.95rem", color: "#334155", lineHeight: 1.6 }}>
+              {qrModalError}
+            </p>
+            <p style={{ margin: 0, fontSize: "0.82rem", color: "#64748b", lineHeight: 1.5 }}>
+              QR Code នេះអាចផុតកំណត់ហើយ។ សូមស្កេន QR Code ថ្មីពីអ្នកគ្រប់គ្រងប្រព័ន្ធ ឬចូលតាមអ៊ីមែល និងពាក្យសម្ងាត់។
+            </p>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => setQrModalError("")}
+              style={{ borderRadius: "10px", marginTop: "0.5rem" }}
+            >
+              យល់ព្រម / OK
+            </button>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }

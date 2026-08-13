@@ -5,6 +5,17 @@ export const membershipAPI = {
   getStats: () => client.get("/membership/stats"),
   export: (params) => client.get("/membership/export", { params }),
 
+  listRegistrations: (params) => client.get("/membership/registrations", { params }),
+  getRegistration: (id) => client.get(`/membership/registrations/${id}`),
+  createRegistration: (data) => client.post("/membership/registrations", data),
+  updateRegistration: (id, data) => client.put(`/membership/registrations/${id}`, data),
+  uploadRegistrationDocument: (id, data) => client.post(`/membership/registrations/${id}/documents`, data),
+  getRegistrationDocument: (id, type) => client.get(`/membership/registrations/${id}/documents/${type}`),
+  submitRegistration: (id) => client.post(`/membership/registrations/${id}/submit`),
+  verifyRegistration: (id, data) => client.post(`/membership/registrations/${id}/verify`, data || {}),
+  approveRegistration: (id, data) => client.post(`/membership/registrations/${id}/approve`, data || {}),
+  rejectRegistration: (id, data) => client.post(`/membership/registrations/${id}/reject`, data),
+
   getProfile: (id) => client.get(`/membership/${id}/profile`),
   getDemographics: (id) => client.get(`/membership/${id}/demographics`),
   updateDemographics: (id, data) => client.put(`/membership/${id}/demographics`, data),

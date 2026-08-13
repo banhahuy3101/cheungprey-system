@@ -466,5 +466,11 @@ func (h *ModuleConfigHandler) getUserContext(c *gin.Context) (uuid.UUID, models.
 }
 
 func (h *ModuleConfigHandler) canOverride(c *gin.Context) bool {
-	return auth.HasFeature(c, models.FeatureSettings) || auth.HasFeature(c, models.FeatureUsers)
+	roles, _ := auth.GetUserRoles(c)
+	if len(roles) == 0 {
+		if r, err := auth.GetUserRole(c); err == nil && r != "" {
+			roles = []models.UserRole{r}
+		}
+	}
+	return h.repo.IsUserSystem(roles) && auth.HasFeature(c, models.FeatureSettings)
 }

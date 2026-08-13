@@ -18,6 +18,7 @@ export default function ZoneCascadeSelect({
   isLocked: _isLocked,
   showVillage = true,
   compact = false,
+  disabled = false,
 }) {
   let provinces = _provinces;
   let districts = _districts;
@@ -69,7 +70,7 @@ export default function ZoneCascadeSelect({
         {!compact && <label>ខេត្ត *</label>}
         <select
           value={selectedProvince}
-          disabled={isLocked("province")}
+          disabled={disabled || isLocked("province")}
           onChange={(e) => onProvinceChange(e.target.value)}
           style={selectStyle}
         >
@@ -83,7 +84,7 @@ export default function ZoneCascadeSelect({
         {!compact && <label>ស្រុក *</label>}
         <select
           value={selectedDistrict}
-          disabled={isLocked("district") || !selectedProvince}
+          disabled={disabled || isLocked("district") || !selectedProvince}
           onChange={(e) => onDistrictChange(e.target.value)}
           style={selectStyle}
         >
@@ -97,7 +98,7 @@ export default function ZoneCascadeSelect({
         {!compact && <label>ឃុំ *</label>}
         <select
           value={selectedCommune}
-          disabled={isLocked("commune") || !selectedDistrict}
+          disabled={disabled || isLocked("commune") || !selectedDistrict}
           onChange={(e) => onCommuneChange(e.target.value)}
           style={selectStyle}
         >
@@ -112,7 +113,7 @@ export default function ZoneCascadeSelect({
           {!compact && <label>ភូមិ</label>}
           <select
             value={selectedVillage}
-            disabled={isLocked("village") || !selectedCommune}
+            disabled={disabled || isLocked("village") || !selectedCommune}
             onChange={(e) => onVillageChange(e.target.value)}
             style={selectStyle}
           >

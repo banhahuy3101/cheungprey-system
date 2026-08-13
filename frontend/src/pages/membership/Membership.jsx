@@ -1,12 +1,12 @@
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
-import { LuPlus, LuList, LuShieldCheck } from "react-icons/lu";
+import { LuClipboardList, LuList, LuPlus } from "react-icons/lu";
 import { membershipAPI } from "../../api/membership";
 import { partyAPI } from "../../api/party";
 import { useAuth } from "../../hooks/useAuth";
 import { canAccess, FEATURES } from "../../utils/permissions";
 import MembershipList from "./MembershipList";
-import ApprovalQueue from "./ApprovalQueue";
+import RegistrationQueue from "./RegistrationQueue";
 import MembershipProfile from "./MembershipProfile";
 import MembershipForm from "./MembershipForm";
 import MembershipDemographics from "./MembershipDemographics";
@@ -76,6 +76,7 @@ export default function Membership() {
   const [profile, setProfile] = useState(null);
 
   const canApprove = canAccess(user, FEATURES.membership_admin) || canAccess(user, FEATURES.members, "update");
+  const canReviewRegistration = canAccess(user, FEATURES.membership_admin);
   const canCreateMember = canAccess(user, FEATURES.members, "create");
   const canUpdateMember = canAccess(user, FEATURES.members, "update");
 
@@ -242,42 +243,26 @@ export default function Membership() {
       <div className="page-header">
         <h2 className="section-title">បញ្ជីសមាជិក</h2>
         <div className="actions" style={{ display: "flex", gap: "0.5rem" }}>
-          {canApprove && (
-            <div style={{ display: "flex", gap: 0, background: "#f1f5f9", borderRadius: 8, padding: 2, marginRight: "0.5rem" }}>
+          <div className="membership-view-switch">
               <button
                 onClick={() => setViewMode("list")}
-                style={{
-                  display: "flex", alignItems: "center", gap: "0.3rem",
-                  padding: "0.35rem 0.7rem", borderRadius: 6,
-                  border: "none", cursor: "pointer", fontSize: "0.78rem", fontWeight: 600,
-                  background: viewMode === "list" ? "#fff" : "transparent",
-                  color: viewMode === "list" ? "#4f46e5" : "#64748b",
-                  boxShadow: viewMode === "list" ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
-                }}
+                className={viewMode === "list" ? "active" : ""}
               ><LuList size={14} /> បញ្ជី</button>
               <button
-                onClick={() => setViewMode("queue")}
-                style={{
-                  display: "flex", alignItems: "center", gap: "0.3rem",
-                  padding: "0.35rem 0.7rem", borderRadius: 6,
-                  border: "none", cursor: "pointer", fontSize: "0.78rem", fontWeight: 600,
-                  background: viewMode === "queue" ? "#fff" : "transparent",
-                  color: viewMode === "queue" ? "#d97706" : "#64748b",
-                  boxShadow: viewMode === "queue" ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
-                }}
-              ><LuShieldCheck size={14} /> យល់ព្រម</button>
-            </div>
-          )}
+                onClick={() => setViewMode("registrations")}
+                className={viewMode === "registrations" ? "active" : ""}
+              ><LuClipboardList size={14} /> ពាក្យសុំ</button>
+          </div>
           <button className="btn btn-secondary" onClick={() => navigate("/membership/stats")}>ស្ថិតិ</button>
           <button className="btn btn-secondary" onClick={() => navigate("/membership/import")}>នាំចូល</button>
           {canCreateMember && <button className="btn btn-primary" onClick={() => navigate("/membership/create")}>
-            <LuPlus /> បន្ថែមសមាជិក
+            <LuPlus /> ចុះឈ្មោះថ្មី
           </button>}
         </div>
       </div>
 
-      {viewMode === "queue" && canApprove ? (
-        <ApprovalQueue onRefresh={fetchMembers} />
+      {viewMode === "registrations" ? (
+        <RegistrationQueue canReview={canReviewRegistration} />
       ) : (
         <>
           {loading ? (

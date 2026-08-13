@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import {
   LuArrowLeft, LuPlus, LuCreditCard, LuClock,
-  LuSparkles, LuCircleCheck, LuQrCode, LuRefreshCw
+  LuSparkles, LuQrCode, LuRefreshCw,
+  LuUser, LuStar, LuShieldCheck, LuBadgeCheck
 } from "react-icons/lu";
 import { membershipAPI } from "../../api/membership";
 import Modal from "../settings/Modal";
@@ -9,6 +10,7 @@ import Modal from "../settings/Modal";
 export default function MembershipCards({ memberId, onBack }) {
   const [cards, setCards] = useState([]);
   const [member, setMember] = useState(null);
+  const [demos, setDemos] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState({ card_no: "" });
@@ -25,6 +27,7 @@ export default function MembershipCards({ memberId, onBack }) {
       setCards(cardsRes.data?.data || cardsRes.data || []);
       const prof = profileRes.data?.data || profileRes.data;
       setMember(prof?.member || null);
+      setDemos(prof?.demographics || null);
     } catch {
       //
     } finally {
@@ -96,6 +99,12 @@ export default function MembershipCards({ memberId, onBack }) {
 
   const fullNameKh = member ? `${member.last_name_kh} ${member.first_name_kh}` : "ឈ្មោះសមាជិក";
   const fullNameEn = member ? `${member.first_name_en} ${member.last_name_en}`.toUpperCase() : "MEMBER NAME";
+
+  const genderLabel = (g) => (g === "Male" ? "ប្រុស" : g === "Female" ? "ស្រី" : g || "—");
+  const photoUrl = demos?.photo_url || null;
+  const nationalId = member?.national_id || "—";
+  const dob = member?.date_of_birth || "";
+  const cardNumber = activeCard ? activeCard.card_no : (member?.membership_card_no || "CARD-0000-0000");
 
   if (loading) {
     return <div className="page"><div className="loading">កំពុងផ្ទុកព័ត៌មានកាតសមាជិក...</div></div>;
@@ -230,19 +239,23 @@ export default function MembershipCards({ memberId, onBack }) {
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", zIndex: 2 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
                     <div style={{
-                      width: "42px", height: "42px", borderRadius: "10px",
-                      background: "rgba(255,255,255,0.15)", backdropFilter: "blur(8px)",
+                      width: "42px", height: "42px", borderRadius: "50%",
+                      background: "linear-gradient(135deg, #fbbf24, #d97706)",
                       display: "flex", alignItems: "center", justifyContent: "center",
-                      border: "1px solid rgba(255,255,255,0.2)", fontSize: "1.2rem", color: "#fbbf24"
+                      border: "2px solid rgba(255,255,255,0.6)", fontSize: "1.1rem", color: "#7c2d12",
+                      boxShadow: "0 4px 10px rgba(0,0,0,0.25)"
                     }}>
-                      🏛️
+                      <LuStar size={22} fill="currentColor" />
                     </div>
                     <div>
-                      <div style={{ fontSize: "0.95rem", fontWeight: "800", letterSpacing: "0.02em", color: "#ffffff" }}>
+                      <div style={{ fontSize: "0.98rem", fontWeight: "800", letterSpacing: "0.02em", color: "#ffffff", lineHeight: 1.2 }}>
                         គណបក្សប្រជាជនកម្ពុជា
                       </div>
-                      <div style={{ fontSize: "0.65rem", fontWeight: "700", color: "#93c5fd", letterSpacing: "0.1em" }}>
+                      <div style={{ fontSize: "0.62rem", fontWeight: "700", color: "#93c5fd", letterSpacing: "0.12em" }}>
                         CAMBODIAN PEOPLE'S PARTY
+                      </div>
+                      <div style={{ fontSize: "0.6rem", color: "#c7d2fe", letterSpacing: "0.06em", marginTop: "2px" }}>
+                        ស្រុកជើងព្រៃ · ខេត្តកំពង់ចាម
                       </div>
                     </div>
                   </div>
@@ -258,44 +271,78 @@ export default function MembershipCards({ memberId, onBack }) {
                   )}
                 </div>
 
-                {/* Body: Chip & Member Details */}
-                <div style={{ display: "flex", alignItems: "center", gap: "1.25rem", zIndex: 2, margin: "0.5rem 0" }}>
-                  {/* EMV Chip Graphic */}
+                {/* Body: Photo + Member Details */}
+                <div style={{ display: "flex", alignItems: "center", gap: "1.25rem", zIndex: 2, flex: 1, margin: "0.35rem 0" }}>
+                  {/* Member Photo */}
                   <div style={{
-                    width: "42px", height: "32px", borderRadius: "6px",
-                    background: "linear-gradient(135deg, #fde047 0%, #d97706 100%)",
-                    border: "1px solid #b45309", position: "relative", flexShrink: 0
+                    width: "86px", height: "104px", borderRadius: "10px", flexShrink: 0,
+                    background: "#f1f5f9", overflow: "hidden",
+                    border: "2px solid rgba(255,255,255,0.7)",
+                    boxShadow: "0 8px 18px rgba(0,0,0,0.3)",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    position: "relative"
                   }}>
-                    <div style={{ position: "absolute", top: "50%", left: 0, right: 0, height: "1px", background: "#b45309" }} />
-                    <div style={{ position: "absolute", top: 0, bottom: 0, left: "40%", width: "1px", background: "#b45309" }} />
+                    {photoUrl ? (
+                      <img
+                        src={photoUrl}
+                        alt="Member"
+                        style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                      />
+                    ) : (
+                      <LuUser size={38} style={{ color: "#94a3b8" }} />
+                    )}
                   </div>
 
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: "1.15rem", fontWeight: "800", color: "#ffffff", lineHeight: "1.2", textShadow: "0 1px 2px rgba(0,0,0,0.3)" }}>
+                    <div style={{ fontSize: "1.05rem", fontWeight: "800", color: "#ffffff", lineHeight: "1.2", textShadow: "0 1px 2px rgba(0,0,0,0.3)" }}>
                       {fullNameKh}
                     </div>
-                    <div style={{ fontSize: "0.75rem", fontWeight: "600", color: "#bfdbfe", letterSpacing: "0.05em", marginTop: "2px" }}>
+                    <div style={{ fontSize: "0.7rem", fontWeight: "600", color: "#bfdbfe", letterSpacing: "0.05em", marginTop: "2px", textTransform: "uppercase" }}>
                       {fullNameEn}
+                    </div>
+
+                    {/* National ID & DOB */}
+                    <div style={{ marginTop: "0.6rem", display: "flex", flexDirection: "column", gap: "0.3rem" }}>
+                      <div style={{ display: "flex", gap: "0.5rem", alignItems: "baseline" }}>
+                        <span style={{ fontSize: "0.56rem", color: "#93c5fd", textTransform: "uppercase", letterSpacing: "0.08em", width: "64px" }}>NID / អត្តសញ្ញាណ</span>
+                        <span style={{ fontSize: "0.78rem", fontWeight: "700", color: "#ffffff", fontFamily: "monospace" }}>{nationalId}</span>
+                      </div>
+                      <div style={{ display: "flex", gap: "0.5rem", alignItems: "baseline" }}>
+                        <span style={{ fontSize: "0.56rem", color: "#93c5fd", textTransform: "uppercase", letterSpacing: "0.08em", width: "64px" }}>DOB / ថ្ងៃខែឆ្នាំកំណើត</span>
+                        <span style={{ fontSize: "0.78rem", fontWeight: "700", color: "#ffffff" }}>{dob || "—"}</span>
+                      </div>
+                      <div style={{ display: "flex", gap: "0.5rem", alignItems: "baseline" }}>
+                        <span style={{ fontSize: "0.56rem", color: "#93c5fd", textTransform: "uppercase", letterSpacing: "0.08em", width: "64px" }}>ភេទ</span>
+                        <span style={{ fontSize: "0.78rem", fontWeight: "700", color: "#ffffff" }}>{genderLabel(member?.gender)}</span>
+                      </div>
                     </div>
                   </div>
                 </div>
 
-                {/* Footer: Card Number & Dates */}
-                <div style={{ zIndex: 2, display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
+                {/* Footer: Card Number, Role & Validity */}
+                <div style={{ zIndex: 2, display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: "0.75rem" }}>
                   <div>
-                    <div style={{ fontSize: "0.62rem", color: "#93c5fd", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                    <div style={{ fontSize: "0.56rem", color: "#93c5fd", textTransform: "uppercase", letterSpacing: "0.08em" }}>
                       លេខកាត / CARD NO.
                     </div>
-                    <div style={{ fontSize: "1.1rem", fontWeight: "800", fontFamily: "monospace", letterSpacing: "0.15em", color: "#ffffff" }}>
-                      {activeCard ? activeCard.card_no : (member?.membership_card_no || "CARD-0000-0000")}
+                    <div style={{ fontSize: "1rem", fontWeight: "800", fontFamily: "monospace", letterSpacing: "0.12em", color: "#ffffff" }}>
+                      {cardNumber}
                     </div>
                   </div>
-                  <div style={{ textAlign: "right" }}>
-                    <div style={{ fontSize: "0.62rem", color: "#93c5fd", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                  <div style={{ textAlign: "left", minWidth: "88px" }}>
+                    <div style={{ fontSize: "0.56rem", color: "#93c5fd", textTransform: "uppercase", letterSpacing: "0.08em" }}>
                       តួនាទី / ROLE
                     </div>
                     <div style={{ fontSize: "0.78rem", fontWeight: "700", color: "#fef08a" }}>
                       {member?.party_role || "សមាជិក"}
+                    </div>
+                  </div>
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontSize: "0.56rem", color: "#93c5fd", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                      មានសុពលភាពរហូត / VALID UNTIL
+                    </div>
+                    <div style={{ fontSize: "0.78rem", fontWeight: "700", color: "#ffffff" }}>
+                      {activeCard?.expired_at?.slice(0, 10) || "គ្មានកំណត់"}
                     </div>
                   </div>
                 </div>
@@ -305,23 +352,31 @@ export default function MembershipCards({ memberId, onBack }) {
               <div style={{ height: "100%", display: "flex", flexDirection: "column", justifyContent: "space-between", zIndex: 2 }}>
                 <div style={{
                   height: "36px", background: "#020617", margin: "-1.5rem -1.75rem 0.5rem -1.75rem",
-                  display: "flex", alignItems: "center", padding: "0 1.5rem"
+                  display: "flex", alignItems: "center", padding: "0 1.5rem", gap: "0.5rem"
                 }}>
-                  <span style={{ fontSize: "0.6rem", color: "#64748b", letterSpacing: "0.1em" }}>AUTHORIZED SIGNATURE / ហត្ថលេខាផ្លូវការ</span>
+                  <LuShieldCheck size={14} style={{ color: "#4ade80" }} />
+                  <span style={{ fontSize: "0.6rem", color: "#94a3b8", letterSpacing: "0.1em", textTransform: "uppercase" }}>ហត្ថលេខាផ្លូវការ · AUTHORIZED SIGNATURE</span>
                 </div>
                 <div style={{ display: "flex", gap: "1rem", alignItems: "center" }}>
-                  <div style={{ background: "#ffffff", padding: "6px", borderRadius: "8px", flexShrink: 0 }}>
-                    <LuQrCode size={64} style={{ color: "#0f172a" }} />
+                  <div style={{ background: "#ffffff", padding: "6px", borderRadius: "8px", flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: "3px" }}>
+                    <LuQrCode size={62} style={{ color: "#0f172a" }} />
+                    <span style={{ fontSize: "0.5rem", color: "#334155", fontWeight: "700", fontFamily: "monospace" }}>{cardNumber.slice(-6)}</span>
                   </div>
-                  <div style={{ fontSize: "0.7rem", color: "#cbd5e1", lineHeight: "1.4" }}>
-                    <p style={{ margin: 0, fontWeight: "600" }}>ប័ណ្ណនេះជាសម្បត្តិរបស់ គណបក្សប្រជាជនកម្ពុជា។</p>
-                    <p style={{ margin: "4px 0 0 0", color: "#94a3b8", fontSize: "0.65rem" }}>
-                      ប្រសិនបើបានរើសបាន សូមប្រគល់ជូនការិយាល័យគណបក្សដែលនៅជិតបំផុត។
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: "0.72rem", fontWeight: "800", color: "#ffffff", marginBottom: "4px" }}>
+                      គណបក្សប្រជាជនកម្ពុជា
+                    </div>
+                    <p style={{ margin: 0, fontSize: "0.68rem", color: "#cbd5e1", lineHeight: "1.5" }}>
+                      ប័ណ្ណនេះជាសម្បត្តិរបស់គណបក្ស និងជាភស្តុតាងនៃសមាជិកភាព។
+                    </p>
+                    <p style={{ margin: "4px 0 0 0", color: "#94a3b8", fontSize: "0.62rem", lineHeight: "1.5" }}>
+                      ប្រសិនបើបានរើសបាន សូមប្រគល់ជូនការិយាល័យគណបក្សដែលនៅជិតបំផុត ឬលេខទូរស័ព្ទ {member?.phone_number || "…"}។
                     </p>
                   </div>
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.68rem", color: "#93c5fd", borderTop: "1px solid rgba(255,255,255,0.15)", paddingTop: "0.5rem" }}>
                   <span>ថ្ងៃចេញ: {activeCard?.issued_at?.slice(0, 10) || "—"}</span>
+                  <span>លេខសមាជិក: {member?.membership_card_no || "—"}</span>
                   <span>ផុតកំណត់: {activeCard?.expired_at?.slice(0, 10) || "គ្មានកំណត់"}</span>
                 </div>
               </div>
@@ -389,7 +444,7 @@ export default function MembershipCards({ memberId, onBack }) {
                                 onClick={() => handleUpdateCard(c.id, "Delivered")}
                                 style={{ background: "#dcfce7", color: "#15803d", border: "1px solid #bbf7d0", padding: "0.2rem 0.5rem", borderRadius: "6px", fontSize: "0.72rem" }}
                               >
-                                <LuCheckCircle2 size={13} style={{ verticalAlign: "middle" }} /> ប្រគល់
+                                <LuBadgeCheck size={13} style={{ verticalAlign: "middle" }} /> ប្រគល់
                               </button>
                             )}
                             {c.card_status !== "Expired" && c.card_status !== "Replaced" && (

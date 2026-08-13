@@ -5,6 +5,7 @@ export const authAPI = {
   register: (data) => client.post("/auth/register", data),
   refreshToken: (refreshToken) =>
     client.post("/auth/refresh", { refresh_token: refreshToken }),
+  qrLogin: (qrToken) => client.post("/auth/qr-login", { qr_token: qrToken }),
   getProfile: () => client.get("/profile"),
   updateProfile: (data) => client.put("/profile", data),
 };

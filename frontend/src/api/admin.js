@@ -3,6 +3,7 @@ import client from "./client";
 export const adminAPI = {
   getUsers: (params) => client.get("/admin/users", { params }),
   getUserById: (id) => client.get(`/admin/users/${id}`),
+  getUserQRCode: (id) => client.get(`/admin/users/${id}/qrcode`),
   createUser: (data) => client.post("/admin/users", data),
   updateUser: (id, data) => client.put(`/admin/users/${id}`, data),
   deleteUser: (id) => client.delete(`/admin/users/${id}`),

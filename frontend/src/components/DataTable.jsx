@@ -173,7 +173,7 @@ export default function DataTable({
           style={{
             display: "flex",
             alignItems: "center",
-            justify: "space-between",
+            justifyContent: "space-between",
             padding: "0.5rem 0.25rem",
             fontSize: "0.82rem",
             color: "#64748b",

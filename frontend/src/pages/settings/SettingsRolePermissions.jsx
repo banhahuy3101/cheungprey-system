@@ -18,6 +18,7 @@ import RoleMetrics from "../../components/rbac/RoleMetrics";
 import PermissionMatrixTable from "../../components/rbac/PermissionMatrixTable";
 import CreateRoleModal from "../../components/rbac/CreateRoleModal";
 import RolePermissionsSkeleton from "../../components/rbac/RolePermissionsSkeleton";
+import FormModal from "../../components/FormModal";
 
 const MODULE_ICONS = {
   dashboard: LuLayoutDashboard,
@@ -218,9 +219,6 @@ export default function SettingsRolePermissions() {
   const navigate = useNavigate();
   const toast = useToast();
   const { user, refreshProfile } = useAuth();
-  const canCreateRole = canAccess(user, FEATURES.users, "create");
-  const canUpdatePermissions = canAccess(user, FEATURES.users, "update");
-  const canDeleteRole = canAccess(user, FEATURES.users, "delete");
 
   const [roles, setRoles] = useState([]);
   const [originalPerms, setOriginalPerms] = useState({});
@@ -231,11 +229,23 @@ export default function SettingsRolePermissions() {
   const [selectedRole, setSelectedRole] = useState(null);
   const [search, setSearch] = useState("");
 
+  const isSystemUser = user?.roles?.includes("super_admin") || user?.role === "super_admin" || roles.some((r) => r.is_system && (user?.roles?.includes(r.role) || user?.role === r.role));
+  const canCreateRole = canAccess(user, FEATURES.users, "create") && isSystemUser;
+  const canUpdatePermissions = canAccess(user, FEATURES.users, "update");
+  const canDeleteRole = canAccess(user, FEATURES.users, "delete") && isSystemUser;
+
   // Create role modal state
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newRole, setNewRole] = useState({ role: "", label: "" });
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState("");
+
+  // Edit role modal state
+  const [editTargetRole, setEditTargetRole] = useState(null);
+  const [editRoleLabel, setEditRoleLabel] = useState("");
+  const [editingRoleSaving, setEditingRoleSaving] = useState(false);
+  const [editError, setEditError] = useState("");
+
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [saving, setSaving] = useState(false);
 
@@ -392,14 +402,35 @@ export default function SettingsRolePermissions() {
         role: newRole.role.trim().toLowerCase(),
         label: newRole.label.trim(),
       });
-      toast.success("បង្កើតតួនាទីថ្មីបានសម្រេច!");
+      toast.success("បង្កើតតួនាទីថ្មីដោយជោគជ័យ!");
       setShowCreateModal(false);
       setNewRole({ role: "", label: "" });
       load();
     } catch (err) {
-      setCreateError(err.response?.data?.error || "បង្កើតតួនាទីមិនបានសម្រេច!");
+      setCreateError(err.response?.data?.error || err.response?.data?.message || err.message || "បង្កើតមិនបានសម្រេច");
     } finally {
       setCreating(false);
+    }
+  };
+
+  const handleEditRoleSubmit = async (e) => {
+    e.preventDefault();
+    if (!editTargetRole?.role) return;
+    if (!editRoleLabel.trim()) {
+      setEditError("សូមបញ្ចូលឈ្មោះតួនាទី!");
+      return;
+    }
+    setEditingRoleSaving(true);
+    setEditError("");
+    try {
+      await adminAPI.updateRole(editTargetRole.role, { label: editRoleLabel.trim() });
+      toast.success("ធ្វើបច្ចុប្បន្នភាពឈ្មោះតួនាទីដោយជោគជ័យ!");
+      setEditTargetRole(null);
+      load();
+    } catch (err) {
+      setEditError(err.response?.data?.error || err.response?.data?.message || err.message || "កែប្រែមិនបានសម្រេច");
+    } finally {
+      setEditingRoleSaving(false);
     }
   };
 
@@ -492,6 +523,11 @@ export default function SettingsRolePermissions() {
           setSelectedRole={setSelectedRole}
           canDeleteRole={canDeleteRole}
           setDeleteTarget={setDeleteTarget}
+          onEditRole={canUpdatePermissions ? (r) => {
+            setEditTargetRole(r);
+            setEditRoleLabel(r.label || r.role);
+            setEditError("");
+          } : undefined}
         />
 
         <PermissionMatrixTable
@@ -522,6 +558,32 @@ export default function SettingsRolePermissions() {
         createError={createError}
         onSubmit={handleCreateRole}
       />
+
+      <FormModal
+        open={!!editTargetRole}
+        onClose={() => setEditTargetRole(null)}
+        title={`✏️ កែប្រែព័ត៌មានតួនាទី — ${editTargetRole?.role}`}
+        onSubmit={handleEditRoleSubmit}
+        saving={editingRoleSaving}
+        error={editError}
+        submitText="រក្សាទុកកែប្រែ"
+        cancelText="បោះបង់"
+        maxWidth="540px"
+      >
+        <div>
+          <label style={{ fontWeight: 600, fontSize: "0.88rem", color: "#1e293b", marginBottom: "0.4rem", display: "block" }}>
+            ឈ្មោះបង្ហាញតួនាទី (Role Display Name)
+          </label>
+          <input
+            className="modern-form-input"
+            value={editRoleLabel}
+            onChange={(e) => setEditRoleLabel(e.target.value)}
+            placeholder="បញ្ចូលឈ្មោះតួនាទី..."
+            style={{ width: "100%" }}
+            required
+          />
+        </div>
+      </FormModal>
 
       {deleteTarget && (
         <ConfirmDialog
