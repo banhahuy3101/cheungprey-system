@@ -111,8 +111,7 @@ export default function Login() {
     <div className="login-page">
       <div className="login-card">
         <div className="login-header">
-          <h1>ប្រព័ន្ធគ្រប់គ្រងស្រុកជើងព្រៃ</h1>
-          <h2>សម្រាប់ស្រុកជើងព្រៃ</h2>
+          <h1>District Management System</h1>
         </div>
         <form onSubmit={handleSubmit}>
           <div className="form-group">

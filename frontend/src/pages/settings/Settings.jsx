@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { LuKeyRound, LuShield, LuTarget, LuWrench, LuFileText, LuMapPin, LuSettings2 } from "react-icons/lu";
+import { LuKeyRound, LuShield, LuTarget, LuWrench, LuFileText, LuMapPin, LuSettings2, LuClock, LuSettings } from "react-icons/lu";
+import PageHeader from "../../components/PageHeader";
 import { useAuth } from "../../hooks/useAuth";
 import { canAccess, hasAnyFeature } from "../../utils/permissions";
 import api from "../../api/client";
@@ -13,6 +14,7 @@ const ICON_MAP = {
   LuWrench,
   LuSettings2,
   LuTarget,
+  LuClock,
 };
 
 export default function Settings() {
@@ -47,9 +49,14 @@ export default function Settings() {
 
   return (
     <div className="page">
-      <div className="page-header">
-        <h2 className="section-title">ការកំណត់</h2>
-      </div>
+      <PageHeader
+        title="ការកំណត់ប្រព័ន្ធ"
+        subtitle="គ្រប់គ្រងសិទ្ធិ អ្នកប្រើប្រាស់ ម៉ឺនុយ និងការកំណត់បច្ចេកទេសប្រព័ន្ធ"
+        icon={<LuSettings size={20} />}
+        breadcrumbs={[
+          { label: "ការកំណត់" },
+        ]}
+      />
 
       {loading ? (
         <div className="loading" style={{ padding: "2rem", textAlign: "center", color: "#64748b" }}>

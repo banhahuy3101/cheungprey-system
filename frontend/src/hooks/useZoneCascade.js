@@ -44,7 +44,7 @@ export function useZoneCascade({ userZone, isAdmin, initialZoneCode, showVillage
     setSelectedDistrict(h.district || "");
     setSelectedCommune(h.commune || "");
     setSelectedVillage(showVillage ? (h.village || "") : "");
-    requestAnimationFrame(() => { skipFetch.current = false; });
+    setTimeout(() => { skipFetch.current = false; }, 0);
   }, [showVillage]);
 
   useEffect(() => {

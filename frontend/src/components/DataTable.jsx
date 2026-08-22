@@ -2,7 +2,7 @@ import { LuChevronLeft, LuChevronRight, LuInbox } from "react-icons/lu";
 import { SkeletonTable } from "./Skeleton";
 
 /**
- * Reusable & Consistent DataTable Component for Cheung Prey System
+ * Reusable & Consistent DataTable Component for District Management System
  *
  * @param {Object} props
  * @param {Array} props.columns - Column definitions: [{ key, label, render, align, width }]

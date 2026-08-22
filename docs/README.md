@@ -1,6 +1,6 @@
-# Cheung Prey System — Documentation
+# System Documentation
 
-Cheung Prey District Management System (ប្រព័ន្ធគ្រប់គ្រងស្រុកជើងព្រៃ).
+District Management System.
 
 ## Documents
 

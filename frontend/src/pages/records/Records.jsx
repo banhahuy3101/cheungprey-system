@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { LuPlus, LuPencil, LuTrash2, LuSearch, LuFileText } from "react-icons/lu";
+import PageHeader from "../../components/PageHeader";
 import { recordsAPI } from "../../api/records";
 import Modal from "../settings/Modal";
 import DataTable from "../../components/DataTable";
@@ -144,23 +145,24 @@ export default function Records() {
 
   return (
     <div className="page" style={{ maxWidth: "1200px", margin: "0 auto" }}>
-      <div className="page-header" style={{ marginBottom: "1.25rem" }}>
-        <div>
-          <h2 className="section-title" style={{ margin: 0, fontSize: "1.35rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
-            <LuFileText style={{ color: "var(--primary)" }} /> កំណត់ត្រា (Records)
-          </h2>
-          <span style={{ fontSize: "0.82rem", color: "#64748b" }}>
-            គ្រប់គ្រងកំណត់ត្រា និងកិច្ចការងារប្រព័ន្ធគ្រប់គ្រងស្រុកជើងព្រៃ
-          </span>
-        </div>
-        {canCreate && <button
-          className="btn btn-primary"
-          onClick={openCreate}
-          style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem", borderRadius: "10px", padding: "0.6rem 1.2rem", fontWeight: "600" }}
-        >
-          <LuPlus size={18} /> បន្ថែមកំណត់ត្រា
-        </button>}
-      </div>
+      <PageHeader
+        title="កំណត់ត្រា (Records)"
+        subtitle="គ្រប់គ្រងកំណត់ត្រា និងកិច្ចការងារប្រព័ន្ធ"
+        breadcrumbs={[
+          { label: "កំណត់ត្រា" },
+        ]}
+        actions={
+          canCreate && (
+            <button
+              className="btn btn-primary"
+              onClick={openCreate}
+              style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem", borderRadius: "8px", padding: "0.55rem 1.1rem", fontWeight: "600" }}
+            >
+              <LuPlus size={18} /> បន្ថែមកំណត់ត្រា
+            </button>
+          )
+        }
+      />
 
       <div className="search-bar" style={{ marginBottom: "1.25rem" }}>
         <LuSearch className="search-icon" />

@@ -1,13 +1,55 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
 export default function Modal({ open, onClose, title, children, maxWidth = "680px", padding }) {
+  const dialogRef = useRef(null);
+  const onCloseRef = useRef(onClose);
+  const prevOpen = useRef(false);
+  onCloseRef.current = onClose;
+
   useEffect(() => {
+    if (open) {
+      const dialog = dialogRef.current;
+      if (dialog) {
+        const focusables = dialog.querySelectorAll(
+          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+        );
+        const target = focusables[0] || dialog;
+        target.focus();
+      }
+      prevOpen.current = true;
+    } else {
+      prevOpen.current = false;
+    }
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
     const handleKeyDown = (e) => {
-      if (e.key === "Escape" && open) onClose?.();
+      if (e.key === "Escape") {
+        onCloseRef.current?.();
+        return;
+      }
+      if (e.key === "Tab") {
+        const dialog = dialogRef.current;
+        if (!dialog) return;
+        const focusables = dialog.querySelectorAll(
+          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+        );
+        if (focusables.length === 0) return;
+        const first = focusables[0];
+        const last = focusables[focusables.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
 
@@ -42,6 +84,8 @@ export default function Modal({ open, onClose, title, children, maxWidth = "680p
         }
       `}</style>
       <div
+        ref={dialogRef}
+        tabIndex={-1}
         style={{
           width: `min(${maxWidth}, 95%)`,
           background: "#ffffff",

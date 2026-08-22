@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { LuPlus, LuTrash2, LuExternalLink, LuSearch, LuFileText } from "react-icons/lu";
+import PageHeader from "../../components/PageHeader";
 import { partyAPI } from "../../api/party";
 import { TWO_MINUTE_TIMEOUT } from "../../api/client";
 import { readFileAsBase64, mimeTypeForFile, base64ToBlob, openBlobFile } from "../../utils/file";
@@ -229,23 +230,24 @@ export default function Files() {
 
   return (
     <div className="page" style={{ maxWidth: "1200px", margin: "0 auto" }}>
-      <div className="page-header" style={{ marginBottom: "1.25rem" }}>
-        <div>
-          <h2 className="section-title" style={{ margin: 0, fontSize: "1.35rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
-            <LuFileText style={{ color: "var(--primary)" }} /> បណ្ណសារឯកសារ (Document Archive)
-          </h2>
-          <span style={{ fontSize: "0.82rem", color: "#64748b" }}>
-            គ្រប់គ្រង និងរក្សាទុកឯកសារផ្លូវការប្រព័ន្ធស្រុកជើងព្រៃ
-          </span>
-        </div>
-        {canCreate && <button
-          className="btn btn-primary"
-          onClick={() => setShowUpload(true)}
-          style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem", borderRadius: "10px", padding: "0.6rem 1.2rem", fontWeight: "600" }}
-        >
-          <LuPlus size={18} /> បង្ហោះឯកសារ (Upload File)
-        </button>}
-      </div>
+      <PageHeader
+        title="បណ្ណសារឯកសារ (Document Archive)"
+        subtitle="គ្រប់គ្រង និងរក្សាទុកឯកសារផ្លូវការប្រព័ន្ធ"
+        breadcrumbs={[
+          { label: "បណ្ណសារឯកសារ" },
+        ]}
+        actions={
+          canCreate && (
+            <button
+              className="btn btn-primary"
+              onClick={() => setShowUpload(true)}
+              style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem", borderRadius: "8px", padding: "0.55rem 1.1rem", fontWeight: "600" }}
+            >
+              <LuPlus size={18} /> បង្ហោះឯកសារ (Upload File)
+            </button>
+          )
+        }
+      />
 
       <div className="search-bar" style={{ marginBottom: "1.25rem" }}>
         <LuSearch className="search-icon" />

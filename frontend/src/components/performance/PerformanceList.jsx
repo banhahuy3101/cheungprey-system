@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { LuPlus, LuEye, LuPencil, LuTrash2, LuDownload, LuX } from "react-icons/lu";
+import PageHeader from "../PageHeader";
 import { performanceAPI } from "../../api/performance";
 import { partyAPI } from "../../api/party";
 import { zoneCodeOf, loadZoneHierarchy, unwrapList } from "../../utils/zone";
@@ -261,23 +262,26 @@ export default function PerformanceList({ onView, onEdit, onCreate }) {
       ? villages.filter((v) => communes.some((c) => zoneCodeOf(c) === v.parent_code && c.parent_code === districtFilter))
       : provinceFilter
         ? villages.filter((v) => {
-            const comm = communes.find((c) => zoneCodeOf(c) === v.parent_code);
-            return districts.some((d) => zoneCodeOf(d) === comm?.parent_code && d.parent_code === provinceFilter);
-          })
+          const comm = communes.find((c) => zoneCodeOf(c) === v.parent_code);
+          return districts.some((d) => zoneCodeOf(d) === comm?.parent_code && d.parent_code === provinceFilter);
+        })
         : villages;
 
   return (
     <div className="page">
-      <div className="page-header">
-        <h2 className="section-title">
-          បញ្ជីរបាយការណ៍លទ្ធផលការងារ
-        </h2>
-        <div style={{ display: "flex", gap: "0.5rem" }}>
+      <PageHeader
+        title="បញ្ជីរបាយការណ៍លទ្ធផលការងារ"
+        subtitle="តាមដាន និងវាយតម្លៃសូចនាករសមិទ្ធកម្មតាមតំបន់"
+        breadcrumbs={[
+          { label: "Performance", path: "/performance" },
+          { label: "របាយការណ៍លទ្ធផលការងារ" },
+        ]}
+        actions={
           <button className="btn btn-primary" onClick={onCreate}>
             <LuPlus /> បង្កើតថ្មី
           </button>
-        </div>
-      </div>
+        }
+      />
 
       {message && (
         <div className={`alert ${message.includes("មិនបាន") ? "alert-error" : "alert-success"}`}>

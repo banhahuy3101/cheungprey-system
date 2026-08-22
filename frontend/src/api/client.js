@@ -12,9 +12,32 @@ const client = axios.create({
   timeout: 15000,
 });
 
-// Request interceptor: attach access token
+let cachedCoords = null;
+
+if (typeof window !== "undefined" && navigator.geolocation) {
+  try {
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        cachedCoords = {
+          lat: pos.coords.latitude.toFixed(6),
+          lng: pos.coords.longitude.toFixed(6),
+        };
+      },
+      () => {},
+      { timeout: 5000, maximumAge: 60000 }
+    );
+  } catch {
+    // Ignore geolocation errors
+  }
+}
+
+// Request interceptor: attach access token & location headers
 client.interceptors.request.use(
   (config) => {
+    if (cachedCoords) {
+      config.headers["X-Latitude"] = cachedCoords.lat;
+      config.headers["X-Longitude"] = cachedCoords.lng;
+    }
     if (isAuthRequest(config.url)) {
       return config;
     }

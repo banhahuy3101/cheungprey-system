@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { LuArrowLeft } from "react-icons/lu";
+import { LuArrowLeft, LuTarget } from "react-icons/lu";
+import PageHeader from "../../components/PageHeader";
 import DomainManager from "./DomainManager";
 import SubDomainManager from "./SubDomainManager";
 import IndicatorManager from "./IndicatorManager";
@@ -20,14 +21,16 @@ export default function SettingsPerformance() {
 
   return (
     <div className="page">
-      <div className="page-header">
-        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-          <button className="btn-icon" onClick={() => navigate("/settings")} title="ត្រឡប់">
-            <LuArrowLeft size={20} />
-          </button>
-          <h2 className="section-title">ការកំណត់ Performance</h2>
-        </div>
-      </div>
+      <PageHeader
+        showBack={() => navigate("/settings")}
+        title="គ្រប់គ្រង Performance"
+        subtitle="គ្រប់គ្រងដែន ចំណុចរង សូចនាករ និងរយៈពេលសមិទ្ធកម្ម"
+        icon={<LuTarget size={20} />}
+        breadcrumbs={[
+          { label: "ការកំណត់", path: "/settings" },
+          { label: "Performance" },
+        ]}
+      />
 
       <div style={{ display: "flex", gap: "0.25rem", marginBottom: "1.5rem", flexWrap: "wrap" }}>
         {TABS.map((t) => (

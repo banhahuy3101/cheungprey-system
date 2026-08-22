@@ -22,6 +22,8 @@ services:
         sync: false
       - key: CORS_ORIGIN
         value: https://cheung-prey-system.onrender.com,https://cheungprey-web.onrender.com,http://localhost:5173
+      - key: FRONTEND_URL
+        value: https://cheung-prey-system.onrender.com
       - key: CHROME_PATH
         value: /usr/bin/chromium
 

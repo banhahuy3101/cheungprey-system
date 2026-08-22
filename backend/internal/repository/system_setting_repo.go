@@ -1,11 +1,36 @@
 package repository
 
 import (
+	"encoding/json"
 	"fmt"
 	"time"
 
 	"github.com/banhahuy/cheungprey-system/backend/internal/models"
 )
+
+type DatabaseTableInfo struct {
+	Name string `json:"name"`
+	Desc string `json:"desc"`
+	PK   string `json:"pk"`
+	Type string `json:"type"`
+	Status string `json:"status"`
+}
+
+func (r *Repository) ListDatabaseTables() ([]DatabaseTableInfo, error) {
+	result := r.AdminClient.Rpc("get_database_tables", "", nil)
+	if result == "" {
+		return []DatabaseTableInfo{}, nil
+	}
+
+	var tables []DatabaseTableInfo
+	if err := json.Unmarshal([]byte(result), &tables); err != nil {
+		return nil, fmt.Errorf("list database tables: %w", err)
+	}
+	if tables == nil {
+		tables = []DatabaseTableInfo{}
+	}
+	return tables, nil
+}
 
 func (r *Repository) ListSystemSettings() ([]models.SystemSetting, error) {
 	var settings []models.SystemSetting

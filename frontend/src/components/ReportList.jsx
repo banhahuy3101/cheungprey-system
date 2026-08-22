@@ -13,6 +13,7 @@ import {
   LuRefreshCw,
   LuSearch,
 } from "react-icons/lu";
+import PageHeader from "./PageHeader";
 import { useAuth } from "../hooks/useAuth";
 import { canAccess, FEATURES } from "../utils/permissions";
 import { useModules } from "../hooks/useModules";
@@ -250,24 +251,52 @@ export default function ReportList({ onView, onEdit, onCreate }) {
 
   return (
     <div
-      className="page report-page"
+      className="page"
       style={{
-        maxWidth: "none",
-        width: "100%",
-        padding: "0.5rem 1rem",
-        margin: "0",
         display: "flex",
         flexDirection: "column",
-        gap: "0.75rem"
+        gap: "1rem"
       }}
     >
+      <PageHeader
+        title="របាយការណ៍"
+        subtitle="ប្រព័ន្ធគ្រប់គ្រង និងតាមដានរបាយការណ៍"
+        breadcrumbs={[
+          { label: "របាយការណ៍" },
+        ]}
+        actions={
+          <>
+            {canDelete && (
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={openTrashPopup}
+                style={{ display: "inline-flex", alignItems: "center", gap: "0.25rem", minHeight: "2.1rem" }}
+              >
+                <LuTrash2 size={14} /> ធុងសំរាម
+              </button>
+            )}
+            {canCreate && (
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => setShowCreateModal(true)}
+                style={{ display: "inline-flex", alignItems: "center", gap: "0.25rem", minHeight: "2.1rem" }}
+              >
+                <LuPlus size={15} /> បង្កើតរបាយការណ៍
+              </button>
+            )}
+          </>
+        }
+      />
+
       {message && (
         <div className={`alert report-flash ${message.includes("មិនបាន") ? "alert-error" : "alert-success"}`} style={{ margin: 0 }}>
           {message}
         </div>
       )}
 
-      {/* Modern, Compact Unified Header & Filters Bar */}
+      {/* Toolbar Filter & Tabs Row */}
       <div
         className="card"
         style={{
@@ -278,171 +307,137 @@ export default function ReportList({ onView, onEdit, onCreate }) {
           borderRadius: "12px",
           boxShadow: "0 1px 3px rgba(0,0,0,0.02)",
           display: "flex",
-          flexDirection: "column",
+          flexWrap: "wrap",
+          alignItems: "center",
+          justifyContent: "space-between",
           gap: "0.75rem"
         }}
       >
-        {/* Top Header Row */}
-        <div style={{ display: "flex", alignItems: "center", justifySpace: "space-between", justifyContent: "space-between", gap: "1rem", flexWrap: "wrap" }}>
-          <div>
-            <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
-              <h1 style={{ fontSize: "1.2rem", fontWeight: "800", color: "var(--text)", margin: 0, display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                <LuFileText style={{ color: "var(--primary)" }} /> របាយការណ៍
-              </h1>
-            </div>
-            <p style={{ fontSize: "0.78rem", color: "var(--text-muted)", margin: "0.1rem 0 0 0" }}>ប្រព័ន្ធគ្រប់គ្រង និងតាមដានរបាយការណ៍</p>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-            {canDelete && <button
-              type="button"
-              className="btn btn-outline btn-sm"
-              onClick={openTrashPopup}
-              style={{ display: "inline-flex", alignItems: "center", gap: "0.25rem", minHeight: "2.1rem" }}
-            >
-              <LuTrash2 size={14} /> ធុងសំរាម
-            </button>}
-            {canCreate && <button
-              type="button"
-              className="btn btn-primary btn-sm"
-              onClick={() => setShowCreateModal(true)}
-              style={{ display: "inline-flex", alignItems: "center", gap: "0.25rem", minHeight: "2.1rem" }}
-            >
-              <LuPlus size={15} /> បង្កើតរបាយការណ៍
-            </button>}
-          </div>
+        {/* Left Side: Status tabs acting as filter & stats */}
+        <div style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "0.2rem",
+          background: "#f1f5f9",
+          padding: "0.2rem",
+          borderRadius: "8px",
+          border: "1px solid var(--border)"
+        }}>
+          <button
+            type="button"
+            onClick={() => setStatusFilter("all")}
+            style={{
+              padding: "0.35rem 0.65rem",
+              borderRadius: "6px",
+              fontSize: "0.8rem",
+              fontWeight: "600",
+              border: "none",
+              background: statusFilter === "all" ? "#ffffff" : "transparent",
+              color: statusFilter === "all" ? "var(--primary)" : "#64748b",
+              boxShadow: statusFilter === "all" ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
+              cursor: "pointer",
+              transition: "all 0.15s"
+            }}
+          >
+            ទាំងអស់ ({stats.total})
+          </button>
+          <button
+            type="button"
+            onClick={() => setStatusFilter("published")}
+            style={{
+              padding: "0.35rem 0.65rem",
+              borderRadius: "6px",
+              fontSize: "0.8rem",
+              fontWeight: "600",
+              border: "none",
+              background: statusFilter === "published" ? "#ffffff" : "transparent",
+              color: statusFilter === "published" ? "#166534" : "#64748b",
+              boxShadow: statusFilter === "published" ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
+              cursor: "pointer",
+              transition: "all 0.15s"
+            }}
+          >
+            បានចេញ ({stats.published})
+          </button>
+          <button
+            type="button"
+            onClick={() => setStatusFilter("draft")}
+            style={{
+              padding: "0.35rem 0.65rem",
+              borderRadius: "6px",
+              fontSize: "0.8rem",
+              fontWeight: "600",
+              border: "none",
+              background: statusFilter === "draft" ? "#ffffff" : "transparent",
+              color: statusFilter === "draft" ? "#92400e" : "#64748b",
+              boxShadow: statusFilter === "draft" ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
+              cursor: "pointer",
+              transition: "all 0.15s"
+            }}
+          >
+            ព្រាង ({stats.draft})
+          </button>
         </div>
 
-        {/* Separator line */}
-        <div style={{ height: "1px", background: "var(--border)", width: "100%" }} />
-
-        {/* Toolbar Filter & Tabs Row */}
-        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: "0.75rem" }}>
-          {/* Left Side: Status tabs acting as filter & stats */}
-          <div style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "0.2rem",
-            background: "#f1f5f9",
-            padding: "0.2rem",
-            borderRadius: "8px",
-            border: "1px solid var(--border)"
-          }}>
-            <button
-              type="button"
-              onClick={() => setStatusFilter("all")}
+        {/* Right Side: Inline Search, Category & Location selects */}
+        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.5rem", flex: 1, justifyContent: "flex-end" }}>
+          {/* Search Input */}
+          <div style={{ position: "relative", width: "180px" }}>
+            <LuSearch
               style={{
-                padding: "0.35rem 0.65rem",
-                borderRadius: "6px",
-                fontSize: "0.8rem",
-                fontWeight: "600",
-                border: "none",
-                background: statusFilter === "all" ? "#ffffff" : "transparent",
-                color: statusFilter === "all" ? "var(--primary)" : "#64748b",
-                boxShadow: statusFilter === "all" ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
-                cursor: "pointer",
-                transition: "all 0.15s"
+                position: "absolute",
+                left: "0.65rem",
+                top: "50%",
+                transform: "translateY(-50%)",
+                color: "#94a3b8",
+                fontSize: "0.95rem",
+                pointerEvents: "none"
               }}
-            >
-              ទាំងអស់ ({stats.total})
-            </button>
-            <button
-              type="button"
-              onClick={() => setStatusFilter("published")}
+            />
+            <input
+              type="text"
+              placeholder="ស្វែងរក..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
               style={{
-                padding: "0.35rem 0.65rem",
-                borderRadius: "6px",
-                fontSize: "0.8rem",
-                fontWeight: "600",
-                border: "none",
-                background: statusFilter === "published" ? "#ffffff" : "transparent",
-                color: statusFilter === "published" ? "#166534" : "#64748b",
-                boxShadow: statusFilter === "published" ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
-                cursor: "pointer",
-                transition: "all 0.15s"
+                width: "100%",
+                minHeight: "2.1rem",
+                height: "2.1rem",
+                padding: "0.3rem 0.5rem 0.3rem 1.85rem",
+                border: "1px solid var(--border)",
+                borderRadius: "8px",
+                fontSize: "0.85rem",
+                color: "var(--text)",
+                outline: "none"
               }}
-            >
-              បានចេញ ({stats.published})
-            </button>
-            <button
-              type="button"
-              onClick={() => setStatusFilter("draft")}
-              style={{
-                padding: "0.35rem 0.65rem",
-                borderRadius: "6px",
-                fontSize: "0.8rem",
-                fontWeight: "600",
-                border: "none",
-                background: statusFilter === "draft" ? "#ffffff" : "transparent",
-                color: statusFilter === "draft" ? "#92400e" : "#64748b",
-                boxShadow: statusFilter === "draft" ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
-                cursor: "pointer",
-                transition: "all 0.15s"
-              }}
-            >
-              ព្រាង ({stats.draft})
-            </button>
+            />
           </div>
 
-          {/* Right Side: Inline Search, Category & Location selects */}
-          <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.5rem", flex: 1, justifyContent: "flex-end" }}>
-            {/* Search Input */}
-            <div style={{ position: "relative", width: "180px" }}>
-              <LuSearch
-                style={{
-                  position: "absolute",
-                  left: "0.65rem",
-                  top: "50%",
-                  transform: "translateY(-50%)",
-                  color: "#94a3b8",
-                  fontSize: "0.95rem",
-                  pointerEvents: "none"
-                }}
-              />
-              <input
-                type="text"
-                placeholder="ស្វែងរក..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                style={{
-                  width: "100%",
-                  minHeight: "2.1rem",
-                  height: "2.1rem",
-                  padding: "0.3rem 0.5rem 0.3rem 1.85rem",
-                  border: "1px solid var(--border)",
-                  borderRadius: "8px",
-                  fontSize: "0.85rem",
-                  color: "var(--text)",
-                  outline: "none"
-                }}
-              />
-            </div>
+          {/* Category Filter */}
+          <div style={{ position: "relative", width: "120px" }}>
+            <select
+              value={categoryFilter}
+              onChange={(e) => setCategoryFilter(e.target.value)}
+              style={{
+                width: "100%",
+                height: "2.1rem",
+                minHeight: "2.1rem",
+                borderRadius: "8px",
+                border: "1px solid var(--border)",
+                fontSize: "0.85rem",
+                padding: "0 1.5rem 0 0.5rem",
+                cursor: "pointer"
+              }}
+            >
+              {CATEGORY_FILTERS.map((c) => (
+                <option key={c.value} value={c.value}>{c.label}</option>
+              ))}
+            </select>
+          </div>
 
-            {/* Category Filter */}
-            <div style={{ position: "relative", width: "120px" }}>
-              <select
-                value={categoryFilter}
-                onChange={(e) => setCategoryFilter(e.target.value)}
-                style={{
-                  width: "100%",
-                  height: "2.1rem",
-                  minHeight: "2.1rem",
-                  borderRadius: "8px",
-                  border: "1px solid var(--border)",
-                  fontSize: "0.85rem",
-                  padding: "0 1.5rem 0 0.5rem",
-                  cursor: "pointer"
-                }}
-              >
-                {CATEGORY_FILTERS.map((c) => (
-                  <option key={c.value} value={c.value}>{c.label}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* Location selector */}
-            <div style={{ display: "flex", gap: "0.35rem", alignItems: "center" }}>
-              <ZoneCascadeSelect hook={zoneHook} showVillage={false} compact={true} />
-            </div>
+          {/* Location selector */}
+          <div style={{ display: "flex", gap: "0.35rem", alignItems: "center" }}>
+            <ZoneCascadeSelect hook={zoneHook} showVillage={false} compact={true} />
           </div>
         </div>
       </div>
@@ -485,6 +480,7 @@ export default function ReportList({ onView, onEdit, onCreate }) {
           {
             key: "status",
             label: "ស្ថានភាព",
+            width: "100px",
             render: (val, r) => (
               <span className="report-status-badge report-status-badge-sm" data-status={val}>
                 {val === "published" ? "បានចេញ"

@@ -21,14 +21,18 @@ func (r *Repository) ListAllZones() ([]models.GeographicZone, error) {
 }
 
 func (r *Repository) ListZones(zoneType string) ([]models.GeographicZone, error) {
-	var zones []models.GeographicZone
-	q := r.AdminClient.From("geographic_zones").Select("*", "exact", false)
-	if zoneType != "" {
-		q = q.Eq("zone_type", zoneType)
+	result := r.AdminClient.Rpc("get_zones_filtered", "", map[string]any{
+		"p_zone_type": zoneType,
+	})
+	if result == "" {
+		return []models.GeographicZone{}, nil
 	}
-	_, err := q.ExecuteTo(&zones)
-	if err != nil {
+	var zones []models.GeographicZone
+	if err := json.Unmarshal([]byte(result), &zones); err != nil {
 		return nil, fmt.Errorf("list zones: %w", err)
+	}
+	if zones == nil {
+		zones = []models.GeographicZone{}
 	}
 	return zones, nil
 }
@@ -56,13 +60,18 @@ func (r *Repository) CountZonesByType() (map[string]int, error) {
 }
 
 func (r *Repository) GetChildren(parentCode string) ([]models.GeographicZone, error) {
+	result := r.AdminClient.Rpc("get_zones_filtered", "", map[string]any{
+		"p_parent_code": parentCode,
+	})
+	if result == "" {
+		return []models.GeographicZone{}, nil
+	}
 	var zones []models.GeographicZone
-	_, err := r.AdminClient.From("geographic_zones").
-		Select("*", "exact", false).
-		Eq("parent_code", parentCode).
-		ExecuteTo(&zones)
-	if err != nil {
+	if err := json.Unmarshal([]byte(result), &zones); err != nil {
 		return nil, fmt.Errorf("get children: %w", err)
+	}
+	if zones == nil {
+		zones = []models.GeographicZone{}
 	}
 	return zones, nil
 }

@@ -2,6 +2,7 @@ package cron
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -16,22 +17,33 @@ import (
 
 // JobStatus holds the result of a single cron job execution.
 type JobStatus struct {
-	Name      string    `json:"name"`
-	Status    string    `json:"status"`
-	LastRun   time.Time `json:"last_run"`
-	NextRun   time.Time `json:"next_run"`
-	Duration  string    `json:"duration"`
-	Error     string    `json:"error,omitempty"`
-	Details   []string  `json:"details,omitempty"`
+	Key        string    `json:"key"`
+	Name       string    `json:"name"`
+	Status     string    `json:"status"`
+	LastRun    time.Time `json:"last_run"`
+	NextRun    time.Time `json:"next_run,omitempty"`
+	Duration   string    `json:"duration"`
+	Error      string    `json:"error,omitempty"`
+	Details    []string  `json:"details,omitempty"`
+	RetryCount int       `json:"retry_count"`
+	MaxRetries int       `json:"max_retries"`
+}
+
+type TelegramInfo struct {
+	Enabled     bool   `json:"enabled"`
+	ChatID      string `json:"chat_id,omitempty"`
+	BotUsername string `json:"bot_username,omitempty"`
+	Link        string `json:"link,omitempty"`
 }
 
 // SchedulerStatus holds the overall scheduler state for the API.
 type SchedulerStatus struct {
-	Running   bool        `json:"running"`
-	Timezone  string      `json:"timezone"`
-	NextRun   string      `json:"next_run"`
-	LastRun   string      `json:"last_run"`
-	Jobs      []JobStatus `json:"jobs"`
+	Running  bool         `json:"running"`
+	Timezone string       `json:"timezone"`
+	NextRun  string       `json:"next_run"`
+	LastRun  string       `json:"last_run"`
+	Jobs     []JobStatus  `json:"jobs"`
+	Telegram TelegramInfo `json:"telegram"`
 }
 
 // Scheduler runs background cron jobs to keep Supabase alive and perform
@@ -42,13 +54,14 @@ type Scheduler struct {
 	stopCh   chan struct{}
 	running  bool
 
-	tgToken  string
-	tgChatID string
+	tgToken       string
+	tgChatID      string
+	tgBotUsername string
 
-	mu        sync.RWMutex
-	lastRun   time.Time
-	nextRun   time.Time
-	jobLogs   []JobStatus
+	mu      sync.RWMutex
+	lastRun time.Time
+	nextRun time.Time
+	jobLogs []JobStatus
 }
 
 // New creates a new Scheduler targeting Asia/Phnom_Penh timezone (UTC+7).
@@ -57,12 +70,132 @@ func New(repo *repository.Repository) *Scheduler {
 	if err != nil {
 		tz = time.FixedZone("ICT", 7*3600) // fallback UTC+7
 	}
-	return &Scheduler{
+	s := &Scheduler{
 		repo:     repo,
 		timezone: tz,
 		tgToken:  os.Getenv("TELEGRAM_BOT_TOKEN"),
 		tgChatID: os.Getenv("TELEGRAM_CHAT_ID"),
 		stopCh:   make(chan struct{}),
+	}
+	go s.fetchBotUsername()
+	s.loadLogsFromDB()
+	return s
+}
+
+func (s *Scheduler) fetchBotUsername() {
+	botUsername := os.Getenv("TELEGRAM_BOT_USERNAME")
+	if botUsername != "" {
+		s.tgBotUsername = strings.TrimPrefix(botUsername, "@")
+		return
+	}
+
+	if s.tgToken != "" {
+		apiURL := fmt.Sprintf("https://api.telegram.org/bot%s/getMe", s.tgToken)
+		client := &http.Client{Timeout: 5 * time.Second}
+		resp, err := client.Get(apiURL)
+		if err == nil {
+			defer resp.Body.Close()
+			if resp.StatusCode == 200 {
+				var result struct {
+					OK     bool `json:"ok"`
+					Result struct {
+						Username string `json:"username"`
+					} `json:"result"`
+				}
+				if err := json.NewDecoder(resp.Body).Decode(&result); err == nil && result.OK && result.Result.Username != "" {
+					s.tgBotUsername = result.Result.Username
+					log.Printf("[CRON] Telegram bot username resolved: @%s", s.tgBotUsername)
+					return
+				}
+			}
+		}
+	}
+
+	// Default fallback
+	s.tgBotUsername = "cheungprey_system_bot"
+}
+
+func (s *Scheduler) loadLogsFromDB() {
+	if s.repo == nil {
+		s.initDefaultJobTemplates()
+		return
+	}
+	logs, err := s.repo.GetRecentCronLogs(30)
+	if err != nil || len(logs) == 0 {
+		s.initDefaultJobTemplates()
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	latestJobs := make(map[string]JobStatus)
+	for _, l := range logs {
+		if _, exists := latestJobs[l.JobKey]; !exists {
+			latestJobs[l.JobKey] = JobStatus{
+				Key:        l.JobKey,
+				Name:       l.JobName,
+				Status:     l.Status,
+				LastRun:    l.LastRun,
+				Duration:   l.Duration,
+				Error:      l.Error,
+				Details:    l.Details,
+				RetryCount: l.RetryCount,
+				MaxRetries: l.MaxRetries,
+			}
+			if s.lastRun.Before(l.LastRun) {
+				s.lastRun = l.LastRun
+			}
+		}
+	}
+	jobList := make([]JobStatus, 0, len(latestJobs))
+	for _, j := range latestJobs {
+		jobList = append(jobList, j)
+	}
+	s.jobLogs = jobList
+	if len(s.jobLogs) == 0 {
+		s.initDefaultJobTemplates()
+	}
+}
+
+func (s *Scheduler) initDefaultJobTemplates() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if len(s.jobLogs) == 0 {
+		s.jobLogs = []JobStatus{
+			{
+				Key:        "ping_supabase",
+				Name:       "Ping Supabase (រក្សាទុក DB ឲ្យនៅសកម្ម)",
+				Status:     "idle",
+				MaxRetries: 3,
+				Details:    []string{"សួរទិន្នន័យពី profiles, role_permissions, report_documents, fms_chart_of_accounts, zones"},
+			},
+			{
+				Key:        "log_module_counts",
+				Name:       "Module Counts (ត្រួតពិនិត្យទិន្នន័យតាម Module)",
+				Status:     "idle",
+				MaxRetries: 3,
+				Details:    []string{"រាប់ចំនួនជួរទិន្នន័យក្នុង profiles, records, members, zones, fms_transactions"},
+			},
+		}
+	}
+}
+
+func (s *Scheduler) persistJobLog(st JobStatus) {
+	if s.repo == nil {
+		return
+	}
+	rec := repository.CronLogRecord{
+		JobKey:     st.Key,
+		JobName:    st.Name,
+		Status:     st.Status,
+		LastRun:    st.LastRun,
+		Duration:   st.Duration,
+		Error:      st.Error,
+		Details:    st.Details,
+		RetryCount: st.RetryCount,
+		MaxRetries: st.MaxRetries,
+	}
+	if err := s.repo.SaveCronLog(rec); err != nil {
+		log.Printf("[CRON] Failed to save cron log to DB: %v", err)
 	}
 }
 
@@ -109,6 +242,71 @@ func (s *Scheduler) RunNow() {
 	go s.runAll()
 }
 
+// RetryJob executes a retry for a specific feature job by key.
+func (s *Scheduler) RetryJob(jobKey string) (*JobStatus, error) {
+	jobKeyLower := strings.ToLower(strings.TrimSpace(jobKey))
+	var runFn func() JobStatus
+	var keyName string
+	var displayName string
+
+	switch jobKeyLower {
+	case "ping_supabase", "ping supabase", "ping":
+		keyName = "ping_supabase"
+		displayName = "Ping Supabase"
+		runFn = s.pingSupabase
+	case "log_module_counts", "log module counts", "module_counts", "counts":
+		keyName = "log_module_counts"
+		displayName = "Module Counts"
+		runFn = s.logModuleCounts
+	default:
+		return nil, fmt.Errorf("unknown job feature: %s", jobKey)
+	}
+
+	log.Printf("[CRON] Retry requested for job feature: %s", displayName)
+	jobRes := s.runJobWithRetry(keyName, 3, runFn)
+
+	s.mu.Lock()
+	found := false
+	for i, j := range s.jobLogs {
+		if j.Key == keyName || strings.EqualFold(j.Name, displayName) {
+			s.jobLogs[i] = jobRes
+			found = true
+			break
+		}
+	}
+	if !found {
+		s.jobLogs = append(s.jobLogs, jobRes)
+	}
+	s.mu.Unlock()
+
+	go s.notifyTelegram([]JobStatus{jobRes}, 0)
+
+	return &jobRes, nil
+}
+
+// runJobWithRetry executes jobFn and retries up to maxRetries if it fails.
+func (s *Scheduler) runJobWithRetry(key string, maxRetries int, jobFn func() JobStatus) JobStatus {
+	var lastStatus JobStatus
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		if attempt > 0 {
+			log.Printf("[CRON] Retrying job %s (attempt %d/%d)...", key, attempt, maxRetries)
+			time.Sleep(time.Duration(attempt) * 1 * time.Second)
+		}
+
+		lastStatus = jobFn()
+		lastStatus.Key = key
+		lastStatus.RetryCount = attempt
+		lastStatus.MaxRetries = maxRetries
+
+		if lastStatus.Status == "success" {
+			go s.persistJobLog(lastStatus)
+			return lastStatus
+		}
+	}
+	go s.persistJobLog(lastStatus)
+	return lastStatus
+}
+
 // Status returns the current scheduler status for API response.
 func (s *Scheduler) Status() SchedulerStatus {
 	s.mu.RLock()
@@ -126,24 +324,39 @@ func (s *Scheduler) Status() SchedulerStatus {
 	jobs := make([]JobStatus, len(s.jobLogs))
 	copy(jobs, s.jobLogs)
 
+	tgLink := os.Getenv("TELEGRAM_LINK")
+	if tgLink == "" {
+		if s.tgBotUsername != "" {
+			tgLink = "https://t.me/" + s.tgBotUsername
+		} else if strings.HasPrefix(s.tgChatID, "@") {
+			tgLink = "https://t.me/" + strings.TrimPrefix(s.tgChatID, "@")
+		}
+	}
+
 	return SchedulerStatus{
 		Running:  s.running,
 		Timezone: s.timezone.String(),
 		NextRun:  nextRunStr,
 		LastRun:  lastRunStr,
 		Jobs:     jobs,
+		Telegram: TelegramInfo{
+			Enabled:     s.tgToken != "" && s.tgChatID != "",
+			ChatID:      s.tgChatID,
+			BotUsername: s.tgBotUsername,
+			Link:        tgLink,
+		},
 	}
 }
 
-// runAll executes all nightly maintenance jobs.
+// runAll executes all nightly maintenance jobs with automatic retry.
 func (s *Scheduler) runAll() {
 	start := time.Now()
 	log.Println("[CRON] ===== Nightly maintenance started =====")
 
 	var jobs []JobStatus
 
-	jobs = append(jobs, s.pingSupabase())
-	jobs = append(jobs, s.logModuleCounts())
+	jobs = append(jobs, s.runJobWithRetry("ping_supabase", 3, s.pingSupabase))
+	jobs = append(jobs, s.runJobWithRetry("log_module_counts", 3, s.logModuleCounts))
 
 	elapsed := time.Since(start).Round(time.Millisecond)
 	log.Printf("[CRON] ===== Nightly maintenance completed in %s =====", elapsed)
@@ -166,8 +379,8 @@ func (s *Scheduler) pingSupabase() JobStatus {
 		"report_documents",
 		"performance_domains",
 		"performance_periods",
-		"fms_chart_of_accounts",
-		"zones",
+		"chart_of_accounts",
+		"geographic_zones",
 	}
 
 	var details []string
@@ -176,7 +389,7 @@ func (s *Scheduler) pingSupabase() JobStatus {
 	for _, table := range tables {
 		var result []map[string]any
 		_, err := s.repo.AdminClient.From(table).
-			Select("id", "exact", false).
+			Select("*", "exact", false).
 			Limit(1, "").
 			ExecuteTo(&result)
 		if err != nil {
@@ -197,6 +410,7 @@ func (s *Scheduler) pingSupabase() JobStatus {
 	}
 
 	return JobStatus{
+		Key:      "ping_supabase",
 		Name:     "Ping Supabase",
 		Status:   status,
 		LastRun:  start,
@@ -216,7 +430,7 @@ func (s *Scheduler) logModuleCounts() JobStatus {
 		{"profiles", "Users"},
 		{"report_documents", "Report Documents"},
 		{"performance_data", "Performance Data"},
-		{"zones", "Zones"},
+		{"geographic_zones", "Zones"},
 		{"fms_transactions", "FMS Transactions"},
 		{"records", "Records"},
 		{"members", "Members"},
@@ -228,7 +442,7 @@ func (s *Scheduler) logModuleCounts() JobStatus {
 	for _, c := range counts {
 		var rows []map[string]any
 		_, err := s.repo.AdminClient.From(c.table).
-			Select("id", "exact", false).
+			Select("*", "exact", false).
 			ExecuteTo(&rows)
 		if err != nil {
 			msg := c.label + ": ERROR - " + err.Error()
@@ -236,8 +450,9 @@ func (s *Scheduler) logModuleCounts() JobStatus {
 			details = append(details, msg)
 			lastErr = msg
 		} else {
+			msg := fmt.Sprintf("%s: %d", c.label, len(rows))
 			log.Printf("[CRON] Count %s: %d", c.label, len(rows))
-			details = append(details, fmt.Sprintf("%s: %d", c.label, len(rows)))
+			details = append(details, msg)
 		}
 	}
 
@@ -247,6 +462,7 @@ func (s *Scheduler) logModuleCounts() JobStatus {
 	}
 
 	return JobStatus{
+		Key:      "log_module_counts",
 		Name:     "Module Counts",
 		Status:   status,
 		LastRun:  start,
@@ -302,4 +518,3 @@ func escapeTelegram(s string) string {
 	s = strings.ReplaceAll(s, ">", "&gt;")
 	return s
 }
-

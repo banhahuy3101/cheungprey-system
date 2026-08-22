@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"text/template"
 	"time"
 
@@ -18,6 +19,10 @@ import (
 	"github.com/banhahuy/cheungprey-system/backend/pkg/pdf"
 	"github.com/banhahuy/cheungprey-system/backend/pkg/periodlabel"
 )
+
+// reportPlaceholderRe matches {{ key }} placeholders left in report content when
+// a template was filled with missing values. We blank them out at render time.
+var reportPlaceholderRe = regexp.MustCompile(`\{\{\s*[\w.#]+\s*\}\}`)
 
 type ReportService struct {
 	fontDir string
@@ -514,10 +519,13 @@ func (s *ReportService) GeneratePartyReportDocument(doc *models.ReportDocument) 
 func renderSimpleReportHTML(doc *models.ReportDocument, regularFont, boldFont string) ([]byte, error) {
 	tmpl := htmltemplate.Must(htmltemplate.New("simpleReport").Parse(simpleReportHTML))
 	var htmlBuf bytes.Buffer
+	// Blank out any leftover {{ key }} placeholders in the stored content so
+	// they never appear in the rendered PDF when no data was provided.
+	content := reportPlaceholderRe.ReplaceAllString(doc.Content, "")
 	err := tmpl.Execute(&htmlBuf, map[string]any{
 		"KhmerFontPath": regularFont,
 		"Doc":           doc,
-		"Content":       htmltemplate.HTML(doc.Content),
+		"Content":       htmltemplate.HTML(content),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("render report template: %w", err)

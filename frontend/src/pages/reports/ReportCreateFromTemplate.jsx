@@ -234,7 +234,7 @@ export default function ReportCreateFromTemplate() {
 
     const currentUserName = user?.full_name || user?.name || user?.username || "មន្ត្រីទទួលបន្ទុក";
     const currentUserRole = user?.role || "ប្រធានការិយាល័យ";
-    const currentOrg = user?.organization || "រដ្ឋបាលស្រុកជើងព្រៃ";
+    const currentOrg = user?.organization || "រដ្ឋបាលស្រុក";
     const khmerToday = getKhmerDateStr();
 
     (selected.keys || []).forEach(k => {
@@ -774,7 +774,7 @@ export default function ReportCreateFromTemplate() {
 
               const currentUserName = user?.full_name || user?.name || user?.username || "មន្ត្រីទទួលបន្ទុក";
               const currentUserRole = user?.role || "ប្រធានការិយាល័យ";
-              const currentOrg = user?.organization || "រដ្ឋបាលស្រុកជើងព្រៃ";
+              const currentOrg = user?.organization || "រដ្ឋបាលស្រុក";
 
               const metaItem = (selected.keys_meta || []).find(m => m.key_name === k);
               const labelText = metaItem?.display_label || humanizeKey(k);

@@ -47,6 +47,11 @@ export async function loadZoneHierarchy(partyAPI, zoneCode) {
     province = zoneCode;
   }
 
+  // Resolve upward: village → commune → district → province
+  if (village && !commune) {
+    const v = unwrapZone(await partyAPI.getZones({ code: village }));
+    commune = v?.parent_code || "";
+  }
   if (commune && !district) {
     const c = unwrapZone(await partyAPI.getZones({ code: commune }));
     district = c?.parent_code || "";
@@ -55,11 +60,8 @@ export async function loadZoneHierarchy(partyAPI, zoneCode) {
     const d = unwrapZone(await partyAPI.getZones({ code: district }));
     province = d?.parent_code || "";
   }
-  if (village && !commune) {
-    const v = unwrapZone(await partyAPI.getZones({ code: village }));
-    commune = v?.parent_code || "";
-  }
 
+  // Fetch all level lists in parallel
   const [provinces, districts, communes, villages] = await Promise.all([
     partyAPI.getZones({ type: "Province" }),
     province ? partyAPI.getZones({ type: "District", parent_code: province }) : Promise.resolve({ data: [] }),

@@ -23,7 +23,7 @@ export default function MembershipList({
   useEffect(() => {
     membershipAPI.getStats().then((res) => {
       setStats(res.data?.data || res.data);
-    }).catch(() => {});
+    }).catch(() => { });
   }, []);
 
   const toggleSelect = (id) => {
@@ -93,7 +93,7 @@ export default function MembershipList({
       <!DOCTYPE html>
       <html>
         <head>
-          <title>បញ្ជីសមាជិក - ស្រុកជើងព្រៃ</title>
+          <title>បញ្ជីសមាជិក</title>
           <style>
             @media print {
               @page { size: A4 landscape; margin: 15mm; }
@@ -111,7 +111,7 @@ export default function MembershipList({
         <body>
           <div class="header">
             <h2>ព្រះរាជាណាចក្រកម្ពុជា · ជាតិ សាសនា ព្រះមហាក្សត្រ</h2>
-            <h4>គណបក្សប្រជាជនកម្ពុជា គណៈកម្មាធិការបក្សស្រុកជើងព្រៃ</h4>
+            <h4>គណបក្សប្រជាជនកម្ពុជា គណៈកម្មាធិការបក្សស្រុក</h4>
             <h3 style="margin-top: 15px; text-decoration: underline;">តារាងបញ្ជីឈ្មោះសមាជិកគណបក្ស</h3>
           </div>
           <div style="display:flex; justify-content:space-between; font-size:10pt; margin-bottom:10px;">
@@ -227,7 +227,7 @@ export default function MembershipList({
               const res = await membershipAPI.export({ ids });
               const data = res.data?.data || res.data;
               const csv = jsonToCSV(data);
-              downloadFile(csv, `membership-export-${new Date().toISOString().slice(0,10)}.csv`, "text/csv");
+              downloadFile(csv, `membership-export-${new Date().toISOString().slice(0, 10)}.csv`, "text/csv");
             } catch {
               alert("ការនាំចេញបរាជ័យ");
             }
@@ -243,6 +243,7 @@ export default function MembershipList({
         selectedIds={selectedIds}
         onSelectRow={toggleSelect}
         onSelectAll={toggleAll}
+        onRowClick={(item) => navigate(`/membership/${item.id}`)}
         loading={loading}
         emptyMessage="មិនទាន់មានសមាជិក"
         columns={[
@@ -253,13 +254,49 @@ export default function MembershipList({
             render: (_, __, i) => (page - 1) * 20 + i + 1,
           },
           {
+            key: "card_no",
+            label: "លេខប័ណ្ណ",
+            width: "100px",
+            render: (_, m) => (
+              <span style={{
+                fontFamily: "monospace",
+                fontWeight: "700",
+                fontSize: "0.82rem",
+                color: "#1e3a8a",
+                background: "#eff6ff",
+                padding: "0.2rem 0.5rem",
+                borderRadius: "6px",
+                border: "1px solid #bfdbfe"
+              }}>
+                {m.membership_card_no || "—"}
+              </span>
+            ),
+          },
+          {
+            key: "national_id",
+            label: "អត្តសញ្ញាណប័ណ្ណ",
+            width: "120px",
+            render: (val) => (
+              <span style={{ fontSize: "0.8rem", color: "#64748b" }}>
+                {val || "—"}
+              </span>
+            ),
+          },
+          {
             key: "name",
-            label: "ឈ្មោះខ្មែរ",
+            label: "ឈ្មោះសមាជិក",
             render: (_, m) => (
               <MemberHoverCard member={m}>
-                <span style={{ cursor: "pointer", fontWeight: "700", color: "#0f172a" }}>
-                  {m.last_name_kh} {m.first_name_kh}
-                </span>
+                <div style={{ display: "flex", flexDirection: "column", cursor: "pointer" }}>
+                  <span style={{ fontWeight: "700", color: "#0f172a", fontSize: "0.9rem" }}>
+                    {m.last_name_kh} {m.first_name_kh}
+                  </span>
+                  {(m.last_name_en || m.first_name_en) && (
+                    <span style={{ fontSize: "0.75rem", color: "#64748b" }}>
+                      {m.last_name_en} {m.first_name_en}
+                    </span>
+                  )}
+                </div>
               </MemberHoverCard>
             ),
           },
@@ -269,19 +306,47 @@ export default function MembershipList({
             width: "60px",
             render: (val) => (
               <span style={{ fontSize: "0.82rem" }}>
-                {val === "Male" ? "ប្រុស" : val === "Female" ? "ស្រី" : "ផ្សេងៗ"}
+                {val === "Male" || val === "ប្រុស" ? "ប្រុស" : val === "Female" || val === "ស្រី" ? "ស្រី" : "ផ្សេងៗ"}
               </span>
             ),
           },
           {
             key: "phone_number",
             label: "លេខទូរសព្ទ",
-            render: (val) => <span style={{ fontSize: "0.85rem", color: "#475569" }}>{val || "—"}</span>,
+            render: (val) => <span style={{ fontSize: "0.82rem", color: "#334155", fontWeight: 500 }}>{val || "—"}</span>,
           },
           {
             key: "party_role",
-            label: "ឋានៈ",
-            render: (val) => val || "សមាជិក",
+            label: "ឋានៈបក្ស",
+            render: (val) => (
+              <span style={{ fontSize: "0.8rem", fontWeight: 600, color: "#1e293b", background: "#f1f5f9", padding: "0.15rem 0.5rem", borderRadius: "6px" }}>
+                {val || "សមាជិក"}
+              </span>
+            ),
+          },
+          {
+            key: "membership_type",
+            label: "ប្រភេទ / Tier",
+            render: (_, m) => (
+              <div style={{ display: "flex", gap: "0.25rem", flexWrap: "wrap" }}>
+                <span className="badge badge-info" style={{ fontSize: "0.72rem", padding: "0.1rem 0.4rem" }}>
+                  {m.membership_type || "Full"}
+                </span>
+                {m.membership_tier && (
+                  <span style={{
+                    fontSize: "0.72rem",
+                    padding: "0.1rem 0.4rem",
+                    borderRadius: "4px",
+                    fontWeight: "600",
+                    background: m.membership_tier === "Platinum" ? "#fef3c7" : m.membership_tier === "Gold" ? "#fef9c3" : m.membership_tier === "Silver" ? "#f1f5f9" : "#e2e8f0",
+                    color: m.membership_tier === "Platinum" ? "#92400e" : m.membership_tier === "Gold" ? "#854d0e" : m.membership_tier === "Silver" ? "#475569" : "#64748b",
+                    border: "1px solid rgba(0,0,0,0.05)"
+                  }}>
+                    {m.membership_tier}
+                  </span>
+                )}
+              </div>
+            ),
           },
           {
             key: "status",
@@ -293,12 +358,18 @@ export default function MembershipList({
             ),
           },
           {
+            key: "join_date",
+            label: "ថ្ងៃចូលបក្ស",
+            width: "95px",
+            render: (val) => <span style={{ fontSize: "0.8rem", color: "#64748b" }}>{val ? val.slice(0, 10) : "—"}</span>,
+          },
+          {
             key: "actions",
             label: "សកម្មភាព",
             align: "right",
-            width: "180px",
+            width: "170px",
             render: (_, m) => (
-              <div className="actions" style={{ display: "flex", justifyContent: "flex-end", gap: "0.25rem" }}>
+              <div className="actions" onClick={(e) => e.stopPropagation()} style={{ display: "flex", justifyContent: "flex-end", gap: "0.25rem" }}>
                 {canApprove && m.status === "Pending" && (
                   <>
                     <button

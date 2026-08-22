@@ -507,7 +507,7 @@ export default function SettingsRolePermissions() {
             onClick={() => { setShowCreateModal(true); setCreateError(""); }}
             style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem", borderRadius: "10px", padding: "0.6rem 1.2rem", fontWeight: "600" }}
           >
-            <LuPlus size={18} /> + បង្កើតតួនាទីថ្មី (Add Role)
+            <LuPlus size={18} /> បង្កើតតួនាទីថ្មី (Add Role)
           </button>
         )}
       </div>

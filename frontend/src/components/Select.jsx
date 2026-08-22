@@ -43,6 +43,8 @@ export default function Select({
   options: optionsProp,
   children,
   placeholder = "-- ជ្រើសរើស --",
+  leadIcon,
+  tailIcon,
 }) {
   const options = useMemo(() => {
     if (optionsProp) {
@@ -283,6 +285,7 @@ export default function Select({
         onClick={() => !disabled && setOpen((v) => !v)}
         onKeyDown={onKeyDown}
       >
+        {leadIcon && <span className="custom-select-icon is-leading">{leadIcon}</span>}
         <span
           className={[
             "custom-select-value",
@@ -293,6 +296,7 @@ export default function Select({
         >
           {displayLabel}
         </span>
+        {tailIcon && <span className="custom-select-icon is-trailing">{tailIcon}</span>}
         <LuChevronDown className="custom-select-chevron" aria-hidden />
       </button>
       {menu}

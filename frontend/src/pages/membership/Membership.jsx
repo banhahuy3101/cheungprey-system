@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
-import { LuClipboardList, LuList, LuPlus } from "react-icons/lu";
+import { LuClipboardList, LuList, LuPlus, LuUsers } from "react-icons/lu";
+import PageHeader from "../../components/PageHeader";
 import { membershipAPI } from "../../api/membership";
 import { partyAPI } from "../../api/party";
 import { useAuth } from "../../hooks/useAuth";
@@ -204,7 +205,11 @@ export default function Membership() {
         await partyAPI.createMember(payload);
       }
       setShowModal(false);
-      navigate("/membership");
+      if (editing) {
+        navigate(`/membership/${editing.id}`);
+      } else {
+        navigate("/membership");
+      }
       fetchMembers();
     } catch (err) {
       setError(err.response?.data?.error || err.response?.data?.message || "Operation failed.");
@@ -213,6 +218,21 @@ export default function Membership() {
     }
   };
 
+  if (mode === "edit" && params.id) {
+    return (
+      <MembershipForm
+        isFullPage={true}
+        editing={editing}
+        form={form}
+        setForm={setForm}
+        error={error}
+        submitting={submitting}
+        onClose={() => navigate(`/membership/${params.id}`)}
+        onSubmit={handleSubmit}
+        memberZone={memberZone}
+      />
+    );
+  }
   if (mode === "profile" && profile) {
     return <MembershipProfile profile={profile} onBack={() => navigate("/membership")} onEdit={() => navigate(`/membership/${params.id}/edit`)} />;
   }
@@ -240,10 +260,16 @@ export default function Membership() {
 
   return (
     <div className="page">
-      <div className="page-header">
-        <h2 className="section-title">បញ្ជីសមាជិក</h2>
-        <div className="actions" style={{ display: "flex", gap: "0.5rem" }}>
-          <div className="membership-view-switch">
+      <PageHeader
+        title="បញ្ជីសមាជិក"
+        subtitle="គ្រប់គ្រងសមាជិក ពិនិត្យពាក្យសុំ និងមើលស្ថិតិទិន្នន័យ"
+        icon={<LuUsers size={20} />}
+        breadcrumbs={[
+          { label: "សមាជិក" },
+        ]}
+        actions={
+          <>
+            <div className="membership-view-switch">
               <button
                 onClick={() => setViewMode("list")}
                 className={viewMode === "list" ? "active" : ""}
@@ -252,14 +278,17 @@ export default function Membership() {
                 onClick={() => setViewMode("registrations")}
                 className={viewMode === "registrations" ? "active" : ""}
               ><LuClipboardList size={14} /> ពាក្យសុំ</button>
-          </div>
-          <button className="btn btn-secondary" onClick={() => navigate("/membership/stats")}>ស្ថិតិ</button>
-          <button className="btn btn-secondary" onClick={() => navigate("/membership/import")}>នាំចូល</button>
-          {canCreateMember && <button className="btn btn-primary" onClick={() => navigate("/membership/create")}>
-            <LuPlus /> ចុះឈ្មោះថ្មី
-          </button>}
-        </div>
-      </div>
+            </div>
+            <button className="btn btn-secondary" onClick={() => navigate("/membership/stats")}>ស្ថិតិ</button>
+            <button className="btn btn-secondary" onClick={() => navigate("/membership/import")}>នាំចូល</button>
+            {canCreateMember && (
+              <button className="btn btn-primary" onClick={() => navigate("/membership/create")}>
+                <LuPlus /> ចុះឈ្មោះថ្មី
+              </button>
+            )}
+          </>
+        }
+      />
 
       {viewMode === "registrations" ? (
         <RegistrationQueue canReview={canReviewRegistration} />
@@ -290,19 +319,6 @@ export default function Membership() {
             />
           )}
         </>
-      )}
-
-      {showModal && (
-        <MembershipForm
-          editing={editing}
-          form={form}
-          setForm={setForm}
-          error={error}
-          submitting={submitting}
-          onClose={() => { setShowModal(false); navigate("/membership"); }}
-          onSubmit={handleSubmit}
-          memberZone={memberZone}
-        />
       )}
     </div>
   );

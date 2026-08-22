@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  LuPencil, LuTrash2, LuSearch, LuKey, LuUser, LuMail, LuPhone, LuMapPin, LuShieldCheck, LuSparkles, LuX, LuQrCode
+  LuPencil, LuTrash2, LuSearch, LuUser, LuQrCode
 } from "react-icons/lu";
 import { adminAPI } from "../../api/admin";
 import { useAuth } from "../../hooks/useAuth";
@@ -14,7 +14,6 @@ import AdminStats from "./AdminStats";
 import UserProfileModal from "../../components/UserProfileModal";
 import {
   getDefaultUserPassword,
-  createUserFormDefaults,
 } from "../../config/userSettings";
 
 function formatDate(value) {
@@ -22,37 +21,10 @@ function formatDate(value) {
   return value.slice(0, 10);
 }
 
-function RoleCheckboxes({ roleOptions, roles, onToggle }) {
-  const options = roleOptions || [];
-  return (
-    <div className="rbac-role-checkbox-grid">
-      {options.map((r) => {
-        const checked = (roles || []).includes(r.value);
-        return (
-          <label
-            key={r.value}
-            className={`rbac-role-check ${checked ? "active" : ""}`}
-          >
-            <input
-              type="checkbox"
-              checked={checked}
-              onChange={() => onToggle(r.value)}
-              style={{ width: "17px", height: "17px", accentColor: "#2563eb", cursor: "pointer", flexShrink: 0 }}
-            />
-            <span>{r.label}</span>
-          </label>
-        );
-      })}
-    </div>
-  );
-}
-
 export default function Admin() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { roleOptions, roleLabelMap } = useRoleOptions();
-  const isSuperAdmin = user?.roles?.includes("super_admin") || user?.role === "super_admin";
-  const assignableRoles = roleOptions.filter((r) => isSuperAdmin || r.value !== "super_admin");
   const canCreate = canAccess(user, FEATURES.users, "create");
   const canUpdate = canAccess(user, FEATURES.users, "update");
   const canDelete = canAccess(user, FEATURES.users, "delete");
@@ -62,15 +34,11 @@ export default function Admin() {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
-  const [showModal, setShowModal] = useState(false);
-  const [editing, setEditing] = useState(null);
-  const [form, setForm] = useState(createUserFormDefaults());
-  const [error, setError] = useState("");
-  const [submitting, setSubmitting] = useState(false);
   const [defaultPassword, setDefaultPassword] = useState(getDefaultUserPassword());
   const [actionMessage, setActionMessage] = useState("");
   const [resettingId, setResettingId] = useState(null);
   const [resetTargetUser, setResetTargetUser] = useState(null);
+  const [resetPasswordInput, setResetPasswordInput] = useState("");
 
   // QR modal state
   const [qrUser, setQrUser] = useState(null);
@@ -80,11 +48,6 @@ export default function Admin() {
 
   // Profile modal state
   const [profileUser, setProfileUser] = useState(null);
-  const [profileForm, setProfileForm] = useState({ full_name: "", email: "", phone_number: "", zone_code: "", role: "recorder", roles: ["recorder"], password: "" });
-  const [profileEditing, setProfileEditing] = useState(false);
-  const [profileSaving, setProfileSaving] = useState(false);
-  const [profileError, setProfileError] = useState("");
-  const [profileSuccess, setProfileSuccess] = useState("");
 
   useEffect(() => {
     const syncPassword = () => setDefaultPassword(getDefaultUserPassword());
@@ -121,79 +84,30 @@ export default function Admin() {
     return () => { cancelled = true; };
   }, [fetchData]);
 
-  const handleChange = (e) => {
-    setForm({ ...form, [e.target.name]: e.target.value });
-  };
-
   const openCreate = () => {
-    setEditing(null);
-    setForm(createUserFormDefaults());
-    setError("");
-    setShowModal(true);
-  };
-
-  const toggleFormRole = (roleValue) => {
-    setForm((prev) => {
-      const roles = prev.roles || [];
-      const next = roles.includes(roleValue)
-        ? roles.filter((r) => r !== roleValue)
-        : [...roles, roleValue];
-      return { ...prev, roles: next.length ? next : [roleValue], role: next[0] || roleValue };
-    });
-  };
-
-  const toggleProfileRole = (roleValue) => {
-    setProfileForm((prev) => {
-      const roles = prev.roles || [];
-      const next = roles.includes(roleValue)
-        ? roles.filter((r) => r !== roleValue)
-        : [...roles, roleValue];
-      return { ...prev, roles: next.length ? next : [roleValue], role: next[0] || roleValue };
-    });
+    navigate("/settings/users/create");
   };
 
   const openEdit = (u) => {
-    const roles = u.roles?.length ? u.roles : [u.role || "recorder"];
-    setEditing(u);
-    setForm({
-      name: u.full_name || u.name || "",
-      email: u.email || "",
-      phone_number: u.phone_number || "",
-      zone_code: u.zone_code || "",
-      password: "",
-      role: roles[0],
-      roles,
-    });
-    setError("");
-    setShowModal(true);
+    if (!u?.id) return;
+    navigate(`/settings/users/${u.id}/edit`);
   };
 
   const openProfile = (u) => {
     if (!u) return;
-    const roles = u.roles?.length ? u.roles : (u.role ? [u.role] : []);
     setProfileUser(u);
-    setProfileForm({
-      full_name: u.full_name || u.name || "",
-      email: u.email || "",
-      phone_number: u.phone_number || "",
-      zone_code: u.zone_code || "",
-      role: roles[0] || "",
-      roles,
-      password: "",
-    });
-    setProfileEditing(false);
-    setProfileError("");
-    setProfileSuccess("");
   };
 
   const handleResetPassword = async (u) => {
     if (!u?.id) return;
+    const password = resetPasswordInput || defaultPassword;
     setResettingId(u.id);
     setActionMessage("");
     try {
-      await adminAPI.resetPassword(u.id, defaultPassword);
-      setActionMessage(`ពាក្យសម្ងាត់សម្រាប់ ${u.full_name || u.email} ត្រូវបានកំណត់ឡើងវិញទៅ៖ ${defaultPassword}`);
+      await adminAPI.resetPassword(u.id, password);
+      setActionMessage(`ពាក្យសម្ងាត់សម្រាប់ ${u.full_name || u.email} ត្រូវបានកំណត់ឡើងវិញទៅ៖ ${password}`);
       setResetTargetUser(null);
+      setResetPasswordInput("");
       setTimeout(() => setActionMessage(""), 6000);
     } catch {
       setActionMessage("កំណត់ពាក្យសម្ងាត់ឡើងវិញមិនបានសម្រេច");
@@ -209,7 +123,7 @@ export default function Admin() {
     setQrError("");
     setQrLoading(true);
     try {
-      const res = await adminAPI.getUserQRCode(u.id);
+      const res = await adminAPI.getUserQRCode(u.id, { params: { origin: window.location.origin } });
       const inner = res.data?.data || res.data;
       setQrData(inner?.qr_data_uri || "");
     } catch (err) {
@@ -225,83 +139,56 @@ export default function Admin() {
     setQrError("");
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError("");
-    const email = form.email?.trim();
-    const phone = form.phone_number?.trim();
+  const downloadQRCard = () => {
+    if (!qrData || !qrUser) return;
+    const name = qrUser.full_name || qrUser.name || "User";
+    const email = qrUser.email || qrUser.phone_number || "";
+    const scale = 3;
+    const width = 480;
+    const height = 640;
+    const canvas = document.createElement("canvas");
+    canvas.width = width * scale;
+    canvas.height = height * scale;
+    const ctx = canvas.getContext("2d");
+    ctx.scale(scale, scale);
 
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      setError("សូមបញ្ចូលអ៊ីមែលឲ្យបានត្រឹមត្រូវ (ឧ. name@example.com)");
-      setSubmitting(false);
-      return;
-    }
-    if (phone && !/^(?:0[0-9]{8,9}|\+855[0-9]{8,9})$/.test(phone)) {
-      setError("លេខទូរស័ព្ទត្រូវមានទម្រង់ 0xx ឬ +855 (9-13 ខ្ទង់)");
-      setSubmitting(false);
-      return;
-    }
-    const selectedRoles = form.roles?.length ? form.roles : (form.role ? [form.role] : []);
-    if (!selectedRoles.length) {
-      setError("សូមជ្រើសរើសតួនាទីយ៉ាងហោចណាស់មួយ (Roles)");
-      setSubmitting(false);
-      return;
-    }
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, width, height);
 
-    setSubmitting(true);
-    try {
-      const payload = {
-        full_name: form.name,
-        email,
-        phone_number: phone || undefined,
-        zone_code: form.zone_code || undefined,
-        roles: selectedRoles,
-      };
-      if (editing) {
-        await adminAPI.updateUser(editing.id, payload);
-      } else {
-        await adminAPI.createUser({
-          ...payload,
-          password: form.password,
-        });
+    ctx.fillStyle = "#1e40af";
+    ctx.fillRect(0, 0, width, 14);
+    ctx.fillRect(0, height - 14, width, 14);
+
+    const img = new Image();
+    img.onload = () => {
+      const qrSize = 300;
+      ctx.drawImage(img, (width - qrSize) / 2, 160, qrSize, qrSize);
+
+      ctx.fillStyle = "#0f172a";
+      ctx.textAlign = "center";
+      ctx.font = "700 30px 'Khmer OS Siemreap', system-ui, sans-serif";
+      ctx.fillText(name, width / 2, 110);
+      if (email) {
+        ctx.fillStyle = "#64748b";
+        ctx.font = "500 20px system-ui, sans-serif";
+        ctx.fillText(email, width / 2, 142);
       }
-      setShowModal(false);
-      fetchData();
-    } catch (err) {
-      setError(err.response?.data?.error || err.response?.data?.message || err.message || "ប្រតិបត្តិការមិនបានសម្រេច");
-    } finally {
-      setSubmitting(false);
-    }
-  };
 
-  const handleProfileSave = async (e) => {
-    e.preventDefault();
-    if (!profileUser?.id) return;
-    setProfileError("");
-    setProfileSuccess("");
-    setProfileSaving(true);
-    try {
-      const payload = {
-        full_name: profileForm.full_name,
-        email: profileForm.email,
-        phone_number: profileForm.phone_number,
-        zone_code: profileForm.zone_code,
-        roles: profileForm.roles?.length ? profileForm.roles : (profileForm.role ? [profileForm.role] : []),
-      };
-      if (profileForm.password?.trim()) {
-        payload.password = profileForm.password.trim();
-      }
-      await adminAPI.updateUser(profileUser.id, payload);
-      setProfileSuccess("ធ្វើបច្ចុប្បន្នភាពព័ត៌មានរូបដោយជោគជ័យ!");
-      setProfileEditing(false);
-      fetchData();
-      const updated = { ...profileUser, ...payload, role: payload.roles[0] || "" };
-      setProfileUser(updated);
-    } catch (err) {
-      setProfileError(err.response?.data?.error || err.response?.data?.message || err.message || "រក្សាទុកមិនបានសម្រេច");
-    } finally {
-      setProfileSaving(false);
-    }
+      ctx.fillStyle = "#475569";
+      ctx.font = "500 19px 'Khmer OS Siemreap', system-ui, sans-serif";
+      const hint1 = "ស្កេន QR Code នេះដើម្បីចូលប្រព័ន្ធដោយស្វ័យប្រវត្តិ";
+      const hint2 = "ជំនួសអ្នកប្រើប្រាស់នេះ។ កូដអាចប្រើបានច្រើនដង";
+      const hint3 = "ប៉ុន្តែផុតកំណត់ក្នុងរយៈពេល 24 ម៉ោង។";
+      ctx.fillText(hint1, width / 2, 520);
+      ctx.fillText(hint2, width / 2, 548);
+      ctx.fillText(hint3, width / 2, 576);
+
+      const a = document.createElement("a");
+      a.href = canvas.toDataURL("image/png");
+      a.download = `qr-${(name || "user").replace(/[^a-zA-Z0-9\u1780-\u17FF]+/g, "-")}.png`;
+      a.click();
+    };
+    img.src = qrData;
   };
 
   const handleDelete = async (id) => {
@@ -369,6 +256,11 @@ export default function Admin() {
       render: (val, row) => <span style={{ color: "#475569" }}>{val || row.zone_code || "—"}</span>,
     },
     {
+      key: "date_of_birth",
+      label: "ថ្ងៃខែឆ្នាំកំណើត",
+      render: (val) => <span style={{ color: "#475569" }}>{val ? val.slice(0, 10) : "—"}</span>,
+    },
+    {
       key: "roles",
       label: "តួនាទី (Roles)",
       render: (_, u) => {
@@ -403,7 +295,7 @@ export default function Admin() {
       key: "actions",
       label: "សកម្មភាព",
       align: "right",
-      width: "130px",
+      width: "150px",
       render: (_, u) => (
         <div className="actions" style={{ display: "flex", justifyContent: "flex-end", gap: "0.35rem" }}>
           <button
@@ -414,6 +306,16 @@ export default function Admin() {
           >
             <LuUser size={16} />
           </button>
+          {canUpdate && (
+            <button
+              type="button"
+              className="btn-icon"
+              onClick={() => openEdit(u)}
+              title="កែប្រែអ្នកប្រើប្រាស់"
+            >
+              <LuPencil size={16} />
+            </button>
+          )}
           <button
             type="button"
             className="btn-icon"
@@ -474,103 +376,6 @@ export default function Admin() {
         }}
       />
 
-      {/* Create / Edit User Modal */}
-      {showModal && (
-        <Modal
-          open={showModal}
-          onClose={() => setShowModal(false)}
-          title={editing ? "📝 កែប្រែព័ត៌មានអ្នកប្រើប្រាស់" : "👤 បន្ថែមអ្នកប្រើប្រាស់ថ្មី"}
-        >
-          <form onSubmit={handleSubmit}>
-            <div style={{ display: "flex", flexDirection: "column", gap: "1rem", padding: "0.5rem 0" }}>
-              <div>
-                <label style={{ fontWeight: 700, fontSize: "0.85rem", color: "#334155", marginBottom: "0.35rem", display: "block" }}>
-                  គោត្តនាម និងនាម (Full Name) <span style={{ color: "#dc2626" }}>*</span>
-                </label>
-                <input
-                  name="name"
-                  className="modern-form-input"
-                  value={form.name}
-                  onChange={handleChange}
-                  placeholder="បញ្ចូលឈ្មោះអ្នកប្រើប្រាស់..."
-                  required
-                  style={{ width: "100%" }}
-                />
-              </div>
-
-              <div>
-                <label style={{ fontWeight: 700, fontSize: "0.85rem", color: "#334155", marginBottom: "0.35rem", display: "block" }}>
-                  អ៊ីមែល (Email) <span style={{ color: "#dc2626" }}>*</span>
-                </label>
-                <input
-                  name="email"
-                  type="email"
-                  className="modern-form-input"
-                  value={form.email}
-                  onChange={handleChange}
-                  placeholder="name@example.com"
-                  maxLength={100}
-                  required
-                  style={{ width: "100%" }}
-                />
-              </div>
-
-              <div>
-                <label style={{ fontWeight: 700, fontSize: "0.85rem", color: "#334155", marginBottom: "0.35rem", display: "block" }}>
-                  លេខទូរស័ព្ទ (Phone Number)
-                </label>
-                <input
-                  name="phone_number"
-                  className="modern-form-input"
-                  value={form.phone_number}
-                  onChange={handleChange}
-                  placeholder="ឧ. 012 345 678"
-                  inputMode="tel"
-                  maxLength={13}
-                  style={{ width: "100%" }}
-                />
-              </div>
-
-              {!editing && (
-                <div>
-                  <label style={{ fontWeight: 700, fontSize: "0.85rem", color: "#334155", marginBottom: "0.35rem", display: "block" }}>
-                    ពាក្យសម្ងាត់ (Password) <span style={{ color: "#dc2626" }}>*</span>
-                  </label>
-                  <input
-                    name="password"
-                    type="password"
-                    className="modern-form-input"
-                    value={form.password}
-                    onChange={handleChange}
-                    placeholder="បញ្ចូលពាក្យសម្ងាត់យ៉ាងតិច ៦ តួ..."
-                    required
-                    style={{ width: "100%" }}
-                  />
-                </div>
-              )}
-
-              <div>
-                <label style={{ fontWeight: 700, fontSize: "0.85rem", color: "#334155", marginBottom: "0.5rem", display: "block" }}>
-                  តួនាទីក្នុងប្រព័ន្ធ (Roles) <span style={{ color: "#dc2626" }}>*</span>
-                </label>
-                <RoleCheckboxes roleOptions={assignableRoles} roles={form.roles} onToggle={toggleFormRole} />
-              </div>
-
-              {error && <div className="alert alert-error" style={{ fontSize: "0.85rem" }}>{error}</div>}
-
-              <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem", marginTop: "0.5rem" }}>
-                <button type="button" className="btn btn-secondary" onClick={() => setShowModal(false)}>
-                  បោះបង់
-                </button>
-                <button type="submit" className="btn btn-primary" disabled={submitting}>
-                  {submitting ? "រក្សាទុក..." : editing ? "ធ្វើបច្ចុប្បន្នភាព" : "បង្កើតអ្នកប្រើប្រាស់"}
-                </button>
-              </div>
-            </div>
-          </form>
-        </Modal>
-      )}
-
       {/* Password Reset Confirmation Modal */}
       {resetTargetUser && (
         <Modal
@@ -580,14 +385,33 @@ export default function Admin() {
         >
           <div style={{ display: "flex", flexDirection: "column", gap: "1rem", padding: "0.5rem 0" }}>
             <div style={{ fontSize: "0.9rem", color: "#334155", lineHeight: 1.5 }}>
-              តើអ្នកពិតជាចង់កំណត់ពាក្យសម្ងាត់សម្រាប់ <strong>{resetTargetUser.full_name || resetTargetUser.email}</strong> ឡើងវិញទៅជាពាក្យសម្ងាត់ដើម (Default Password) មែនទេ?
+              តើអ្នកពិតជាចង់កំណត់ពាក្យសម្ងាត់សម្រាប់ <strong>{resetTargetUser.full_name || resetTargetUser.email}</strong> ឡើងវិញ មែនទេ?
             </div>
-            <div style={{ padding: "0.75rem", background: "#f8fafc", borderRadius: "8px", border: "1px solid #e2e8f0", fontSize: "0.85rem" }}>
-              <span style={{ color: "#64748b" }}>ពាក្យសម្ងាត់ដើម៖ </span>
-              <code style={{ fontWeight: 700, color: "#1d4ed8", fontSize: "0.95rem" }}>{defaultPassword}</code>
+            <div>
+              <label style={{ display: "block", marginBottom: "0.4rem", fontWeight: "600", fontSize: "0.85rem", color: "#334155" }}>
+                ពាក្យសម្ងាត់ថ្មី (New Password)
+              </label>
+              <input
+                type="text"
+                value={resetPasswordInput}
+                onChange={(e) => setResetPasswordInput(e.target.value)}
+                placeholder={`លោក/អ្នកស្រីអាចបញ្ចូលពាក្យសម្ងាត់ថ្មី ឬទុកទទេសម្រាប់ពាក្យសម្ងាត់ដើម (${defaultPassword})`}
+                style={{
+                  width: "100%",
+                  padding: "0.6rem 0.75rem",
+                  borderRadius: "8px",
+                  border: "1px solid #cbd5e1",
+                  fontSize: "0.9rem",
+                  outline: "none",
+                }}
+                autoFocus
+              />
+              <div style={{ marginTop: "0.4rem", fontSize: "0.75rem", color: "#64748b" }}>
+                ប្រសិនបើទុកទទេ នឹងប្រើពាក្យសម្ងាត់ដើម៖ <code style={{ fontWeight: 700, color: "#1d4ed8" }}>{defaultPassword}</code>
+              </div>
             </div>
             <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem", marginTop: "0.5rem" }}>
-              <button type="button" className="btn btn-secondary" onClick={() => setResetTargetUser(null)}>
+              <button type="button" className="btn btn-secondary" onClick={() => { setResetTargetUser(null); setResetPasswordInput(""); }}>
                 បោះបង់
               </button>
               <button
@@ -613,7 +437,7 @@ export default function Admin() {
         canDelete={canDelete}
         currentUserId={user?.id}
         roleOptions={roleOptions}
-        onResetPassword={(u) => setResetTargetUser(u)}
+        onResetPassword={(u) => { setProfileUser(null); setResetTargetUser(u); }}
         onDeleteUser={(id) => handleDelete(id)}
       />
 
@@ -675,14 +499,14 @@ export default function Admin() {
                 <p style={{ margin: 0, fontSize: "0.8rem", color: "#64748b", lineHeight: 1.5 }}>
                   ស្កេន QR Code នេះដើម្បីចូលប្រព័ន្ធដោយស្វ័យប្រវត្តិជំនួសអ្នកប្រើប្រាស់នេះ។ កូដនេះអាចប្រើបានច្រើនដង ប៉ុន្តែផុតកំណត់ក្នុងរយៈពេល 24 ម៉ោង។
                 </p>
-                <a
-                  href={qrData}
-                  download={`qr-${qrUser.full_name || qrUser.name || qrUser.id || "user"}.png`}
+                <button
+                  type="button"
+                  onClick={downloadQRCard}
                   className="btn btn-primary"
-                  style={{ textDecoration: "none", display: "inline-flex", alignItems: "center", gap: "0.4rem", borderRadius: "10px" }}
+                  style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem", borderRadius: "10px" }}
                 >
                   <LuQrCode size={16} /> ទាញយក QR Code
-                </a>
+                </button>
               </>
             )}
 

@@ -538,15 +538,15 @@ export default function ReportDetail({ reportId }) {
                           borderRadius: "6px",
                           fontSize: "0.75rem",
                           fontWeight: "600",
-                          background: r.action === "confirm" ? "#dcfce7" : r.action === "reject" ? "#fee2e2" : "#dbeafe",
-                          color: r.action === "confirm" ? "#166534" : r.action === "reject" ? "#991b1b" : "#1e40af",
+                          background: (r.action === "confirm" || r.action === "approve") ? "#dcfce7" : r.action === "reject" ? "#fee2e2" : "#dbeafe",
+                          color: (r.action === "confirm" || r.action === "approve") ? "#166534" : r.action === "reject" ? "#991b1b" : "#1e40af",
                           display: "inline-flex",
                           alignItems: "center",
                           gap: "0.25rem",
                         }}
                       >
-                        {r.action === "confirm" ? <LuCircleCheck size={12} /> : r.action === "reject" ? <LuCircleX size={12} /> : <LuSend size={12} />}
-                        {r.action === "submit" ? "បានដាក់ស្នើ" : r.action === "confirm" ? "បានអនុម័ត" : "បានបដិសេធ"}
+                        {(r.action === "confirm" || r.action === "approve") ? <LuCircleCheck size={12} /> : r.action === "reject" ? <LuCircleX size={12} /> : <LuSend size={12} />}
+                        {r.action === "submit" ? "បានដាក់ស្នើ" : (r.action === "confirm" || r.action === "approve") ? "បានអនុម័ត" : "បានបដិសេធ"}
                       </span>
                       <span style={{ color: "var(--text-muted)", fontSize: "0.75rem" }}>{formatDate(r.created_at)}</span>
                     </div>

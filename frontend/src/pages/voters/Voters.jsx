@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
-import { LuPlus, LuSearch, LuX } from "react-icons/lu";
+import { LuPlus, LuSearch, LuX, LuVote } from "react-icons/lu";
+import PageHeader from "../../components/PageHeader";
 import { partyAPI } from "../../api/party";
 import Select from "../../components/Select";
 import { useAuth } from "../../hooks/useAuth";
@@ -80,14 +81,20 @@ export default function Voters() {
 
   return (
     <div className="page">
-      <div className="page-header">
-        <h2 className="section-title">បញ្ជីអ្នកបោះឆ្នោត</h2>
-        {canCreate && (
-          <button className="btn btn-primary" onClick={openCreate}>
-            <LuPlus /> បន្ថែមអ្នកបោះឆ្នោត
-          </button>
-        )}
-      </div>
+      <PageHeader
+        title="បញ្ជីអ្នកបោះឆ្នោត"
+        subtitle="គ្រប់គ្រង និងស្វែងរកទិន្នន័យបញ្ជីឈ្មោះអ្នកបោះឆ្នោតក្នុងស្រុក"
+        breadcrumbs={[
+          { label: "អ្នកបោះឆ្នោត" },
+        ]}
+        actions={
+          canCreate && (
+            <button className="btn btn-primary" onClick={openCreate}>
+              <LuPlus /> បន្ថែមអ្នកបោះឆ្នោត
+            </button>
+          )
+        }
+      />
 
       <div className="search-bar">
         <LuSearch className="search-icon" />

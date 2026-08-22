@@ -3,7 +3,11 @@ package handlers
 import (
 	"crypto/rand"
 	"encoding/base64"
+	"encoding/json"
+	"net"
 	"net/http"
+	"net/url"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -30,6 +34,17 @@ func NewAdminHandler(repo *repository.Repository, cfg *config.Config) *AdminHand
 
 func (h *AdminHandler) requireAdmin(c *gin.Context) bool {
 	return auth.RequireAdminHandler(c)
+}
+
+func (h *AdminHandler) getDefaultPassword() string {
+	setting, err := h.repo.GetSystemSetting("default_user_password")
+	if err == nil && setting != nil && len(setting.Value) > 0 {
+		var pw string
+		if err := json.Unmarshal(setting.Value, &pw); err == nil && pw != "" {
+			return pw
+		}
+	}
+	return h.cfg.DefaultUserPassword
 }
 
 func (h *AdminHandler) GetUsers(c *gin.Context) {
@@ -69,6 +84,41 @@ func (h *AdminHandler) GetUserByID(c *gin.Context) {
 	utils.JSON(c, http.StatusOK, profile)
 }
 
+// lanIP returns the machine's outbound LAN IP (e.g. 192.168.1.20) so that
+// URLs embedded in QR codes are reachable from phones on the same network.
+func lanIP() string {
+	conn, err := net.Dial("udp", "8.8.8.8:80")
+	if err != nil {
+		return ""
+	}
+	defer conn.Close()
+	addr, ok := conn.LocalAddr().(*net.UDPAddr)
+	if !ok || addr.IP == nil {
+		return ""
+	}
+	return addr.IP.String()
+}
+
+// resolveQRBaseURL picks a base URL phones can reach: it prefers the origin
+// the admin browser is on, and swaps localhost/127.0.0.1 for the LAN IP.
+func resolveQRBaseURL(requested, fallback string) string {
+	base := strings.TrimSpace(requested)
+	if base == "" {
+		base = fallback
+	}
+	u, err := url.Parse(base)
+	if err != nil || u.Host == "" {
+		return fallback
+	}
+	host := u.Hostname()
+	if host == "localhost" || host == "127.0.0.1" || host == "0.0.0.0" {
+		if lan := lanIP(); lan != "" {
+			u.Host = net.JoinHostPort(lan, u.Port())
+		}
+	}
+	return u.Scheme + "://" + u.Host
+}
+
 func (h *AdminHandler) GetUserQRCode(c *gin.Context) {
 	if !h.requireAdmin(c) {
 		return
@@ -103,7 +153,8 @@ func (h *AdminHandler) GetUserQRCode(c *gin.Context) {
 		return
 	}
 
-	loginURL := h.cfg.FrontendURL + "/login?qr_token=" + token
+	base := resolveQRBaseURL(c.Query("origin"), h.cfg.FrontendURL)
+	loginURL := base + "/login?qr_token=" + token
 
 	png, err := qrcode.Encode(loginURL, qrcode.Medium, 320)
 	if err != nil {
@@ -182,7 +233,7 @@ func (h *AdminHandler) CreateUser(c *gin.Context) {
 
 	pw := req.Password
 	if pw == "" {
-		pw = "Demo123!"
+		pw = h.getDefaultPassword()
 	}
 	resp, err := h.repo.AdminClient.Auth.WithToken(h.cfg.SupabaseServiceKey).AdminCreateUser(gotrue.AdminCreateUserRequest{
 		Email:        req.Email,
@@ -219,6 +270,9 @@ func (h *AdminHandler) CreateUser(c *gin.Context) {
 		if err == nil {
 			profile.VillageID = &vid
 		}
+	}
+	if req.DateOfBirth != "" {
+		profile.DateOfBirth = &req.DateOfBirth
 	}
 
 	if err := h.repo.CreateProfile(profile); err != nil {
@@ -403,7 +457,7 @@ func (h *AdminHandler) GetStatistics(c *gin.Context) {
 	}
 
 	stats := &models.Statistics{
-		TotalUsers:   len(profiles),
+		TotalUsers:    len(profiles),
 		RecordsByRole: map[string]int{},
 	}
 
@@ -431,20 +485,44 @@ func (h *AdminHandler) GetSettingsCatalog(c *gin.Context) {
 		enabledMap[mc.ModuleKey] = mc.Enabled
 	}
 
+	dbMenuItems, err := h.repo.ListMenuItems()
+	if err == nil && len(dbMenuItems) > 0 {
+		var dynamicCatalog []SettingsNavItem
+		for _, mi := range dbMenuItems {
+			if mi.ModuleKey == "settings" && mi.ParentID != nil && mi.IsActive && mi.IsVisible {
+				dynamicCatalog = append(dynamicCatalog, SettingsNavItem{
+					Key:       mi.FeatureKey,
+					ModuleKey: mi.SubModule,
+					Icon:      mi.Icon,
+					Title:     mi.Title,
+					Desc:      mi.TitleEN,
+					Path:      mi.Path,
+				})
+			}
+		}
+
+		if len(dynamicCatalog) > 0 {
+			var filtered []SettingsNavItem
+			for _, item := range dynamicCatalog {
+				if item.ModuleKey != "" {
+					if enabled, ok := enabledMap[item.ModuleKey]; ok && !enabled {
+						continue
+					}
+				}
+				filtered = append(filtered, item)
+			}
+			utils.JSON(c, http.StatusOK, filtered)
+			return
+		}
+	}
+
 	catalog := []SettingsNavItem{
 		{
 			Key:   string(models.FeatureUsers),
 			Icon:  "LuShield",
-			Title: "គ្រប់គ្រងអ្នកប្រើប្រាស់",
-			Desc:  "បន្ថែម កែប្រែ ឬលុបអ្នកប្រើប្រាស់",
+			Title: "គ្រប់គ្រងអ្នកប្រើប្រាស់ និងសិទ្ធិតួនាទី",
+			Desc:  "គ្រប់គ្រងគណនីអ្នកប្រើប្រាស់ កំណត់សិទ្ធិ និងតួនាទីប្រព័ន្ធ (User & Role Permissions)",
 			Path:  "/settings/users",
-		},
-		{
-			Key:   string(models.FeatureUsers),
-			Icon:  "LuKeyRound",
-			Title: "សិទ្ធិតួនាទី",
-			Desc:  "កំណត់ feature allow/none សម្រាប់រដ្ឋបាលនីមួយៗ",
-			Path:  "/settings/role-permissions",
 		},
 		{
 			Key:       string(models.FeatureUsers),
@@ -472,9 +550,16 @@ func (h *AdminHandler) GetSettingsCatalog(c *gin.Context) {
 		{
 			Features: []string{string(models.FeatureTechnical), string(models.FeatureUsers)},
 			Icon:     "LuSettings2",
-			Title:    "ម៉ូឌុលប្រព័ន្ធ (Module)",
-			Desc:     "បើក/បិទម៉ូឌុលប្រព័ន្ធ និងកំណត់ដំណើរការអនុម័ត",
-			Path:     "/settings/modules",
+			Title:    "អ្នកអនុម័ត",
+			Desc:     "បើក/បិទការអនុម័ត និងកំណត់ជំហានអនុម័តតាមម៉ូឌុល",
+			Path:     "/settings/modules/workflow",
+		},
+		{
+			Features: []string{string(models.FeatureTechnical), string(models.FeatureUsers)},
+			Icon:     "LuLayers",
+			Title:    "គ្រប់គ្រងម៉ឺនុយប្រព័ន្ធ",
+			Desc:     "រៀបចំ ម៉ូឌុល ម៉ូឌុលរង លក្ខណៈពិសេស និងម៉ឺនុយកូនតាមឋានានុក្រម",
+			Path:     "/settings/menu-items",
 		},
 		{
 			Key:       string(models.FeaturePerformanceAdmin),
@@ -483,6 +568,13 @@ func (h *AdminHandler) GetSettingsCatalog(c *gin.Context) {
 			Title:     "គ្រប់គ្រង Performance",
 			Desc:      "គ្រប់គ្រងដែន ចំណុចរង សូចនាករ និងរយៈពេល",
 			Path:      "/settings/performance",
+		},
+		{
+			Features: []string{string(models.FeatureTechnical), string(models.FeatureUsers), string(models.FeatureSettings)},
+			Icon:     "LuClock",
+			Title:    "ការងារ Cron & ថែទាំប្រព័ន្ធ",
+			Desc:     "ពិនិត្យស្ថានភាព Cron nightly, ដំណើរការថែទាំ Supabase និងកំណត់ហេតុ",
+			Path:     "/settings/cron",
 		},
 	}
 
@@ -504,7 +596,7 @@ func (h *AdminHandler) GetSettings(c *gin.Context) {
 		return
 	}
 	utils.JSON(c, http.StatusOK, models.AdminSettings{
-		DefaultUserPassword: h.cfg.DefaultUserPassword,
+		DefaultUserPassword: h.getDefaultPassword(),
 	})
 }
 
@@ -521,7 +613,7 @@ func (h *AdminHandler) ResetUserPassword(c *gin.Context) {
 
 	var req models.AdminResetPasswordRequest
 	if err := c.ShouldBindJSON(&req); err != nil || req.Password == "" {
-		req.Password = h.cfg.DefaultUserPassword
+		req.Password = h.getDefaultPassword()
 	}
 
 	if err := h.repo.AdminResetUserPassword(id, req.Password); err != nil {
@@ -531,3 +623,50 @@ func (h *AdminHandler) ResetUserPassword(c *gin.Context) {
 
 	utils.JSON(c, http.StatusOK, gin.H{"message": "Password reset"})
 }
+
+func (h *AdminHandler) ListSystemSettings(c *gin.Context) {
+	if !h.requireAdmin(c) {
+		return
+	}
+	settings, err := h.repo.ListSystemSettings()
+	if err != nil {
+		utils.InternalError(c, "Failed to fetch system settings")
+		return
+	}
+	utils.JSON(c, http.StatusOK, settings)
+}
+
+type UpdateSystemSettingRequest struct {
+	Key         string `json:"key" binding:"required"`
+	Value       any    `json:"value" binding:"required"`
+	Description string `json:"description"`
+}
+
+func (h *AdminHandler) UpdateSystemSetting(c *gin.Context) {
+	if !h.requireAdmin(c) {
+		return
+	}
+	var req UpdateSystemSettingRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, "Invalid request body")
+		return
+	}
+	if err := h.repo.UpsertSystemSetting(req.Key, req.Value, req.Description); err != nil {
+		utils.InternalError(c, "Failed to update system setting: "+err.Error())
+		return
+	}
+	utils.JSON(c, http.StatusOK, gin.H{"message": "System setting updated successfully"})
+}
+
+func (h *AdminHandler) ListDatabaseTables(c *gin.Context) {
+	if !h.requireAdmin(c) {
+		return
+	}
+	tables, err := h.repo.ListDatabaseTables()
+	if err != nil {
+		utils.InternalError(c, "Failed to fetch database tables")
+		return
+	}
+	utils.JSON(c, http.StatusOK, tables)
+}
+

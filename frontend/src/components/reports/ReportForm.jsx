@@ -2,12 +2,13 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   LuArrowLeft, LuSave, LuPencil, LuDownload,
-  LuSend, LuCircleX, LuCircleCheck, LuClock, LuCalendar, LuRotateCcw,
-  LuFileText, LuTag, LuSettings, LuChevronRight,
+  LuSend, LuCircleX, LuCircleCheck, LuCalendar, LuRotateCcw,
+  LuFileText, LuTag, LuSettings, LuChevronRight, LuMaximize2, LuMinimize2,
 } from "react-icons/lu";
 import { useAuth } from "../../hooks/useAuth";
 import { useModules } from "../../hooks/useModules";
 import { reportDocumentsAPI } from "../../api/reportDocuments";
+import { approvalsAPI } from "../../api/modules";
 import TextEditor from "../TextEditor";
 import Modal from "../../pages/settings/Modal";
 import {
@@ -16,10 +17,12 @@ import {
   docToSimpleForm,
   isEmptyContent,
 } from "../../utils/reportForm";
-
-const STATUS_LABEL = { draft: "ព្រាង", pending_review: "កំពុងពិនិត្យ", published: "បានចេញ", rejected: "បានបដិសេធ" };
-const STATUS_BG = { draft: "#fef3c7", pending_review: "#dbeafe", published: "#dcfce7", rejected: "#fecaca" };
-const STATUS_FG = { draft: "#92400e", pending_review: "#1e40af", published: "#166534", rejected: "#991b1b" };
+import { canAccess, FEATURES } from "../../utils/permissions";
+import ReportStatusBadge from "./ReportStatusBadge";
+import ReportMoreInfoCard from "./ReportMoreInfoCard";
+import ReportWorkflowCard from "./ReportWorkflowCard";
+import ReportHistoryCard from "./ReportHistoryCard";
+import RejectReportModal from "./RejectReportModal";
 
 function fmtDate(iso) {
   if (!iso) return "—";
@@ -28,9 +31,9 @@ function fmtDate(iso) {
 
 export default function ReportForm({ mode = "create", reportId }) {
   const { user } = useAuth();
-  const { needsApproval, canEditInTransaction } = useModules();
-  const isApprovalActive = needsApproval("reports");
+  const { canEditInTransaction, needsApproval } = useModules();
   const allowTransactionEdit = canEditInTransaction("reports");
+  const reportsNeedApproval = needsApproval("reports");
   const navigate = useNavigate();
   const isEdit = mode === "edit";
   const isCreate = mode === "create";
@@ -38,7 +41,8 @@ export default function ReportForm({ mode = "create", reportId }) {
   const [doc, setDoc] = useState(null);
   const [form, setForm] = useState(emptySimpleReportForm);
   const [reviews, setReviews] = useState([]);
-  const [loading, setLoading] = useState(!isCreate);
+  const [workflow, setWorkflow] = useState([]);
+  const [loading, setLoading] = useState(Boolean(reportId) && !isCreate);
   const [saving, setSaving] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [downloading, setDownloading] = useState(false);
@@ -50,21 +54,26 @@ export default function ReportForm({ mode = "create", reportId }) {
   const [rejectReason, setRejectReason] = useState("");
   const [rejecting, setRejecting] = useState(false);
   const [showReviews, setShowReviews] = useState(false);
+  const [showWorkflow, setShowWorkflow] = useState(true);
+  const [showMoreInfo, setShowMoreInfo] = useState(true);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [fullscreenOpen, setFullscreenOpen] = useState(false);
 
   /* ---- fetch ---- */
   useEffect(() => {
-    if (!reportId || isCreate) { setLoading(false); return; }
+    if (!reportId || isCreate) return;
     let ok = true;
     Promise.all([
       reportDocumentsAPI.getById(reportId),
       reportDocumentsAPI.getReviews(reportId),
-    ]).then(([r1, r2]) => {
+      approvalsAPI.history("reports", reportId).catch(() => ({ data: [] })),
+    ]).then(([r1, r2, r3]) => {
       if (!ok) return;
       const d = r1.data?.data ?? r1.data;
       setDoc(d);
       setForm(docToSimpleForm(d));
       setReviews(r2.data?.data ?? r2.data ?? []);
+      setWorkflow(r3.data?.data ?? r3.data ?? []);
     }).catch(() => { }).finally(() => ok && setLoading(false));
     return () => { ok = false; };
   }, [reportId, isCreate]);
@@ -120,6 +129,18 @@ export default function ReportForm({ mode = "create", reportId }) {
   };
 
   const doPublish = async () => {
+    if (reportsNeedApproval) {
+      if (!activePending?.id) return;
+      setSubmitting(true);
+      try {
+        await approvalsAPI.approve(activePending.id, { notes: "" });
+        setMsg("បានអនុម័តជំហាននេះ");
+        window.location.reload();
+      }
+      catch (e) { setError(e?.response?.data?.error || e?.message || "អនុម័តមិនបាន"); }
+      finally { setSubmitting(false); }
+      return;
+    }
     if (doc?.require_signature && !user?.signature) {
       setError("សូមកំណត់ហត្ថលេខាក្នុងទំព័រប្រវត្តិរូបរបស់អ្នកជាមុនសិន ទើបអាចអនុម័តរបាយការណ៍បាន។");
       return;
@@ -144,13 +165,28 @@ export default function ReportForm({ mode = "create", reportId }) {
   const doReject = async () => {
     if (!rejectReason.trim()) return;
     setRejecting(true);
-    try { await reportDocumentsAPI.reject(reportId, rejectReason.trim()); setRejectOpen(false); setRejectReason(""); window.location.reload(); }
+    try {
+      if (reportsNeedApproval && activePending?.id) {
+        await approvalsAPI.reject(activePending.id, { notes: rejectReason.trim() });
+      } else {
+        await reportDocumentsAPI.reject(reportId, rejectReason.trim());
+      }
+      setRejectOpen(false); setRejectReason(""); window.location.reload();
+    }
     catch (e) { setError(e?.response?.data?.error || "បដិសេធមិនបាន"); }
     finally { setRejecting(false); }
   };
 
   const canReview = canAccess(user, FEATURES.reports, "update") || canAccess(user, FEATURES.reports, "create");
+
   const status = doc?.status || "draft";
+
+  const activePending = workflow.find((s) => s.status === "pending");
+  const isAssignedApprover =
+    !!activePending?.approver_id &&
+    user?.id &&
+    String(user.id) === String(activePending.approver_id);
+  const canActOnPending = (status === "pending_review") && isAssignedApprover;
 
   if (loading) return (
     <div className="page report-form-page" style={{ maxWidth: "1350px", margin: "0 auto", padding: "0 0.5rem 2rem 0.5rem" }}>
@@ -472,7 +508,7 @@ export default function ReportForm({ mode = "create", reportId }) {
                 {doc && (
                   <div style={{ display: "flex", justifyContent: "space-between" }}>
                     <span>ស្ថានភាព៖</span>
-                    <span style={{ fontWeight: "600", color: STATUS_FG[status] }}>{STATUS_LABEL[status]}</span>
+                    <ReportStatusBadge status={status} />
                   </div>
                 )}
               </div>
@@ -539,18 +575,11 @@ export default function ReportForm({ mode = "create", reportId }) {
         </div>
 
         <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
-          {reviews.length > 0 && (
-            <button type="button" className="btn btn-ghost btn-sm"
-              onClick={() => setShowReviews(!showReviews)}
-              style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}>
-              <LuClock size={15} /> ប្រវត្តិ ({reviews.length})
-            </button>
-          )}
           <button className="btn btn-secondary btn-sm" onClick={doDownload} disabled={downloading}
             style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}>
             <LuDownload size={15} /> {downloading ? "កំពុងទាញយក..." : "ទាញយក PDF"}
           </button>
-          {allowTransactionEdit && (canReview || doc?.created_by === user?.id) && (
+          {allowTransactionEdit && (status === "draft" || status === "rejected") && (canReview || doc?.created_by === user?.id) && (
             <button className="btn btn-outline btn-sm" onClick={() => navigate(`/reports/${reportId}/edit`)}
               style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}>
               <LuPencil size={15} /> កែប្រែ
@@ -562,13 +591,13 @@ export default function ReportForm({ mode = "create", reportId }) {
               <LuSend size={15} /> {submitting ? "កំពុងដាក់ស្នើ..." : "ដាក់ស្នើសម្រាប់ពិនិត្យ"}
             </button>
           )}
-          {status === "pending_review" && (canReview || doc?.created_by === user?.id) && (
+          {status === "pending_review" && canActOnPending && (
             <button className="btn btn-outline btn-sm" onClick={doRevertToDraft} disabled={submitting}
               style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}>
               <LuRotateCcw size={15} /> បង្វែរទៅជាព្រាង
             </button>
           )}
-          {status === "pending_review" && canReview && (
+          {status === "pending_review" && canActOnPending && (
             <>
               <button className="btn btn-danger btn-sm" onClick={() => setRejectOpen(true)}
                 style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}>
@@ -576,7 +605,7 @@ export default function ReportForm({ mode = "create", reportId }) {
               </button>
               <button className="btn btn-success btn-sm" onClick={doPublish} disabled={submitting}
                 style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}>
-                <LuCircleCheck size={15} /> អនុម័តរបាយការណ៍
+                <LuCircleCheck size={15} /> {reportsNeedApproval ? "អនុម័តជំហាននេះ" : "អនុម័តរបាយការណ៍"}
               </button>
             </>
           )}
@@ -585,34 +614,6 @@ export default function ReportForm({ mode = "create", reportId }) {
 
       {msg && <div className="alert alert-success" style={{ marginBottom: "1.25rem", borderRadius: "8px" }}>{msg}</div>}
       {error && <div className="alert alert-error" style={{ marginBottom: "1.25rem", borderRadius: "8px" }}>{error}</div>}
-
-      {/* reviews (inline) */}
-      {showReviews && reviews.length > 0 && (
-        <div className="report-reviews" style={{
-          background: "#ffffff", border: "1px solid var(--border)", borderRadius: "12px",
-          padding: "1.25rem", marginBottom: "1.5rem", boxShadow: "0 2px 8px rgba(0,0,0,0.03)",
-          display: "flex", flexDirection: "column", gap: "0.75rem",
-        }}>
-          {reviews.map((r, idx) => (
-            <div key={r.id || idx} style={{
-              display: "flex", alignItems: "center", gap: "0.75rem", fontSize: "0.85rem",
-              paddingBottom: "0.6rem", borderBottom: idx === reviews.length - 1 ? "none" : "1px dashed var(--border)",
-            }}>
-              <span style={{
-                padding: "0.15rem 0.55rem", borderRadius: "6px", fontSize: "0.75rem", fontWeight: "600",
-                background: r.action === "confirm" ? "#dcfce7" : r.action === "reject" ? "#fee2e2" : "#dbeafe",
-                color: r.action === "confirm" ? "#166534" : r.action === "reject" ? "#991b1b" : "#1e40af",
-              }}>
-                {r.action === "submit" ? "ដាក់ស្នើ" : r.action === "confirm" ? "បានអនុម័ត" : "បដិសេធ"}
-              </span>
-              {r.comment && <span style={{ color: "#475569", fontStyle: "italic" }}>— "{r.comment}"</span>}
-              <span style={{ marginLeft: "auto", color: "var(--text-muted)", fontSize: "0.75rem" }}>
-                {new Date(r.created_at).toLocaleString("km-KH")}
-              </span>
-            </div>
-          ))}
-        </div>
-      )}
 
       {/* ---- 70/30 SPLIT ---- */}
       <div style={{ display: "flex", gap: "1.5rem", flexWrap: "wrap", alignItems: "flex-start" }}>
@@ -626,14 +627,7 @@ export default function ReportForm({ mode = "create", reportId }) {
               <h1 style={{ margin: 0, fontSize: "1.75rem", fontWeight: "700", lineHeight: "1.35", color: "var(--text)" }}>
                 {form?.title || "—"}
               </h1>
-              <span className="report-status-pill" style={{
-                background: STATUS_BG[status], color: STATUS_FG[status],
-                padding: "0.35rem 0.85rem", fontSize: "0.82rem", fontWeight: "600", borderRadius: "999px",
-                display: "inline-flex", alignItems: "center", gap: "0.35rem", whiteSpace: "nowrap",
-              }}>
-                <span style={{ width: "7px", height: "7px", borderRadius: "50%", background: STATUS_FG[status] }} />
-                {STATUS_LABEL[status]}
-              </span>
+              <ReportStatusBadge status={status} />
             </div>
 
             <div style={{ display: "flex", gap: "1.25rem", alignItems: "center", flexWrap: "wrap", color: "var(--text-muted)", fontSize: "0.85rem", marginBottom: "1rem" }}>
@@ -662,60 +656,91 @@ export default function ReportForm({ mode = "create", reportId }) {
             )}
           </div>
 
-          <div className="report-form-view-content">
+          <div className="card report-form-view-content" style={{
+            padding: "1.75rem 2rem", borderRadius: "12px",
+            background: "#ffffff", border: "1px solid var(--border)", boxShadow: "0 2px 10px rgba(0,0,0,0.03)",
+          }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1rem", borderBottom: "1px solid var(--border)", paddingBottom: "0.85rem" }}>
+              <span style={{ fontSize: "0.95rem", fontWeight: "700", color: "#334155" }}>ខ្លឹមសាររបាយការណ៍</span>
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={() => setFullscreenOpen(true)}
+                style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}
+              >
+                <LuMaximize2 size={14} /> មើលពេញអេក្រង់
+              </button>
+            </div>
             <TextEditor variant="full" value={form.content} readOnly />
           </div>
         </div>
 
         {/* RIGHT: Side Info */}
-        <div style={{ flex: "1 1 320px", minWidth: "280px" }}>
-          <div className="card" style={{
-            padding: "1.35rem", borderRadius: "12px", background: "#ffffff",
-            border: "1px solid var(--border)", boxShadow: "0 2px 8px rgba(0,0,0,0.03)",
-            display: "flex", flexDirection: "column", gap: "0.75rem", fontSize: "0.875rem",
-          }}>
-            <h4 style={{ margin: 0, fontSize: "0.95rem", fontWeight: "700", color: "var(--text)", borderBottom: "1px solid var(--border)", paddingBottom: "0.6rem" }}>
-              ព័ត៌មានបន្ថែម
-            </h4>
-            <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <span style={{ color: "var(--text-muted)" }}>ប្រភេទ៖</span>
-              <span style={{ fontWeight: "600" }}>{form.category || "—"}</span>
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <span style={{ color: "var(--text-muted)" }}>តំបន់/ឃុំ៖</span>
-              <span style={{ fontWeight: "500" }}>{doc?.zone_name || "—"}</span>
-            </div>
-          </div>
+        <div style={{ flex: "1 1 320px", minWidth: "280px", display: "flex", flexDirection: "column", gap: "1rem" }}>
+          <ReportMoreInfoCard
+            category={form.category}
+            zoneName={doc?.zone_name}
+            open={showMoreInfo}
+            onToggle={() => setShowMoreInfo(!showMoreInfo)}
+          />
+
+          <ReportWorkflowCard
+            workflow={workflow}
+            open={showWorkflow}
+            onToggle={() => setShowWorkflow(!showWorkflow)}
+          />
+
+          <ReportHistoryCard
+            reviews={reviews}
+            open={showReviews}
+            onToggle={() => setShowReviews(!showReviews)}
+          />
         </div>
       </div>
 
-      {/* reject modal */}
-      <Modal open={rejectOpen} onClose={() => setRejectOpen(false)} title="បដិសេធរបាយការណ៍">
-        <div style={{ padding: "0.5rem 0" }}>
-          <div className="form-group">
-            <label style={{ display: "block", marginBottom: "0.4rem", fontWeight: "600", fontSize: "0.9rem" }}>
-              មូលហេតុនៃការបដិសេធ <span style={{ color: "#dc2626" }}>*</span>
-            </label>
-            <textarea
-              className="form-control"
-              value={rejectReason}
-              onChange={(e) => setRejectReason(e.target.value)}
-              rows={4}
-              placeholder="សូមបញ្ចូលមូលហេតុ ឬការណែនាំសម្រាប់អ្នកកែប្រែ..."
-              style={{ width: "100%", padding: "0.6rem 0.75rem", borderRadius: "6px", border: "1px solid var(--border)", fontSize: "0.9rem" }}
-            />
-            {fieldErrors.description && <span className="field-error" style={{ color: "#dc2626", fontSize: "0.78rem", fontWeight: "500", marginTop: "0.15rem", display: "block" }}>{fieldErrors.description}</span>}
-          </div>
-          <div style={{ display: "flex", gap: "0.75rem", justifyContent: "flex-end", marginTop: "1.25rem" }}>
-            <button className="btn btn-secondary" onClick={() => setRejectOpen(false)}>
-              បោះបង់
-            </button>
-            <button className="btn btn-danger" onClick={doReject} disabled={rejecting || !rejectReason.trim()}>
-              {rejecting ? "កំពុងបដិសេធ..." : "បញ្ជាក់ការបដិសេធ"}
-            </button>
+      <RejectReportModal
+        open={rejectOpen}
+        onClose={() => setRejectOpen(false)}
+        reason={rejectReason}
+        onReasonChange={setRejectReason}
+        onConfirm={doReject}
+        rejecting={rejecting}
+        error={fieldErrors.description}
+      />
+
+{fullscreenOpen && (
+        <div style={{
+          position: "fixed", inset: 0, zIndex: 9999,
+          background: "#eef2f7",
+          overflow: "auto",
+          padding: "2rem 1rem 4rem 1rem",
+        }}>
+          <button
+            type="button"
+            onClick={() => setFullscreenOpen(false)}
+            title="បិទ"
+            style={{
+              position: "fixed", top: "1.25rem", right: "1.25rem", zIndex: 1,
+              width: "42px", height: "42px", borderRadius: "50%",
+              background: "#ffffff", border: "1px solid #e2e8f0",
+              boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
+              display: "inline-flex", alignItems: "center", justifyContent: "center",
+              cursor: "pointer", color: "#475569",
+            }}
+          >
+            <LuMinimize2 size={20} />
+          </button>
+
+          <div style={{
+            maxWidth: "850px", margin: "0 auto",
+            background: "#ffffff", borderRadius: "4px",
+            boxShadow: "0 2px 16px rgba(0,0,0,0.08)",
+            padding: "3rem 3.5rem",
+          }}>
+            <TextEditor variant="full" value={form.content} readOnly />
           </div>
         </div>
-      </Modal>
+      )}
     </div>
   );
 }

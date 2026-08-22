@@ -1,19 +1,22 @@
 import { useNavigate } from "react-router-dom";
-import { LuArrowLeft, LuSettings, LuSettings2 } from "react-icons/lu";
+import { LuSettings, LuSettings2, LuWrench } from "react-icons/lu";
+import PageHeader from "../../components/PageHeader";
 
 export default function SettingsTechnical() {
   const navigate = useNavigate();
 
   return (
     <div className="page">
-      <div className="page-header">
-        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-          <button className="btn-icon" onClick={() => navigate("/settings")} title="ត្រឡប់">
-            <LuArrowLeft size={20} />
-          </button>
-          <h2 className="section-title">Technical</h2>
-        </div>
-      </div>
+      <PageHeader
+        showBack={() => navigate("/settings")}
+        title="Technical Settings"
+        subtitle="គ្រប់គ្រងការកំណត់បច្ចេកទេស និងការគ្រប់គ្រងម៉ូឌុលប្រព័ន្ធ"
+        icon={<LuWrench size={20} />}
+        breadcrumbs={[
+          { label: "ការកំណត់", path: "/settings" },
+          { label: "បច្ចេកទេស" },
+        ]}
+      />
 
       <div className="settings-grid">
         <div
@@ -38,10 +41,10 @@ export default function SettingsTechnical() {
 
         <div
           className="card settings-nav-card"
-          onClick={() => navigate("/settings/modules")}
+          onClick={() => navigate("/settings/modules/workflow")}
           role="button"
           tabIndex={0}
-          onKeyDown={(e) => e.key === "Enter" && navigate("/settings/modules")}
+          onKeyDown={(e) => e.key === "Enter" && navigate("/settings/modules/workflow")}
         >
           <div className="settings-nav-card-inner">
             <div className="settings-nav-icon">

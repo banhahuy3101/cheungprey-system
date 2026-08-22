@@ -7,6 +7,7 @@ import { useNavigate } from "react-router-dom";
 import { zoneChiefAPI } from "../../api/zoneChief";
 import { adminAPI } from "../../api/admin";
 import { partyAPI } from "../../api/party";
+import FormInput from "../../components/FormInput";
 
 const ZONE_TYPE = {
   Province: { label: "ខេត្ត", icon: LuMapPin, bg: "#e8eaf6", color: "#283593", border: "#5c6bc0" },
@@ -38,11 +39,13 @@ export default function SettingsZoneChief() {
   const [zoneCounts, setZoneCounts] = useState({ Province: 0, District: 0, Commune: 0, Village: 0 });
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadingZones, setLoadingZones] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
   const [tab, setTab] = useState("");
+  const [zoneSearch, setZoneSearch] = useState("");
 
   const [showAssign, setShowAssign] = useState(false);
   const [selectedZone, setSelectedZone] = useState(null);
@@ -68,15 +71,12 @@ export default function SettingsZoneChief() {
     setLoading(true);
     setError("");
     try {
-      const [assignRes, zonesRes, countsRes, userRes] = await Promise.all([
+      const [assignRes, countsRes, userRes] = await Promise.all([
         zoneChiefAPI.list(),
-        partyAPI.getZones({ type: "Province" }),
         partyAPI.getZoneCounts(),
         adminAPI.getUsers(),
       ]);
       setAssignments(assignRes.data?.data ?? assignRes.data ?? []);
-      const z = zonesRes.data?.data ?? zonesRes.data ?? [];
-      setRootZones(Array.isArray(z) ? z : []);
       setZoneCounts(countsRes.data?.data ?? countsRes.data ?? { Province: 0, District: 0, Commune: 0, Village: 0 });
       const userList = userRes.data?.data ?? userRes.data ?? [];
       setUsers(Array.isArray(userList) ? userList : []);
@@ -88,6 +88,28 @@ export default function SettingsZoneChief() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    if (loading) return;
+    let cancelled = false;
+    const fetchRoots = async () => {
+      setLoadingZones(true);
+      setExpandedNodes({});
+      setChildrenMap({});
+      try {
+        const zoneType = tab || "Province";
+        const res = await partyAPI.getZones({ type: zoneType });
+        const z = res.data?.data ?? res.data ?? [];
+        if (!cancelled) setRootZones(Array.isArray(z) ? z : []);
+      } catch {
+        if (!cancelled) setRootZones([]);
+      } finally {
+        if (!cancelled) setLoadingZones(false);
+      }
+    };
+    fetchRoots();
+    return () => { cancelled = true; };
+  }, [tab, loading]);
 
   const loadChildren = async (zoneCode) => {
     if (childrenMap[zoneCode]) return;
@@ -126,11 +148,6 @@ export default function SettingsZoneChief() {
     }
     setExpandedNodes((prev) => ({ ...prev, [zoneCode]: !prev[zoneCode] }));
   };
-
-  const filteredRoots = useMemo(() => {
-    if (tab) return rootZones.filter((z) => z.zone_type === tab);
-    return rootZones;
-  }, [rootZones, tab]);
 
   const handleAssign = async () => {
     if (!selectedZone || !selectedUser) return;
@@ -171,6 +188,17 @@ export default function SettingsZoneChief() {
         u.zone_name?.toLowerCase().includes(lower),
     );
   }, [users, userSearch]);
+
+  const filteredZones = useMemo(() => {
+    if (!zoneSearch.trim()) return rootZones;
+    const lower = zoneSearch.toLowerCase();
+    return rootZones.filter(
+      (z) =>
+        z.name_kh?.toLowerCase().includes(lower) ||
+        z.name_en?.toLowerCase().includes(lower) ||
+        z.zone_code?.toLowerCase().includes(lower),
+    );
+  }, [rootZones, zoneSearch]);
 
   const renderZoneNode = (zone, parentBg) => {
     const zoneType = zone.zone_type;
@@ -356,18 +384,48 @@ export default function SettingsZoneChief() {
             @keyframes spin { to { transform: rotate(360deg); } }`}</style>
         </div>
       ) : (
+        <>
+        <div style={{ marginBottom: "0.75rem" }}>
+          <FormInput
+            type="text"
+            placeholder="ស្វែងរកតាមឈ្មោះ ឬ zone code..."
+            value={zoneSearch}
+            onChange={(e) => setZoneSearch(e.target.value)}
+            leadIcon={<LuSearch size={16} style={{ color: "var(--text-muted)" }} />}
+            tailIcon={
+              zoneSearch ? (
+                <button
+                  onClick={() => setZoneSearch("")}
+                  style={{
+                    border: "none", background: "none", cursor: "pointer", color: "var(--text-muted)",
+                    display: "flex", alignItems: "center", justifyContent: "center", width: 28, height: 28, borderRadius: "6px",
+                  }}
+                  title="សម្អាត"
+                >
+                  <LuX size={16} />
+                </button>
+              ) : null
+            }
+          />
+        </div>
         <div className="card" style={{ padding: 0, overflow: "hidden", flex: 1, display: "flex", flexDirection: "column" }}>
-          {filteredRoots.length === 0 ? (
+          {loadingZones ? (
+            <div style={{ padding: "2rem", textAlign: "center", color: "var(--text-muted)" }}>
+              <LuLoader size={24} className="spin" style={{ marginBottom: "0.5rem" }} />
+              <div>កំពុងផ្ទុកទិន្នន័យ...</div>
+            </div>
+          ) : filteredZones.length === 0 ? (
             <div style={{ padding: "2rem", textAlign: "center", color: "var(--text-muted)" }}>
               <LuMapPin size={32} style={{ marginBottom: "0.5rem", opacity: 0.3 }} />
-              <div>គ្មានទិន្នន័យខេត្ត</div>
+              <div>{zoneSearch ? `គ្មានលទ្ធផលសម្រាប់ "${zoneSearch}"` : `គ្មានទិន្នន័យ${tab ? ZONE_TYPE[tab]?.label || "" : "ខេត្ត"}`}</div>
             </div>
           ) : (
             <div style={{ flex: 1, overflowY: "auto" }}>
-              {filteredRoots.map((province) => renderZoneNode(province))}
+              {filteredZones.map((zone) => renderZoneNode(zone))}
             </div>
           )}
         </div>
+        </>
       )}
 
       {showAssign && selectedZone && (

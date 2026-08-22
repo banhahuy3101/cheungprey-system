@@ -25,3 +25,26 @@ func (h *CronHandler) RunNow(c *gin.Context) {
 	h.scheduler.RunNow()
 	utils.JSON(c, http.StatusOK, gin.H{"message": "cron triggered"})
 }
+
+type RetryCronRequest struct {
+	Job string `json:"job" binding:"required"`
+}
+
+func (h *CronHandler) RetryJob(c *gin.Context) {
+	var req RetryCronRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, "Job key is required")
+		return
+	}
+
+	jobStatus, err := h.scheduler.RetryJob(req.Job)
+	if err != nil {
+		utils.BadRequest(c, err.Error())
+		return
+	}
+
+	utils.JSON(c, http.StatusOK, gin.H{
+		"message": "Cron job retried successfully",
+		"job":     jobStatus,
+	})
+}

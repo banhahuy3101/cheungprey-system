@@ -89,6 +89,7 @@ func main() {
 	membershipHandler := handlers.NewMembershipHandler(repo)
 	zoneChiefHandler := handlers.NewZoneChiefHandler(repo)
 	moduleConfigHandler := handlers.NewModuleConfigHandler(repo)
+	menuItemHandler := handlers.NewMenuItemHandler(repo)
 
 	r := gin.Default()
 	r.Use(middleware.CORS())
@@ -117,6 +118,15 @@ func main() {
 			protected.PUT("/profile", authHandler.UpdateProfile)
 			protected.GET("/permissions/features", permissionHandler.ListFeatures)
 
+			menuItems := protected.Group("/menu-items")
+			{
+				menuItems.GET("", menuItemHandler.ListTree)
+				menuItems.GET("/flat", menuItemHandler.ListFlat)
+				menuItems.POST("", menuItemHandler.Create)
+				menuItems.PUT("/:id", menuItemHandler.Update)
+				menuItems.DELETE("/:id", menuItemHandler.Delete)
+			}
+
 			protected.GET("/hierarchy/provinces", hierarchyHandler.GetProvinces)
 			protected.GET("/hierarchy/provinces/:province_id/districts", hierarchyHandler.GetDistricts)
 			protected.GET("/hierarchy/districts/:district_id/communes", hierarchyHandler.GetCommunes)
@@ -140,6 +150,9 @@ func main() {
 				admin.PUT("/users/:id/role", auth.RequireFeatureAction(models.FeatureUsers, "update"), adminHandler.UpdateUserRole)
 				admin.PUT("/users/:id/password", auth.RequireFeatureAction(models.FeatureUsers, "update"), adminHandler.ResetUserPassword)
 				admin.GET("/settings", auth.RequireFeatureAction(models.FeatureUsers, "read"), adminHandler.GetSettings)
+			admin.GET("/system-settings", adminHandler.ListSystemSettings)
+			admin.POST("/system-settings", adminHandler.UpdateSystemSetting)
+			admin.GET("/database/tables", adminHandler.ListDatabaseTables)
 				admin.GET("/statistics", auth.RequireFeatureAction(models.FeatureUsers, "read"), adminHandler.GetStatistics)
 				admin.PUT("/role-permissions/:role", auth.RequireFeatureAction(models.FeatureUsers, "update"), permissionHandler.UpdateRolePermissions)
 				admin.POST("/roles", auth.RequireFeatureAction(models.FeatureUsers, "create"), permissionHandler.CreateRole)
@@ -147,6 +160,7 @@ func main() {
 				admin.DELETE("/roles/:role", auth.RequireFeatureAction(models.FeatureUsers, "delete"), permissionHandler.DeleteRole)
 				admin.GET("/cron/status", cronHandler.Status)
 				admin.POST("/cron/run", cronHandler.RunNow)
+				admin.POST("/cron/retry", cronHandler.RetryJob)
 				admin.GET("/zone-chiefs", auth.RequireFeatureAction(models.FeatureUsers, "read"), zoneChiefHandler.ListAssignments)
 				admin.GET("/zone-chiefs/:zoneCode", auth.RequireFeatureAction(models.FeatureUsers, "read"), zoneChiefHandler.GetAssignment)
 				admin.POST("/zone-chiefs", auth.RequireFeatureAction(models.FeatureUsers, "update"), zoneChiefHandler.Assign)

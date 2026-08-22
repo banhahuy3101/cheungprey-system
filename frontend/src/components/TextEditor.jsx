@@ -2029,7 +2029,7 @@ export default function TextEditor({
   }
 
   const initialConfig = {
-    namespace: "CheungPreyReportEditor",
+    namespace: "ReportEditor",
     theme,
     onError,
     nodes: [

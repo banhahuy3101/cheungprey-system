@@ -175,15 +175,19 @@ func (h *ReportDocumentHandler) Create(c *gin.Context) {
 		return
 	}
 
-	cfg, _ := h.repo.GetModuleConfig("reports")
+	wfRequired := h.repo.IsWorkflowRequired("reports")
 	doc := reportDocumentFromRequest(req, userID, time.Now())
-	if cfg != nil && !cfg.NeedApproval {
+	if !wfRequired {
 		doc.Status = "published"
 	}
 	if err := h.repo.CreateReportDocument(doc); err != nil {
 		log.Printf("ERROR create report document: %v", err)
 		utils.InternalError(c, "Failed to create report")
 		return
+	}
+
+	if wfRequired {
+		_ = h.repo.InitializeWorkflowForItem("reports", doc.ID.String())
 	}
 
 	utils.JSON(c, http.StatusCreated, doc)
@@ -204,15 +208,19 @@ func (h *ReportDocumentHandler) CreateSimple(c *gin.Context) {
 		zoneCode = *profile.ZoneCode
 	}
 
-	cfg, _ := h.repo.GetModuleConfig("reports")
+	wfRequired := h.repo.IsWorkflowRequired("reports")
 	doc := simpleReportDocumentFromRequest(req, userID, zoneCode, time.Now())
-	if cfg != nil && !cfg.NeedApproval {
+	if !wfRequired {
 		doc.Status = "published"
 	}
 	if err := h.repo.CreateReportDocument(doc); err != nil {
 		log.Printf("ERROR create simple report document: %v", err)
 		utils.InternalError(c, "Failed to create report")
 		return
+	}
+
+	if wfRequired {
+		_ = h.repo.InitializeWorkflowForItem("reports", doc.ID.String())
 	}
 
 	utils.JSON(c, http.StatusCreated, doc)
@@ -320,6 +328,21 @@ func (h *ReportDocumentHandler) UpdateStatus(c *gin.Context) {
 		if err != nil || doc == nil {
 			utils.Error(c, http.StatusNotFound, "Report not found")
 			return
+		}
+
+		// When the reports module requires approval, publishing must go
+		// through the multi-step workflow (ApproveItem completes it). A
+		// direct status=published here would bypass the workflow and leave
+		// approval rows pending. Only allow it if no workflow is configured
+		// (or every step is already approved).
+		cfg, _ := h.repo.GetModuleConfig("reports")
+		needApproval := cfg == nil || cfg.NeedApproval
+		if needApproval {
+			pending, _ := h.repo.ListWorkflowSteps("reports")
+			if len(pending) > 0 {
+				utils.BadRequest(c, "មិនអាចអនុម័តដោយផ្ទាល់បានទេ — សូមអនុម័តតាមជំហាន Workflow ជាមុនសិន")
+				return
+			}
 		}
 
 		if doc.RequireSignature {
@@ -470,11 +493,13 @@ func (h *ReportDocumentHandler) Submit(c *gin.Context) {
 	if len(steps) > 0 {
 		for _, step := range steps {
 			approval := &models.WorkflowApproval{
-				ID:        uuid.New(),
-				ModuleKey: "reports",
-				ItemID:    doc.ID,
-				StepOrder: step.StepOrder,
-				Status:    "pending",
+				ID:         uuid.New(),
+				ModuleKey:  "reports",
+				ItemID:     doc.ID,
+				StepOrder:  step.StepOrder,
+				ApproverID: step.ApproverID,
+				Status:     "pending",
+				CreatedAt:  time.Now(),
 			}
 			_ = h.repo.CreateWorkflowApproval(approval)
 		}
@@ -554,7 +579,19 @@ func (h *ReportDocumentHandler) ListReviews(c *gin.Context) {
 	if reviews == nil {
 		reviews = []models.ReportReview{}
 	}
-	utils.JSON(c, http.StatusOK, reviews)
+	type reviewView struct {
+		models.ReportReview
+		ReviewerName string `json:"reviewer_name"`
+	}
+	views := make([]reviewView, 0, len(reviews))
+	for _, rv := range reviews {
+		name := ""
+		if n, err := h.repo.GetProfileName(rv.ReviewerID); err == nil {
+			name = n
+		}
+		views = append(views, reviewView{ReportReview: rv, ReviewerName: name})
+	}
+	utils.JSON(c, http.StatusOK, views)
 }
 
 func (h *ReportDocumentHandler) DownloadPDF(c *gin.Context) {

@@ -3,7 +3,7 @@ import client from "./client";
 export const adminAPI = {
   getUsers: (params) => client.get("/admin/users", { params }),
   getUserById: (id) => client.get(`/admin/users/${id}`),
-  getUserQRCode: (id) => client.get(`/admin/users/${id}/qrcode`),
+  getUserQRCode: (id, config) => client.get(`/admin/users/${id}/qrcode`, config),
   createUser: (data) => client.post("/admin/users", data),
   updateUser: (id, data) => client.put(`/admin/users/${id}`, data),
   deleteUser: (id) => client.delete(`/admin/users/${id}`),
@@ -21,4 +21,9 @@ export const adminAPI = {
   createRole: (data) => client.post("/admin/roles", data),
   updateRole: (role, data) => client.put(`/admin/roles/${role}`, data),
   deleteRole: (role) => client.delete(`/admin/roles/${role}`),
+  getCronStatus: () => client.get("/admin/cron/status"),
+  runCronNow: () => client.post("/admin/cron/run"),
+  listSystemSettings: () => client.get("/admin/system-settings"),
+  updateSystemSetting: (data) => client.post("/admin/system-settings", data),
+  listDatabaseTables: () => client.get("/admin/database/tables"),
 };

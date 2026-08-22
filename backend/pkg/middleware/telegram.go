@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -17,6 +18,76 @@ import (
 	"github.com/banhahuy/cheungprey-system/backend/internal/auth"
 	"github.com/banhahuy/cheungprey-system/backend/internal/repository"
 )
+
+var addressCache = sync.Map{}
+
+func resolveFullAddress(lat, lng, clientIP string) string {
+	cacheKey := fmt.Sprintf("%s_%s_%s", lat, lng, clientIP)
+	if val, ok := addressCache.Load(cacheKey); ok {
+		return val.(string)
+	}
+
+	address := ""
+
+	// 1. Reverse Geocode Lat/Lng via Nominatim OpenStreetMap API
+	if lat != "" && lng != "" {
+		apiURL := fmt.Sprintf("https://nominatim.openstreetmap.org/reverse?lat=%s&lon=%s&format=json", url.QueryEscape(lat), url.QueryEscape(lng))
+		req, err := http.NewRequest("GET", apiURL, nil)
+		if err == nil {
+			req.Header.Set("User-Agent", "CheungPreySystem/1.0 (admin@cheungprey.org.kh)")
+			client := &http.Client{Timeout: 3 * time.Second}
+			resp, err := client.Do(req)
+			if err == nil {
+				defer resp.Body.Close()
+				if resp.StatusCode == 200 {
+					var res struct {
+						DisplayName string `json:"display_name"`
+					}
+					if err := json.NewDecoder(resp.Body).Decode(&res); err == nil && res.DisplayName != "" {
+						address = fmt.Sprintf("%s (%s, %s)", res.DisplayName, lat, lng)
+					}
+				}
+			}
+		}
+	}
+
+	// 2. Fallback to IP geolocation if client IP is public
+	if address == "" && clientIP != "" && clientIP != "127.0.0.1" && clientIP != "::1" && !strings.HasPrefix(clientIP, "192.168.") && !strings.HasPrefix(clientIP, "10.") {
+		apiURL := fmt.Sprintf("http://ip-api.com/json/%s", url.QueryEscape(clientIP))
+		client := &http.Client{Timeout: 3 * time.Second}
+		resp, err := client.Get(apiURL)
+		if err == nil {
+			defer resp.Body.Close()
+			if resp.StatusCode == 200 {
+				var res struct {
+					City    string  `json:"city"`
+					Country string  `json:"country"`
+					Lat     float64 `json:"lat"`
+					Lon     float64 `json:"lon"`
+				}
+				if err := json.NewDecoder(resp.Body).Decode(&res); err == nil && res.Country != "" {
+					if res.City != "" {
+						address = fmt.Sprintf("%s, %s (%.4f, %.4f)", res.City, res.Country, res.Lat, res.Lon)
+					} else {
+						address = fmt.Sprintf("%s (%.4f, %.4f)", res.Country, res.Lat, res.Lon)
+					}
+				}
+			}
+		}
+	}
+
+	// 3. Fallback for Local / Dev environment (Phnom Penh, Cambodia)
+	if address == "" {
+		if lat != "" && lng != "" {
+			address = fmt.Sprintf("Phnom Penh, Cambodia (%s, %s)", lat, lng)
+		} else {
+			address = "Phnom Penh, Cambodia (11.556400, 104.928200)"
+		}
+	}
+
+	addressCache.Store(cacheKey, address)
+	return address
+}
 
 const (
 	maxConcurrentTelegram = 5
@@ -27,14 +98,14 @@ const (
 var sem = make(chan struct{}, maxConcurrentTelegram)
 
 var putPathTableMap = map[string]string{
-	"records":                "records",
-	"members":                "members",
-	"admin/users":           "profiles",
-	"report-documents":      "report_documents",
-	"report-templates":      "report_templates",
-	"fms/budgets":            "fms_budgets",
-	"fms/coa":                "fms_chart_of_accounts",
-	"performance/domains":    "performance_domains",
+	"records":                 "records",
+	"members":                 "members",
+	"admin/users":             "profiles",
+	"report-documents":        "report_documents",
+	"report-templates":        "report_templates",
+	"fms/budgets":             "fms_budgets",
+	"fms/coa":                 "fms_chart_of_accounts",
+	"performance/domains":     "performance_domains",
 	"performance/sub-domains": "performance_sub_domains",
 	"performance/indicators":  "performance_indicators",
 	"performance/periods":     "performance_periods",
@@ -65,6 +136,7 @@ type logEntry struct {
 	statusCode int
 	latency    time.Duration
 	clientIP   string
+	latLng     string
 	reqBody    string
 	respBody   string
 	before     string
@@ -116,6 +188,21 @@ func Telegram(repo *repository.Repository) gin.HandlerFunc {
 			version = c.Request.Header.Get("App-Version")
 		}
 
+		lat := c.Request.Header.Get("X-Latitude")
+		if lat == "" {
+			lat = c.Request.Header.Get("X-Lat")
+		}
+		lng := c.Request.Header.Get("X-Longitude")
+		if lng == "" {
+			lng = c.Request.Header.Get("X-Lng")
+		}
+		if lat == "" || lng == "" {
+			lat = c.Query("lat")
+			lng = c.Query("lng")
+		}
+
+		fullAddress := resolveFullAddress(lat, lng, c.ClientIP())
+
 		entry := logEntry{
 			method:     c.Request.Method,
 			path:       path,
@@ -123,6 +210,7 @@ func Telegram(repo *repository.Repository) gin.HandlerFunc {
 			statusCode: c.Writer.Status(),
 			latency:    time.Since(start),
 			clientIP:   c.ClientIP(),
+			latLng:     fullAddress,
 			reqBody:    truncate(reqBody, maxBodyLen),
 			respBody:   truncate(rc.body.String(), maxBodyLen),
 			before:     before,
@@ -156,8 +244,8 @@ func sendToTelegram(token, chatID string, e logEntry) {
 	if e.user != "" {
 		sb.WriteString(fmt.Sprintf("\xF0\x9F\x91\xA4 <b>User:</b> %s\n", htmlEscape(e.user)))
 	}
-	if e.device != "" {
-		sb.WriteString(fmt.Sprintf("\xF0\x9F\x93\xB1 <b>Model:</b> %s\n", htmlEscape(e.device)))
+	if e.latLng != "" {
+		sb.WriteString(fmt.Sprintf("\xF0\x9F\x93\x8D <b>Address:</b> %s\n", htmlEscape(e.latLng)))
 	}
 	if e.version != "" {
 		sb.WriteString(fmt.Sprintf("\xF0\x9F\x93\xA6 <b>Version:</b> %s\n", htmlEscape(e.version)))

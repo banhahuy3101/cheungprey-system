@@ -1,9 +1,13 @@
 import { useState, useEffect, useRef, Fragment } from "react";
 import { useNavigate } from "react-router-dom";
-import { LuSave, LuArrowLeft, LuDownload, LuPencil, LuFileText } from "react-icons/lu";
+import {
+  LuSave, LuArrowLeft, LuDownload, LuPencil, LuFileText,
+  LuListOrdered, LuX, LuShield, LuClock, LuCheck, LuUserCheck
+} from "react-icons/lu";
 import { performanceAPI } from "../../api/performance";
 import { partyAPI } from "../../api/party";
 import { reportDocumentsAPI } from "../../api/reportDocuments";
+import { modulesAPI, approvalsAPI } from "../../api/modules";
 import Select from "../Select";
 import { formatPerformancePeriodLabel } from "../../utils/periodLabel";
 import { unwrapZone, zoneCodeOf, loadZoneHierarchy, resolveSelectedZone } from "../../utils/zone";
@@ -53,6 +57,45 @@ export default function PerformanceForm({ mode, zoneCode, periodId }) {
   const [subDomainsByDomain, setSubDomainsByDomain] = useState({});
   const [indicatorsBySub, setIndicatorsBySub] = useState({});
   const [indicatorKeyMap, setIndicatorKeyMap] = useState({});
+
+  // Expandable Right Workflow Drawer state
+  const [workflowSteps, setWorkflowSteps] = useState([]);
+  const [workflowLoading, setWorkflowLoading] = useState(false);
+  const [showWorkflowDrawer, setShowWorkflowDrawer] = useState(false);
+
+  const currentItemId = zoneCode && periodId ? `${zoneCode}_${periodId}` : "";
+
+  useEffect(() => {
+    setWorkflowLoading(true);
+    if (currentItemId) {
+      approvalsAPI.history("performance", currentItemId)
+        .then((res) => {
+          const data = res.data?.data || res.data || [];
+          if (Array.isArray(data) && data.length > 0) {
+            setWorkflowSteps(data);
+          } else {
+            modulesAPI.listSteps("performance").then((sRes) => {
+              const sData = sRes.data?.data || sRes.data || [];
+              setWorkflowSteps(Array.isArray(sData) ? sData : []);
+            });
+          }
+        })
+        .catch(() => {
+          modulesAPI.listSteps("performance").then((sRes) => {
+            const sData = sRes.data?.data || sRes.data || [];
+            setWorkflowSteps(Array.isArray(sData) ? sData : []);
+          });
+        })
+        .finally(() => setWorkflowLoading(false));
+    } else {
+      modulesAPI.listSteps("performance")
+        .then((sRes) => {
+          const sData = sRes.data?.data || sRes.data || [];
+          setWorkflowSteps(Array.isArray(sData) ? sData : []);
+        })
+        .finally(() => setWorkflowLoading(false));
+    }
+  }, [currentItemId]);
 
   const isView = mode === "view";
   const didLoad = useRef(false);
@@ -468,6 +511,17 @@ export default function PerformanceForm({ mode, zoneCode, periodId }) {
           </h2>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+          {/* Expandable Workflow Drawer Toggle Button */}
+          <button
+            type="button"
+            className={`btn ${showWorkflowDrawer ? "btn-primary" : "btn-secondary"}`}
+            onClick={() => setShowWorkflowDrawer(!showWorkflowDrawer)}
+            style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem", borderRadius: "10px", fontWeight: "600" }}
+            title="មើលអ្នកអនុម័ត (Approval Workflow)"
+          >
+            <LuListOrdered size={16} /> អ្នកអនុម័ត {workflowSteps.length > 0 && `(${workflowSteps.length})`}
+          </button>
+
           {isView && (
             <>
               <button
@@ -514,331 +568,438 @@ export default function PerformanceForm({ mode, zoneCode, periodId }) {
         </div>
       </div>
 
-      {error && <div className="alert alert-error">{error}</div>}
+      <div style={{ display: "flex", gap: "1.25rem", alignItems: "flex-start", width: "100%" }}>
+        {/* Main Content Area */}
+        <div style={{ flex: 1, minWidth: 0 }}>
 
-      <div className="card mb-1">
-        <div className="form-row">
-          {/* Province Autocomplete */}
-          <div className="form-group">
-            <label>ខេត្ត *</label>
-            <input
-              type="text"
-              list="province-list"
-              value={provinceInput}
-              onChange={(e) => {
-                const val = e.target.value;
-                setProvinceInput(val);
-                const match = provinces.find(p => p.name_kh === val);
-                if (match) {
-                  setSelectedProvince(match.zone_code || match.code);
-                } else {
-                  // Clear dependent fields when province is cleared
-                  setSelectedProvince("");
-                  setSelectedDistrict("");
-                  setSelectedCommune("");
-                  setSelectedVillage("");
-                  setDistrictInput("");
-                  setCommuneInput("");
-                  setVillageInput("");
-                }
-              }}
-              disabled={isView || mode === "edit"}
-              placeholder="-- ជ្រើសរើស --"
-            />
-            <datalist id="province-list">
-              {provinces.map((p) => (
-                <option key={p.zone_code || p.code} value={p.name_kh} />
-              ))}
-            </datalist>
-          </div>
+          {error && <div className="alert alert-error">{error}</div>}
 
-          {/* District Autocomplete */}
-          <div className="form-group">
-            <label>ស្រុក/ខណ្ឌ *</label>
-            <input
-              type="text"
-              list="district-list"
-              value={districtInput}
-              onChange={(e) => {
-                const val = e.target.value;
-                setDistrictInput(val);
-                const match = districts.find(d => d.name_kh === val);
-                if (match) {
-                  setSelectedDistrict(match.zone_code || match.code);
-                } else {
-                  setSelectedDistrict("");
-                  setSelectedCommune("");
-                  setSelectedVillage("");
-                  setCommuneInput("");
-                  setVillageInput("");
-                }
-              }}
-              disabled={isView || mode === "edit" || !provinceInput}
-              placeholder="-- ជ្រើសរើស --"
-            />
-            <datalist id="district-list">
-              {districts.map((d) => (
-                <option key={d.zone_code || d.code} value={d.name_kh} />
-              ))}
-            </datalist>
-          </div>
-        </div>
+          <div className="card mb-1">
+            <div className="form-row">
+              {/* Province Autocomplete */}
+              <div className="form-group">
+                <label>ខេត្ត *</label>
+                <input
+                  type="text"
+                  list="province-list"
+                  value={provinceInput}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setProvinceInput(val);
+                    const match = provinces.find(p => p.name_kh === val);
+                    if (match) {
+                      setSelectedProvince(match.zone_code || match.code);
+                    } else {
+                      // Clear dependent fields when province is cleared
+                      setSelectedProvince("");
+                      setSelectedDistrict("");
+                      setSelectedCommune("");
+                      setSelectedVillage("");
+                      setDistrictInput("");
+                      setCommuneInput("");
+                      setVillageInput("");
+                    }
+                  }}
+                  disabled={isView || mode === "edit"}
+                  placeholder="-- ជ្រើសរើស --"
+                />
+                <datalist id="province-list">
+                  {provinces.map((p) => (
+                    <option key={p.zone_code || p.code} value={p.name_kh} />
+                  ))}
+                </datalist>
+              </div>
 
-        <div className="form-row" style={{ marginTop: "0.5rem" }}>
-          {/* Commune Autocomplete */}
-          <div className="form-group">
-            <label>ឃុំ/សង្កាត់ *</label>
-            <input
-              type="text"
-              list="commune-list"
-              value={communeInput}
-              onChange={(e) => {
-                const val = e.target.value;
-                setCommuneInput(val);
-                const match = communes.find(c => c.name_kh === val);
-                if (match) {
-                  setSelectedCommune(match.zone_code || match.code);
-                  setSelectedVillage("");
-                  setVillageInput("");
-                  setIndicatorValues({});
-                } else {
-                  setSelectedCommune("");
-                  setSelectedVillage("");
-                  setVillageInput("");
-                }
-              }}
-              disabled={isView || mode === "edit" || !districtInput}
-              placeholder="-- ជ្រើសរើស --"
-            />
-            <datalist id="commune-list">
-              {communes.map((c) => (
-                <option key={c.zone_code || c.code} value={c.name_kh} />
-              ))}
-            </datalist>
-          </div>
+              {/* District Autocomplete */}
+              <div className="form-group">
+                <label>ស្រុក/ខណ្ឌ *</label>
+                <input
+                  type="text"
+                  list="district-list"
+                  value={districtInput}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setDistrictInput(val);
+                    const match = districts.find(d => d.name_kh === val);
+                    if (match) {
+                      setSelectedDistrict(match.zone_code || match.code);
+                    } else {
+                      setSelectedDistrict("");
+                      setSelectedCommune("");
+                      setSelectedVillage("");
+                      setCommuneInput("");
+                      setVillageInput("");
+                    }
+                  }}
+                  disabled={isView || mode === "edit" || !provinceInput}
+                  placeholder="-- ជ្រើសរើស --"
+                />
+                <datalist id="district-list">
+                  {districts.map((d) => (
+                    <option key={d.zone_code || d.code} value={d.name_kh} />
+                  ))}
+                </datalist>
+              </div>
+            </div>
 
-          {/* Village Autocomplete */}
-          <div className="form-group">
-            <label>ភូមិ</label>
-            <input
-              type="text"
-              list="village-list"
-              value={villageInput}
-              onChange={(e) => {
-                const val = e.target.value;
-                setVillageInput(val);
-                const match = villages.find(v => v.name_kh === val);
-                if (match) {
-                  setSelectedVillage(match.zone_code || match.code);
-                  setIndicatorValues({});
-                } else {
-                  setSelectedVillage("");
-                }
-              }}
-              disabled={isView || mode === "edit" || !communeInput}
-              placeholder="-- ជ្រើសរើស --"
-            />
-            <datalist id="village-list">
-              {villages.map((v) => (
-                <option key={v.zone_code || v.code} value={v.name_kh} />
-              ))}
-            </datalist>
-          </div>
-        </div>
+            <div className="form-row" style={{ marginTop: "0.5rem" }}>
+              {/* Commune Autocomplete */}
+              <div className="form-group">
+                <label>ឃុំ/សង្កាត់ *</label>
+                <input
+                  type="text"
+                  list="commune-list"
+                  value={communeInput}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setCommuneInput(val);
+                    const match = communes.find(c => c.name_kh === val);
+                    if (match) {
+                      setSelectedCommune(match.zone_code || match.code);
+                      setSelectedVillage("");
+                      setVillageInput("");
+                      setIndicatorValues({});
+                    } else {
+                      setSelectedCommune("");
+                      setSelectedVillage("");
+                      setVillageInput("");
+                    }
+                  }}
+                  disabled={isView || mode === "edit" || !districtInput}
+                  placeholder="-- ជ្រើសរើស --"
+                />
+                <datalist id="commune-list">
+                  {communes.map((c) => (
+                    <option key={c.zone_code || c.code} value={c.name_kh} />
+                  ))}
+                </datalist>
+              </div>
 
-        <div className="form-row" style={{ marginTop: "0.5rem" }}>
-          <div className="form-group">
-            <label>រយៈពេល *</label>
-            {isView ? (
-              <input
-                type="text"
-                value={periodRangeLabel || selectedPeriodObj?.label_kh || "—"}
-                disabled
-              />
-            ) : (
-              <Select
-                value={selectedPeriod}
-                onChange={(e) => {
-                  setSelectedPeriod(e.target.value);
-                  setIndicatorValues({});
-                }}
-              >
-                <option value="">-- ជ្រើសរើស --</option>
-                {periods.map((p) => (
-                  <option key={p.id} value={normalizeId(p.id)}>
-                    {formatPerformancePeriodLabel(p.start_date, p.end_date) || p.label_kh}
-                  </option>
-                ))}
-              </Select>
+              {/* Village Autocomplete */}
+              <div className="form-group">
+                <label>ភូមិ</label>
+                <input
+                  type="text"
+                  list="village-list"
+                  value={villageInput}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setVillageInput(val);
+                    const match = villages.find(v => v.name_kh === val);
+                    if (match) {
+                      setSelectedVillage(match.zone_code || match.code);
+                      setIndicatorValues({});
+                    } else {
+                      setSelectedVillage("");
+                    }
+                  }}
+                  disabled={isView || mode === "edit" || !communeInput}
+                  placeholder="-- ជ្រើសរើស --"
+                />
+                <datalist id="village-list">
+                  {villages.map((v) => (
+                    <option key={v.zone_code || v.code} value={v.name_kh} />
+                  ))}
+                </datalist>
+              </div>
+            </div>
+
+            <div className="form-row" style={{ marginTop: "0.5rem" }}>
+              <div className="form-group">
+                <label>រយៈពេល *</label>
+                {isView ? (
+                  <input
+                    type="text"
+                    value={periodRangeLabel || selectedPeriodObj?.label_kh || "—"}
+                    disabled
+                  />
+                ) : (
+                  <Select
+                    value={selectedPeriod}
+                    onChange={(e) => {
+                      setSelectedPeriod(e.target.value);
+                      setIndicatorValues({});
+                    }}
+                  >
+                    <option value="">-- ជ្រើសរើស --</option>
+                    {periods.map((p) => (
+                      <option key={p.id} value={normalizeId(p.id)}>
+                        {formatPerformancePeriodLabel(p.start_date, p.end_date) || p.label_kh}
+                      </option>
+                    ))}
+                  </Select>
+                )}
+              </div>
+            </div>
+            {selectedPeriodObj && (
+              <div style={{ marginTop: "0.5rem", fontSize: "0.85rem", color: "#666" }}>
+                <strong>ចាប់ពី៖</strong> {selectedPeriodObj.start_date || "—"} &nbsp;|&nbsp; <strong>ដល់៖</strong> {selectedPeriodObj.end_date || "—"}
+              </div>
             )}
           </div>
+
+          <div className="card mb-1 perf-form-wrap">
+            {dataLoading && (
+              <div className="perf-form-loading">កំពុងផ្ទុកទិន្នន័យ...</div>
+            )}
+            <table className="table perf-form-table">
+              <colgroup>
+                <col className="perf-col-label" />
+                <col className="perf-col-value" />
+              </colgroup>
+              <thead>
+                <tr>
+                  <th className="perf-column-header perf-indicator-label">សូចនាករ</th>
+                  <th className="perf-column-header perf-indicator-value">
+                    ទិន្នន័យ ឬព័ត៌មានលទ្ធផលនៃការអនុវត្ត
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {domains.map((domain) => {
+                  const subs = subDomainsByDomain[domain.id] || [];
+                  return (
+                    <Fragment key={domain.id}>
+                      <tr>
+                        <td className="perf-domain-header" colSpan={2}>
+                          {domain.code}. {domain.name_kh}
+                        </td>
+                      </tr>
+                      {subs.map((sd) => {
+                        const inds = indicatorsBySub[sd.id] || [];
+                        return (
+                          <Fragment key={sd.id}>
+                            <tr>
+                              <td className="perf-subdomain-header" colSpan={2}>
+                                {sd.code}. {sd.name_kh}
+                              </td>
+                            </tr>
+                            {inds.map((ind, idx) => {
+                              const dt = ind.data_type || "number";
+                              const unit = ind.unit_kh || "";
+                              const key = `${domain.code}.${sd.code}.${ind.code}`;
+                              const val = indicatorValues[key] ?? "";
+                              const hasValue = val !== "" && val != null;
+                              const isSelected = val === "true" || val === true;
+                              const isNotSelected = val === "false" || val === false;
+                              const formatViewValue = () => {
+                                if (dt === "binary") {
+                                  if (isSelected) return "បាន/មាន";
+                                  if (isNotSelected) return "មិនបាន/គ្មាន";
+                                  return "—";
+                                }
+                                if (dt === "percentage" && val !== "" && val != null) return `${val}%`;
+                                return val || "—";
+                              };
+                              return (
+                                <tr key={key}>
+                                  <td className="perf-indicator-label">
+                                    <span className="perf-indicator-code">{sd.code}.{idx + 1}</span>
+                                    {ind.name_kh}
+                                    {unit && <span className="perf-indicator-unit">({unit})</span>}
+                                    {ind.target_value != null && (dt === "number" || dt === "percentage") && (
+                                      <span style={{
+                                        fontSize: "0.75rem",
+                                        color: "#666",
+                                        marginLeft: "0.5rem",
+                                      }}>
+                                        (គោលដៅ: {ind.target_value}{dt === "percentage" ? "%" : ""}
+                                        {ind.target_direction === "higher_is_better" ? " ↑" : ind.target_direction === "lower_is_better" ? " ↓" : ""})
+                                      </span>
+                                    )}
+                                  </td>
+                                  <td className="perf-indicator-value">
+                                    {isView ? (
+                                      <strong style={
+                                        ind.target_value != null && val !== "" && val != null && (dt === "number" || dt === "percentage")
+                                          ? ((ind.target_direction === "lower_is_better" ? parseFloat(val) <= ind.target_value : parseFloat(val) >= ind.target_value)
+                                            ? { color: "#059669" } : { color: "#dc2626" })
+                                          : undefined
+                                      }>{formatViewValue()}</strong>
+                                    ) : dt === "binary" ? (
+                                      <div style={{ display: "flex", gap: "0.35rem" }}>
+                                        <button
+                                          type="button"
+                                          onClick={() => setIndicatorValues((p) => ({ ...p, [key]: "true" }))}
+                                          style={{
+                                            flex: 1,
+                                            padding: "0.4rem 0.5rem",
+                                            border: isSelected ? "2px solid var(--primary)" : "1px solid var(--border)",
+                                            borderRadius: "4px",
+                                            background: isSelected ? "var(--primary)" : "var(--surface)",
+                                            color: isSelected ? "#fff" : "var(--text)",
+                                            cursor: "pointer",
+                                            fontSize: "0.8rem",
+                                            fontWeight: isSelected ? 600 : 400,
+                                            transition: "all 0.15s ease",
+                                          }}
+                                        >
+                                          បាន/មាន
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => setIndicatorValues((p) => ({ ...p, [key]: "false" }))}
+                                          style={{
+                                            flex: 1,
+                                            padding: "0.4rem 0.5rem",
+                                            border: isNotSelected ? "2px solid var(--primary)" : "1px solid var(--border)",
+                                            borderRadius: "4px",
+                                            background: isNotSelected ? "var(--primary)" : "var(--surface)",
+                                            color: isNotSelected ? "#fff" : "var(--text)",
+                                            cursor: "pointer",
+                                            fontSize: "0.8rem",
+                                            fontWeight: isNotSelected ? 600 : 400,
+                                            transition: "all 0.15s ease",
+                                          }}
+                                        >
+                                          មិនបាន/គ្មាន
+                                        </button>
+                                      </div>
+                                    ) : (
+                                      <div className="perf-input-group">
+                                        <input
+                                          type="number"
+                                          step="any"
+                                          min={dt === "percentage" ? 0 : (ind.min_value != null ? ind.min_value : undefined)}
+                                          max={dt === "percentage" ? 100 : (ind.max_value != null ? ind.max_value : undefined)}
+                                          value={val}
+                                          onChange={(e) => {
+                                            const v = e.target.value;
+                                            if (dt === "percentage" && v !== "" && parseFloat(v) > 100) return;
+                                            setIndicatorValues((p) => ({ ...p, [key]: v }));
+                                          }}
+                                          placeholder={dt === "percentage" ? "0-100" : unit || "បញ្ចូល..."}
+                                          style={{
+                                            width: "100%",
+                                            padding: "0.4rem 0.5rem",
+                                            border: hasValue ? "2px solid var(--primary)" : "1px solid #d1d5db",
+                                            borderRadius: "4px",
+                                            fontSize: "0.85rem",
+                                            background: hasValue ? "#eef2ff" : "#fff",
+                                            outline: "none",
+                                            transition: "all 0.15s ease",
+                                          }}
+                                        />
+                                        {dt === "percentage" && <span className="perf-input-suffix">%</span>}
+                                      </div>
+                                    )}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </Fragment>
+                        );
+                      })}
+                    </Fragment>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
         </div>
-        {selectedPeriodObj && (
-          <div style={{ marginTop: "0.5rem", fontSize: "0.85rem", color: "#666" }}>
-            <strong>ចាប់ពី៖</strong> {selectedPeriodObj.start_date || "—"} &nbsp;|&nbsp; <strong>ដល់៖</strong> {selectedPeriodObj.end_date || "—"}
+
+        {/* Right Part: Expandable Workflow Drawer Panel */}
+        {showWorkflowDrawer && (
+          <div
+            style={{
+              width: "350px",
+              flexShrink: 0,
+              background: "#ffffff",
+              borderRadius: "16px",
+              border: "1px solid #e2e8f0",
+              boxShadow: "0 4px 20px rgba(0,0,0,0.05)",
+              padding: "1.25rem",
+              position: "sticky",
+              top: "1rem",
+              maxHeight: "calc(100vh - 2rem)",
+              overflowY: "auto",
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem", borderBottom: "1px solid #f1f5f9", paddingBottom: "0.75rem" }}>
+              <h3 style={{ margin: 0, fontSize: "1rem", fontWeight: 700, color: "#0f172a", display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                <LuListOrdered style={{ color: "#0284c7" }} /> អ្នកអនុម័ត (Workflow)
+              </h3>
+              <button
+                type="button"
+                className="btn-icon"
+                onClick={() => setShowWorkflowDrawer(false)}
+                title="បិទ"
+              >
+                <LuX size={18} />
+              </button>
+            </div>
+
+            {workflowLoading ? (
+              <div style={{ padding: "2rem", textAlign: "center", color: "#64748b", fontSize: "0.85rem" }}>
+                កំពុងផ្ទុកអ្នកអនុម័ត...
+              </div>
+            ) : workflowSteps.length === 0 ? (
+              <div style={{ padding: "1.5rem 1rem", textAlign: "center", background: "#f8fafc", borderRadius: "10px", border: "1px dashed #cbd5e1", color: "#64748b", fontSize: "0.82rem" }}>
+                មិនទាន់មានអ្នកអនុម័តបានកំណត់ក្នុង System Settings ឡើយ (No Workflow Steps Configured)
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.85rem" }}>
+                <div style={{ fontSize: "0.78rem", color: "#0369a1", background: "#f0f9ff", padding: "0.55rem 0.75rem", borderRadius: "8px", border: "1px solid #bae6fd", fontWeight: 600 }}>
+                  អ្នកអនុម័តដែលបានកំណត់ចេញពី System Settings ៖
+                </div>
+
+                {workflowSteps.sort((a, b) => a.step_order - b.step_order).map((step, idx) => (
+                  <div
+                    key={step.id}
+                    style={{
+                      position: "relative",
+                      padding: "0.85rem 1rem",
+                      borderRadius: "12px",
+                      background: "#ffffff",
+                      border: "1px solid #e2e8f0",
+                      boxShadow: "0 2px 4px rgba(0,0,0,0.02)",
+                    }}
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.35rem" }}>
+                      <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "#0284c7", background: "#e0f2fe", padding: "0.15rem 0.55rem", borderRadius: "6px" }}>
+                        {step.step_label || `ជំហានទី ${step.step_order || idx + 1}`}
+                      </span>
+                      <span
+                        style={{
+                          fontSize: "0.72rem",
+                          fontWeight: 700,
+                          padding: "0.15rem 0.5rem",
+                          borderRadius: "12px",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "0.25rem",
+                          background: step.status === "approved" ? "#d1fae5" : step.status === "rejected" ? "#fee2e2" : "#f1f5f9",
+                          color: step.status === "approved" ? "#065f46" : step.status === "rejected" ? "#991b1b" : "#475569",
+                        }}
+                      >
+                        {step.status === "approved" ? <><LuCheck size={12} /> បានអនុម័ត</>
+                          : step.status === "rejected" ? <><LuX size={12} /> បានបដិសេធ</>
+                          : <><LuClock size={12} /> កំពុងរង់ចាំ (Pending)</>}
+                      </span>
+                    </div>
+
+                    <div style={{ fontSize: "0.92rem", fontWeight: 700, color: "#0f172a", marginBottom: "0.25rem" }}>
+                      {step.step_label || step.approver_role_label || `ជំហានអនុម័តទី ${idx + 1}`}
+                    </div>
+
+                    <div style={{ fontSize: "0.78rem", color: "#475569", display: "flex", alignItems: "center", gap: "0.35rem", marginTop: "0.35rem" }}>
+                      <LuUserCheck size={14} style={{ color: "#0284c7" }} />
+                      <span>អ្នកទទួលខុសត្រូវ ៖ <strong>{step.approver_name || step.approver_role_label || step.approver_role}</strong></span>
+                    </div>
+
+                    {step.approved_at && (
+                      <div style={{ fontSize: "0.74rem", color: "#059669", marginTop: "0.35rem", fontWeight: 600 }}>
+                        ✓ បានអនុម័តនៅ ៖ {new Date(step.approved_at).toLocaleString("km-KH")}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>
-
-      <div className="card mb-1 perf-form-wrap">
-        {dataLoading && (
-          <div className="perf-form-loading">កំពុងផ្ទុកទិន្នន័យ...</div>
-        )}
-        <table className="table perf-form-table">
-          <colgroup>
-            <col className="perf-col-label" />
-            <col className="perf-col-value" />
-          </colgroup>
-          <thead>
-            <tr>
-              <th className="perf-column-header perf-indicator-label">សូចនាករ</th>
-              <th className="perf-column-header perf-indicator-value">
-                ទិន្នន័យ ឬព័ត៌មានលទ្ធផលនៃការអនុវត្ត
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {domains.map((domain) => {
-              const subs = subDomainsByDomain[domain.id] || [];
-              return (
-                <Fragment key={domain.id}>
-                  <tr>
-                    <td className="perf-domain-header" colSpan={2}>
-                      {domain.code}. {domain.name_kh}
-                    </td>
-                  </tr>
-                  {subs.map((sd) => {
-                    const inds = indicatorsBySub[sd.id] || [];
-                    return (
-                      <Fragment key={sd.id}>
-                        <tr>
-                          <td className="perf-subdomain-header" colSpan={2}>
-                            {sd.code}. {sd.name_kh}
-                          </td>
-                        </tr>
-                        {inds.map((ind, idx) => {
-                          const dt = ind.data_type || "number";
-                          const unit = ind.unit_kh || "";
-                          const key = `${domain.code}.${sd.code}.${ind.code}`;
-                          const val = indicatorValues[key] ?? "";
-                          const hasValue = val !== "" && val != null;
-                          const isSelected = val === "true" || val === true;
-                          const isNotSelected = val === "false" || val === false;
-                          const formatViewValue = () => {
-                            if (dt === "binary") {
-                              if (isSelected) return "បាន/មាន";
-                              if (isNotSelected) return "មិនបាន/គ្មាន";
-                              return "—";
-                            }
-                            if (dt === "percentage" && val !== "" && val != null) return `${val}%`;
-                            return val || "—";
-                          };
-                          return (
-                            <tr key={key}>
-                              <td className="perf-indicator-label">
-                                <span className="perf-indicator-code">{sd.code}.{idx + 1}</span>
-                                {ind.name_kh}
-                                {unit && <span className="perf-indicator-unit">({unit})</span>}
-                                {ind.target_value != null && (dt === "number" || dt === "percentage") && (
-                                  <span style={{
-                                    fontSize: "0.75rem",
-                                    color: "#666",
-                                    marginLeft: "0.5rem",
-                                  }}>
-                                    (គោលដៅ: {ind.target_value}{dt === "percentage" ? "%" : ""}
-                                    {ind.target_direction === "higher_is_better" ? " ↑" : ind.target_direction === "lower_is_better" ? " ↓" : ""})
-                                  </span>
-                                )}
-                              </td>
-                              <td className="perf-indicator-value">
-                                {isView ? (
-                                  <strong style={
-                                    ind.target_value != null && val !== "" && val != null && (dt === "number" || dt === "percentage")
-                                      ? ((ind.target_direction === "lower_is_better" ? parseFloat(val) <= ind.target_value : parseFloat(val) >= ind.target_value)
-                                        ? { color: "#059669" } : { color: "#dc2626" })
-                                      : undefined
-                                  }>{formatViewValue()}</strong>
-                                ) : dt === "binary" ? (
-                                  <div style={{ display: "flex", gap: "0.35rem" }}>
-                                    <button
-                                      type="button"
-                                      onClick={() => setIndicatorValues((p) => ({ ...p, [key]: "true" }))}
-                                      style={{
-                                        flex: 1,
-                                        padding: "0.4rem 0.5rem",
-                                        border: isSelected ? "2px solid var(--primary)" : "1px solid var(--border)",
-                                        borderRadius: "4px",
-                                        background: isSelected ? "var(--primary)" : "var(--surface)",
-                                        color: isSelected ? "#fff" : "var(--text)",
-                                        cursor: "pointer",
-                                        fontSize: "0.8rem",
-                                        fontWeight: isSelected ? 600 : 400,
-                                        transition: "all 0.15s ease",
-                                      }}
-                                    >
-                                      បាន/មាន
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => setIndicatorValues((p) => ({ ...p, [key]: "false" }))}
-                                      style={{
-                                        flex: 1,
-                                        padding: "0.4rem 0.5rem",
-                                        border: isNotSelected ? "2px solid var(--primary)" : "1px solid var(--border)",
-                                        borderRadius: "4px",
-                                        background: isNotSelected ? "var(--primary)" : "var(--surface)",
-                                        color: isNotSelected ? "#fff" : "var(--text)",
-                                        cursor: "pointer",
-                                        fontSize: "0.8rem",
-                                        fontWeight: isNotSelected ? 600 : 400,
-                                        transition: "all 0.15s ease",
-                                      }}
-                                    >
-                                      មិនបាន/គ្មាន
-                                    </button>
-                                  </div>
-                                ) : (
-                                  <div className="perf-input-group">
-                                    <input
-                                      type="number"
-                                      step="any"
-                                      min={dt === "percentage" ? 0 : (ind.min_value != null ? ind.min_value : undefined)}
-                                      max={dt === "percentage" ? 100 : (ind.max_value != null ? ind.max_value : undefined)}
-                                      value={val}
-                                      onChange={(e) => {
-                                        const v = e.target.value;
-                                        if (dt === "percentage" && v !== "" && parseFloat(v) > 100) return;
-                                        setIndicatorValues((p) => ({ ...p, [key]: v }));
-                                      }}
-                                      placeholder={dt === "percentage" ? "0-100" : unit || "បញ្ចូល..."}
-                                      style={{
-                                        width: "100%",
-                                        padding: "0.4rem 0.5rem",
-                                        border: hasValue ? "2px solid var(--primary)" : "1px solid #d1d5db",
-                                        borderRadius: "4px",
-                                        fontSize: "0.85rem",
-                                        background: hasValue ? "#eef2ff" : "#fff",
-                                        outline: "none",
-                                        transition: "all 0.15s ease",
-                                      }}
-                                    />
-                                    {dt === "percentage" && <span className="perf-input-suffix">%</span>}
-                                  </div>
-                                )}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </Fragment>
-                    );
-                  })}
-                </Fragment>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-
     </div>
   );
 }

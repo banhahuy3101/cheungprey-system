@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 	"time"
@@ -711,6 +712,10 @@ func (h *PerformanceHandler) BulkCreatePerformanceData(c *gin.Context) {
 		utils.InternalError(c, "Failed to save performance data: "+err.Error())
 		return
 	}
+
+	// Initialize workflow for this performance record item if configured
+	itemKey := fmt.Sprintf("%s_%s", req.ZoneID, periodID.String())
+	_ = h.repo.InitializeWorkflowForItem("performance", itemKey)
 
 	utils.JSON(c, http.StatusCreated, gin.H{
 		"message":  "Performance data saved successfully",

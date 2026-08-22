@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -189,11 +190,13 @@ func (h *PartyHandler) CreateMember(c *gin.Context) {
 		steps, _ := h.repo.ListWorkflowSteps("membership")
 		for _, step := range steps {
 			approval := &models.WorkflowApproval{
-				ID:        uuid.New(),
-				ModuleKey: "membership",
-				ItemID:    member.ID,
-				StepOrder: step.StepOrder,
-				Status:    "pending",
+				ID:         uuid.New(),
+				ModuleKey:  "membership",
+				ItemID:     member.ID,
+				StepOrder:  step.StepOrder,
+				ApproverID: step.ApproverID,
+				Status:     "pending",
+				CreatedAt:  time.Now(),
 			}
 			_ = h.repo.CreateWorkflowApproval(approval)
 		}
@@ -204,6 +207,7 @@ func (h *PartyHandler) CreateMember(c *gin.Context) {
 			ItemID:    member.ID,
 			StepOrder: 1,
 			Status:    "approved",
+			CreatedAt: time.Now(),
 		})
 	}
 

@@ -3,6 +3,7 @@ package handlers
 import (
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -29,9 +30,14 @@ func (h *ModuleConfigHandler) ListModules(c *gin.Context) {
 		return
 	}
 
+	allSteps, _ := h.repo.ListAllWorkflowSteps()
+	stepsByModule := make(map[string][]models.WorkflowStep)
+	for _, s := range allSteps {
+		stepsByModule[s.ModuleKey] = append(stepsByModule[s.ModuleKey], s)
+	}
+
 	for i := range configs {
-		steps, err := h.repo.ListWorkflowSteps(configs[i].ModuleKey)
-		if err == nil && steps != nil {
+		if steps, ok := stepsByModule[configs[i].ModuleKey]; ok {
 			configs[i].Steps = steps
 		} else {
 			configs[i].Steps = []models.WorkflowStep{}
@@ -108,7 +114,9 @@ func (h *ModuleConfigHandler) CreateStep(c *gin.Context) {
 	step := &models.WorkflowStep{
 		ID:           uuid.New(),
 		ModuleKey:    moduleKey,
+		StepLabel:    req.StepLabel,
 		ApproverRole: req.ApproverRole,
+		ApproverID:   req.ApproverID,
 		CanReject:    canReject,
 	}
 
@@ -134,8 +142,14 @@ func (h *ModuleConfigHandler) UpdateStep(c *gin.Context) {
 	}
 
 	data := map[string]any{}
-	if req.ApproverRole != "" {
-		data["approver_role"] = req.ApproverRole
+	if req.StepLabel != nil {
+		data["step_label"] = *req.StepLabel
+	}
+	if req.ApproverRole != nil {
+		data["approver_role"] = *req.ApproverRole
+	}
+	if req.ApproverID != nil {
+		data["approver_id"] = req.ApproverID.String()
 	}
 	if req.CanReject != nil {
 		data["can_reject"] = *req.CanReject
@@ -184,26 +198,41 @@ func (h *ModuleConfigHandler) ReorderSteps(c *gin.Context) {
 
 func (h *ModuleConfigHandler) ItemApprovalHistory(c *gin.Context) {
 	moduleKey := c.Param("module")
-	itemID, err := uuid.Parse(c.Param("itemId"))
+	rawItemID := c.Param("itemId")
+	itemID, err := uuid.Parse(rawItemID)
 	if err != nil {
-		utils.BadRequest(c, "Invalid item ID")
-		return
+		itemID = uuid.NewSHA1(uuid.NameSpaceDNS, []byte(rawItemID))
 	}
 
 	steps, _ := h.repo.ListWorkflowSteps(moduleKey)
 	history, _ := h.repo.ListApprovalHistory(moduleKey, itemID)
+
+	roleLabels := make(map[string]string)
+	for _, r := range defaultRoleLabels() {
+		roleLabels[r.Role] = r.Label
+	}
+	if roles, err := h.repo.ListRoles(); err == nil {
+		for _, r := range roles {
+			roleLabels[r.Role] = r.Label
+		}
+	}
 
 	historyMap := make(map[int]models.WorkflowApproval)
 	for _, a := range history {
 		historyMap[a.StepOrder] = a
 	}
 
-	// Get member's zone to find assigned chiefs
+	// Get member's or item's zone to find assigned chiefs
 	var zoneCode string
 	if moduleKey == "membership" {
 		member, _ := h.repo.GetMemberByID(itemID)
 		if member != nil {
 			zoneCode = member.RegisteredVillageCode
+		}
+	} else if moduleKey == "performance" {
+		parts := strings.Split(rawItemID, "_")
+		if len(parts) > 0 {
+			zoneCode = parts[0]
 		}
 	}
 
@@ -211,30 +240,50 @@ func (h *ModuleConfigHandler) ItemApprovalHistory(c *gin.Context) {
 	chiefNames := h.getChiefNamesForZone(zoneCode)
 
 	type StepInfo struct {
-		ID               string  `json:"id"`
-		StepOrder        int     `json:"step_order"`
-		ApproverRole     string  `json:"approver_role"`
-		ApproverName     string  `json:"approver_name"`
-		CanReject        bool    `json:"can_reject"`
-		Status           string  `json:"status"`
-		ApprovedBy       *string `json:"approved_by"`
-		ApprovedByName   string  `json:"approved_by_name"`
-		ApprovedAt       *string `json:"approved_at"`
-		Notes            *string `json:"notes"`
+		ID                string  `json:"id"`
+		StepOrder         int     `json:"step_order"`
+		StepLabel         string  `json:"step_label"`
+		ApproverRole      string  `json:"approver_role"`
+		ApproverRoleLabel string  `json:"approver_role_label"`
+		ApproverID        string  `json:"approver_id,omitempty"`
+		ApproverName      string  `json:"approver_name"`
+		CanReject         bool    `json:"can_reject"`
+		Status            string  `json:"status"`
+		ApprovedBy        *string `json:"approved_by"`
+		ApprovedByName    string  `json:"approved_by_name"`
+		ApprovedAt        *string `json:"approved_at"`
+		Notes             *string `json:"notes"`
 	}
 
 	var result []StepInfo
-	for _, s := range steps {
-		info := StepInfo{
-			StepOrder:    s.StepOrder,
-			ApproverRole: s.ApproverRole,
-			ApproverName: chiefNames[s.ApproverRole],
-			CanReject:    s.CanReject,
-			Status:       "pending",
-		}
-		if a, ok := historyMap[s.StepOrder]; ok {
-			info.ID = a.ID.String()
-			info.Status = a.Status
+	if len(history) > 0 {
+		for _, a := range history {
+			roleLabel := roleLabels[a.ApproverRole]
+			if roleLabel == "" {
+				roleLabel = a.ApproverRole
+			}
+			approverName := chiefNames[a.ApproverRole]
+			if a.ApproverID != nil {
+				if name, err := h.repo.GetProfileName(*a.ApproverID); err == nil && name != "" {
+					approverName = name
+				}
+			}
+
+			info := StepInfo{
+				ID:                a.ID.String(),
+				StepOrder:         a.StepOrder,
+				StepLabel:         a.StepLabel,
+				ApproverRole:      a.ApproverRole,
+				ApproverRoleLabel: roleLabel,
+				ApproverName:      approverName,
+				CanReject:         a.CanReject,
+				Status:            a.Status,
+				Notes:             a.Notes,
+			}
+			if a.ApproverID != nil {
+				v := a.ApproverID.String()
+				info.ApproverID = v
+			}
 			if a.ApprovedBy != nil {
 				v := a.ApprovedBy.String()
 				info.ApprovedBy = &v
@@ -246,9 +295,27 @@ func (h *ModuleConfigHandler) ItemApprovalHistory(c *gin.Context) {
 				v := a.ApprovedAt.Format(time.RFC3339)
 				info.ApprovedAt = &v
 			}
-			info.Notes = a.Notes
+			result = append(result, info)
 		}
-		result = append(result, info)
+	} else {
+		for _, s := range steps {
+			info := StepInfo{
+				StepOrder:         s.StepOrder,
+				StepLabel:         s.StepLabel,
+				ApproverRole:      s.ApproverRole,
+				ApproverRoleLabel: roleLabels[s.ApproverRole],
+				ApproverName:      chiefNames[s.ApproverRole],
+				CanReject:         s.CanReject,
+				Status:            "pending",
+			}
+			if s.ApproverID != nil {
+				info.ApproverID = s.ApproverID.String()
+				if name, err := h.repo.GetProfileName(*s.ApproverID); err == nil && name != "" {
+					info.ApproverName = name
+				}
+			}
+			result = append(result, info)
+		}
 	}
 
 	if result == nil {
@@ -256,6 +323,21 @@ func (h *ModuleConfigHandler) ItemApprovalHistory(c *gin.Context) {
 	}
 
 	utils.JSON(c, http.StatusOK, result)
+}
+
+func defaultRoleLabels() []models.Role {
+	return []models.Role{
+		{Role: "super_admin", Label: "អ្នកគ្រប់គ្រងជាន់ខ្ពស់"},
+		{Role: "admin", Label: "អ្នកគ្រប់គ្រង"},
+		{Role: "recorder", Label: "អ្នកកត់ត្រា"},
+		{Role: "regular_user", Label: "អ្នកប្រើប្រាស់ធម្មតា"},
+		{Role: "commune_chief", Label: "ប្រធានឃុំ"},
+		{Role: "commune_clerk", Label: "ស្មៀនឃុំ"},
+		{Role: "district_chief", Label: "ប្រធានស្រុក"},
+		{Role: "province_chief", Label: "ប្រធានខេត្ត"},
+		{Role: "village_chief", Label: "ប្រធានភូមិ"},
+		{Role: "village_assistant", Label: "ជំនួយការភូមិ"},
+	}
 }
 
 func (h *ModuleConfigHandler) getChiefNamesForZone(zoneCode string) map[string]string {
@@ -291,13 +373,19 @@ func (h *ModuleConfigHandler) ApprovalQueue(c *gin.Context) {
 		zonePrefix = *profile.ZoneCode
 	}
 
-	approvals, err := h.repo.ListPendingApprovalsForApprover(moduleKey, string(role), zonePrefix)
+	approvals, err := h.repo.ListPendingApprovalsForUser(moduleKey, userID)
 	if err != nil {
 		utils.InternalError(c, "Failed to fetch approval queue")
 		return
 	}
 
-	_ = userID
+	if len(approvals) == 0 {
+		approvals, err = h.repo.ListPendingApprovalsForApprover(moduleKey, string(role), zonePrefix)
+		if err != nil {
+			utils.InternalError(c, "Failed to fetch approval queue")
+			return
+		}
+	}
 
 	utils.JSON(c, http.StatusOK, approvals)
 }
@@ -330,19 +418,25 @@ func (h *ModuleConfigHandler) ApproveItem(c *gin.Context) {
 		}
 	}
 
-	if currentStep != nil && string(role) != currentStep.ApproverRole {
-		if !h.canOverride(c) {
-			utils.Forbidden(c, "Only "+currentStep.ApproverRole+" can approve this step")
-			return
+	if currentStep != nil {
+		isAssigned := approval.ApproverID != nil && *approval.ApproverID == userID
+		roleMatches := string(role) == currentStep.ApproverRole
+		if !isAssigned && !roleMatches {
+			if !h.canOverride(c) {
+				utils.Forbidden(c, "Only the assigned approver can approve this step")
+				return
+			}
 		}
 	}
 
 	var req models.ApproveRejectRequest
 	c.ShouldBindJSON(&req)
 
+	now := time.Now()
 	data := map[string]any{
 		"status":      "approved",
 		"approved_by": userID.String(),
+		"approved_at": now,
 	}
 	if req.Notes != "" {
 		data["notes"] = req.Notes
@@ -353,8 +447,18 @@ func (h *ModuleConfigHandler) ApproveItem(c *gin.Context) {
 		return
 	}
 
-	remaining, _ := h.repo.GetCurrentApproval(approval.ModuleKey, approval.ItemID)
+	remaining, err := h.repo.GetCurrentApproval(approval.ModuleKey, approval.ItemID)
+	if err != nil {
+		utils.InternalError(c, "Failed to verify workflow state")
+		return
+	}
 	if remaining == nil {
+		// Double-check: a transient query error must never let us skip steps.
+		pending, _ := h.repo.CountPendingApprovals(approval.ModuleKey, approval.ItemID)
+		if pending > 0 {
+			utils.JSON(c, http.StatusOK, gin.H{"success": true, "message": "Approved"})
+			return
+		}
 		if approval.ModuleKey == "membership" {
 			_ = h.repo.UpdateMember(approval.ItemID, map[string]any{"status": "Active"})
 		}
@@ -404,8 +508,10 @@ func (h *ModuleConfigHandler) RejectItem(c *gin.Context) {
 	}
 
 	if currentStep != nil {
-		if string(role) != currentStep.ApproverRole && !h.canOverride(c) {
-			utils.Forbidden(c, "Only "+currentStep.ApproverRole+" can reject this step")
+		isAssigned := approval.ApproverID != nil && *approval.ApproverID == userID
+		roleMatches := string(role) == currentStep.ApproverRole
+		if !isAssigned && !roleMatches && !h.canOverride(c) {
+			utils.Forbidden(c, "Only the assigned approver can reject this step")
 			return
 		}
 		if !currentStep.CanReject && !h.canOverride(c) {
@@ -423,6 +529,7 @@ func (h *ModuleConfigHandler) RejectItem(c *gin.Context) {
 	data := map[string]any{
 		"status":      "rejected",
 		"approved_by": userID.String(),
+		"approved_at": time.Now(),
 	}
 	if req.Notes != "" {
 		data["notes"] = req.Notes

@@ -17,6 +17,9 @@ export function createUserFormDefaults() {
     name: "",
     email: "",
     password: getDefaultUserPassword(),
+    phone_number: "",
+    zone_code: "",
+    date_of_birth: "",
     role: "",
     roles: [],
   };

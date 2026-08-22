@@ -35,6 +35,7 @@ type Profile struct {
 	Roles       []UserRole    `json:"roles,omitempty"`
 	Permissions PermissionSet `json:"permissions,omitempty"`
 	Signature   *string       `json:"signature,omitempty"`
+	DateOfBirth *string       `json:"date_of_birth,omitempty"`
 	CreatedAt   time.Time     `json:"created_at"`
 	UpdatedAt   time.Time     `json:"updated_at"`
 }
@@ -53,6 +54,7 @@ type AdminUser struct {
 	Roles       []UserRole    `json:"roles,omitempty"`
 	Permissions PermissionSet `json:"permissions,omitempty"`
 	Signature   *string       `json:"signature,omitempty"`
+	DateOfBirth *string       `json:"date_of_birth,omitempty"`
 	CreatedAt   time.Time     `json:"created_at"`
 	UpdatedAt   time.Time     `json:"updated_at"`
 }
@@ -95,6 +97,7 @@ type AdminCreateUserRequest struct {
 	CommuneID   string     `json:"commune_id,omitempty"`
 	VillageID   string     `json:"village_id,omitempty"`
 	Signature   string     `json:"signature,omitempty"`
+	DateOfBirth string     `json:"date_of_birth,omitempty"`
 }
 
 type AdminUpdateUserRequest struct {
@@ -106,6 +109,7 @@ type AdminUpdateUserRequest struct {
 	CommuneID   string     `json:"commune_id,omitempty"`
 	VillageID   string     `json:"village_id,omitempty"`
 	Signature   string     `json:"signature,omitempty"`
+	DateOfBirth string     `json:"date_of_birth,omitempty"`
 }
 
 type AdminResetPasswordRequest struct {

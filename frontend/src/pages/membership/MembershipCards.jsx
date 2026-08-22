@@ -255,7 +255,7 @@ export default function MembershipCards({ memberId, onBack }) {
                         CAMBODIAN PEOPLE'S PARTY
                       </div>
                       <div style={{ fontSize: "0.6rem", color: "#c7d2fe", letterSpacing: "0.06em", marginTop: "2px" }}>
-                        ស្រុកជើងព្រៃ · ខេត្តកំពង់ចាម
+                        គណៈកម្មាធិការបក្សស្រុក
                       </div>
                     </div>
                   </div>

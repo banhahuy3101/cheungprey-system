@@ -1,8 +1,18 @@
+import { useMemo } from "react";
 import { zoneCodeOf } from "../utils/zone";
 import { zoneOptionLabel } from "../hooks/useZoneCascade";
+import FormDropdown from "./FormDropdown";
+
+function toOptions(zones) {
+  return (zones || []).map((z) => ({
+    value: zoneCodeOf(z),
+    label: zoneOptionLabel(z),
+  }));
+}
 
 export default function ZoneCascadeSelect({
-  hook,
+  hook: _hook,
+  cascade: _cascade,
   provinces: _provinces,
   districts: _districts,
   communes: _communes,
@@ -34,94 +44,82 @@ export default function ZoneCascadeSelect({
   let onVillageChange = _onVillageChange;
   let isLocked = _isLocked;
 
-  if (hook) {
-    provinces = hook.provinces;
-    districts = hook.districts;
-    communes = hook.communes;
-    villages = hook.villages;
-    selectedProvince = hook.selectedProvince;
-    selectedDistrict = hook.selectedDistrict;
-    selectedCommune = hook.selectedCommune;
-    selectedVillage = hook.selectedVillage;
-    onProvinceChange = (code) => hook.setProvince(code);
-    onDistrictChange = (code) => hook.setDistrict(code);
-    onCommuneChange = (code) => hook.setCommune(code);
-    onVillageChange = (code) => hook.setSelectedVillage(code);
-    isLocked = hook.isLocked;
-    if (hook.showVillage !== undefined) showVillage = hook.showVillage;
+  const activeHook = _hook || _cascade;
+  if (activeHook) {
+    provinces = activeHook.provinces;
+    districts = activeHook.districts;
+    communes = activeHook.communes;
+    villages = activeHook.villages;
+    selectedProvince = activeHook.selectedProvince;
+    selectedDistrict = activeHook.selectedDistrict;
+    selectedCommune = activeHook.selectedCommune;
+    selectedVillage = activeHook.selectedVillage;
+    onProvinceChange = (code) => activeHook.setProvince && activeHook.setProvince(code);
+    onDistrictChange = (code) => activeHook.setDistrict && activeHook.setDistrict(code);
+    onCommuneChange = (code) => activeHook.setCommune && activeHook.setCommune(code);
+    onVillageChange = (code) => activeHook.setSelectedVillage && activeHook.setSelectedVillage(code);
+    isLocked = activeHook.isLocked;
+    if (activeHook.showVillage !== undefined) showVillage = activeHook.showVillage;
   }
 
-  const selectStyle = compact ? {
-    height: "2.1rem",
-    minHeight: "2.1rem",
-    padding: "0.25rem 1.75rem 0.25rem 0.5rem",
-    fontSize: "0.82rem",
-    borderRadius: "8px",
-    border: "1px solid var(--border)",
-    backgroundColor: "var(--surface)",
-    color: "var(--text)",
-    cursor: "pointer",
-    boxShadow: "0 1px 2px rgba(15, 23, 42, 0.04)"
-  } : undefined;
+  if (typeof isLocked !== "function") {
+    isLocked = () => false;
+  }
+
+  const provinceOptions = useMemo(() => toOptions(provinces), [provinces]);
+  const districtOptions = useMemo(() => toOptions(districts), [districts]);
+  const communeOptions = useMemo(() => toOptions(communes), [communes]);
+  const villageOptions = useMemo(() => toOptions(villages), [villages]);
+
+  const allPlaceholder = "ទាំងអស់";
+  const allLabel = (text) => compact ? `${text}ទាំងអស់` : allPlaceholder;
 
   return (
     <div style={{ display: "flex", flexWrap: "wrap", gap: compact ? "0.45rem" : "0.75rem", flex: 1 }}>
-      <div className="form-group" style={{ margin: 0, flex: 1, minWidth: compact ? 110 : 140 }}>
-        {!compact && <label>ខេត្ត *</label>}
-        <select
+      <div style={{ margin: 0, flex: 1, minWidth: compact ? 110 : 140 }}>
+        <FormDropdown
+          label={compact ? undefined : "ខេត្ត *"}
           value={selectedProvince}
-          disabled={disabled || isLocked("province")}
           onChange={(e) => onProvinceChange(e.target.value)}
-          style={selectStyle}
-        >
-          <option value="">{compact ? "ខេត្តទាំងអស់" : "ទាំងអស់"}</option>
-          {provinces.map((z) => (
-            <option key={zoneCodeOf(z)} value={zoneCodeOf(z)}>{zoneOptionLabel(z)}</option>
-          ))}
-        </select>
+          options={provinceOptions}
+          placeholder={allLabel("ខេត្ត")}
+          disabled={disabled || isLocked("province")}
+          compact={compact}
+        />
       </div>
-      <div className="form-group" style={{ margin: 0, flex: 1, minWidth: compact ? 110 : 140 }}>
-        {!compact && <label>ស្រុក *</label>}
-        <select
+      <div style={{ margin: 0, flex: 1, minWidth: compact ? 110 : 140 }}>
+        <FormDropdown
+          label={compact ? undefined : "ស្រុក *"}
           value={selectedDistrict}
-          disabled={disabled || isLocked("district") || !selectedProvince}
           onChange={(e) => onDistrictChange(e.target.value)}
-          style={selectStyle}
-        >
-          <option value="">{compact ? "ស្រុកទាំងអស់" : "ទាំងអស់"}</option>
-          {districts.map((z) => (
-            <option key={zoneCodeOf(z)} value={zoneCodeOf(z)}>{zoneOptionLabel(z)}</option>
-          ))}
-        </select>
+          options={districtOptions}
+          placeholder={allLabel("ស្រុក")}
+          disabled={disabled || isLocked("district") || !selectedProvince}
+          compact={compact}
+        />
       </div>
-      <div className="form-group" style={{ margin: 0, flex: 1, minWidth: compact ? 110 : 140 }}>
-        {!compact && <label>ឃុំ *</label>}
-        <select
+      <div style={{ margin: 0, flex: 1, minWidth: compact ? 110 : 140 }}>
+        <FormDropdown
+          label={compact ? undefined : "ឃុំ *"}
           value={selectedCommune}
-          disabled={disabled || isLocked("commune") || !selectedDistrict}
           onChange={(e) => onCommuneChange(e.target.value)}
-          style={selectStyle}
-        >
-          <option value="">{compact ? "ឃុំទាំងអស់" : "ទាំងអស់"}</option>
-          {communes.map((z) => (
-            <option key={zoneCodeOf(z)} value={zoneCodeOf(z)}>{zoneOptionLabel(z)}</option>
-          ))}
-        </select>
+          options={communeOptions}
+          placeholder={allLabel("ឃុំ")}
+          disabled={disabled || isLocked("commune") || !selectedDistrict}
+          compact={compact}
+        />
       </div>
       {showVillage && (
-        <div className="form-group" style={{ margin: 0, flex: 1, minWidth: compact ? 110 : 140 }}>
-          {!compact && <label>ភូមិ</label>}
-          <select
+        <div style={{ margin: 0, flex: 1, minWidth: compact ? 110 : 140 }}>
+          <FormDropdown
+            label={compact ? undefined : "ភូមិ"}
             value={selectedVillage}
-            disabled={disabled || isLocked("village") || !selectedCommune}
             onChange={(e) => onVillageChange(e.target.value)}
-            style={selectStyle}
-          >
-            <option value="">{compact ? "ភូមិទាំងអស់" : "ទាំងអស់"}</option>
-            {villages.map((z) => (
-              <option key={zoneCodeOf(z)} value={zoneCodeOf(z)}>{zoneOptionLabel(z)}</option>
-            ))}
-          </select>
+            options={villageOptions}
+            placeholder={allLabel("ភូមិ")}
+            disabled={disabled || isLocked("village") || !selectedCommune}
+            compact={compact}
+          />
         </div>
       )}
     </div>

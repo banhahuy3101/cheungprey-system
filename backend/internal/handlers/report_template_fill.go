@@ -123,6 +123,9 @@ func replaceSimplePlaceholdersInHTML(content string, payload map[string]any) str
 		re := regexp.MustCompile(`\{\{\s*` + regexp.QuoteMeta(k) + `\s*\}\}`)
 		content = re.ReplaceAllString(content, escapeHTML(s))
 	}
+	// Any remaining {{ key }} placeholders had no data provided — render blank
+	// instead of leaving the literal placeholder text in the report content.
+	content = placeholderRe.ReplaceAllString(content, "")
 	return content
 }
 
@@ -167,6 +170,8 @@ func replaceEachBlocksInHTML(content string, payload map[string]any) string {
 				row = re.ReplaceAllString(row, escapeHTML(s))
 			}
 			row = strings.ReplaceAll(row, "{{index}}", escapeHTML(strconv.Itoa(i+1)))
+			// Blank out any leftover {{ key }} with no data in this row.
+			row = placeholderRe.ReplaceAllString(row, "")
 			expanded.WriteString(row)
 		}
 
@@ -679,36 +684,41 @@ func replacePlaceholdersInDocx(data []byte, values map[string]any) []byte {
 					break
 				}
 
-				var expanded strings.Builder
-				for i, item := range arr {
-					itemMap, _ := item.(map[string]any)
-					row := templateXML
-					for k, v := range itemMap {
-						s, _ := v.(string)
-						re := regexp.MustCompile(`\{\{\s*` + regexp.QuoteMeta(k) + `\s*\}\}`)
-						row = re.ReplaceAllString(row, escapeXML(s))
-					}
-					// Replace {{index}} inside the expanded row
-					row = strings.ReplaceAll(row, "{{index}}", escapeXML(strconv.Itoa(i+1)))
-					expanded.WriteString(row)
+var expanded strings.Builder
+			for i, item := range arr {
+				itemMap, _ := item.(map[string]any)
+				row := templateXML
+				for k, v := range itemMap {
+					s, _ := v.(string)
+					re := regexp.MustCompile(`\{\{\s*` + regexp.QuoteMeta(k) + `\s*\}\}`)
+					row = re.ReplaceAllString(row, escapeXML(s))
 				}
+				// Replace {{index}} inside the expanded row
+				row = strings.ReplaceAll(row, "{{index}}", escapeXML(strconv.Itoa(i+1)))
+				// Blank out any leftover {{ key }} with no data in this row.
+				row = placeholderRe.ReplaceAllString(row, "")
+				expanded.WriteString(row)
+			}
 
 				// Replace the entire block
 				block := xmlStr[m[0] : endIdx+len(endMarker)]
 				xmlStr = strings.Replace(xmlStr, block, expanded.String(), 1)
 			}
 
-			// 2. Replace simple string placeholders
-			for k, v := range values {
-				s, ok := v.(string)
-				if !ok {
-					continue
-				}
-				re := regexp.MustCompile(`\{\{\s*` + regexp.QuoteMeta(k) + `\s*\}\}`)
-				xmlStr = re.ReplaceAllString(xmlStr, escapeXML(s))
+// 2. Replace simple string placeholders
+		for k, v := range values {
+			s, ok := v.(string)
+			if !ok {
+				continue
 			}
+			re := regexp.MustCompile(`\{\{\s*` + regexp.QuoteMeta(k) + `\s*\}\}`)
+			xmlStr = re.ReplaceAllString(xmlStr, escapeXML(s))
+		}
 
-			content = []byte(xmlStr)
+		// 3. Any remaining {{ key }} placeholders had no data — render blank.
+		xmlStr = placeholderRe.ReplaceAllString(xmlStr, "")
+
+		content = []byte(xmlStr)
 		}
 
 		fw.Write(content)

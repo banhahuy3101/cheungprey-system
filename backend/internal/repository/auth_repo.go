@@ -76,6 +76,9 @@ func (r *Repository) CreateProfile(profile *models.Profile) error {
 	if profile.Signature != nil {
 		payload["signature"] = *profile.Signature
 	}
+	if profile.DateOfBirth != nil && *profile.DateOfBirth != "" {
+		payload["date_of_birth"] = *profile.DateOfBirth
+	}
 	var inserted []models.Profile
 	_, err := r.AdminClient.From("profiles").
 		Upsert(payload, "", "representation", "").
@@ -161,6 +164,9 @@ func (r *Repository) AdminUpdateProfile(id uuid.UUID, req *models.AdminUpdateUse
 	}
 	if req.Signature != "" {
 		body["signature"] = req.Signature
+	}
+	if req.DateOfBirth != "" {
+		body["date_of_birth"] = req.DateOfBirth
 	}
 	body["updated_at"] = "now()"
 
@@ -248,6 +254,7 @@ func (r *Repository) ListAdminUsers() ([]models.AdminUser, error) {
 			VillageID:   p.VillageID,
 			Role:        primary,
 			Roles:       roles,
+			DateOfBirth: p.DateOfBirth,
 			CreatedAt:   p.CreatedAt,
 			UpdatedAt:   p.UpdatedAt,
 		})

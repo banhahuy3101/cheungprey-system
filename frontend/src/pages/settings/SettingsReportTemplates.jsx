@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { LuArrowLeft, LuFileText, LuDownload, LuTrash2, LuPlus, LuEye, LuPencil, LuCopy, LuCheck } from "react-icons/lu";
+import PageHeader from "../../components/PageHeader";
 import { reportTemplatesAPI } from "../../api/reportTemplates";
 import Modal from "./Modal";
 import TextEditor from "../../components/TextEditor";
@@ -73,15 +74,21 @@ export default function SettingsReportTemplates() {
 
   return (
     <div className="page template-page">
-      <div className="page-header">
-        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-          <button className="btn-icon" onClick={() => navigate("/settings")}><LuArrowLeft /></button>
-          <h2 className="section-title" style={{ margin: 0 }}>គ្រប់គ្រងគំរូរបាយការណ៍</h2>
-        </div>
-        <button type="button" className="btn btn-primary template-upload-btn" onClick={() => navigate("/settings/report-templates/new")}>
-          <LuPlus /> បន្ថែមគំរូ
-        </button>
-      </div>
+      <PageHeader
+        showBack={() => navigate("/settings")}
+        title="គ្រប់គ្រងគំរូរបាយការណ៍ (Report Templates)"
+        subtitle="បញ្ចូល និងគ្រប់គ្រងគំរូ .docx / .html សម្រាប់របាយការណ៍"
+        icon={<LuFileText size={20} />}
+        breadcrumbs={[
+          { label: "ការកំណត់", path: "/settings" },
+          { label: "គំរូរបាយការណ៍" },
+        ]}
+        actions={
+          <button type="button" className="btn btn-primary template-upload-btn" onClick={() => navigate("/settings/report-templates/new")}>
+            <LuPlus /> បន្ថែមគំរូ
+          </button>
+        }
+      />
 
       {message && (
         <div className={`alert ${message.includes("មិនបាន") ? "alert-error" : "alert-success"}`}>
@@ -90,7 +97,44 @@ export default function SettingsReportTemplates() {
       )}
 
       {loading ? (
-        <div className="loading">កំពុងផ្ទុក...</div>
+        <div className="table-responsive shadow-sm" style={{ borderRadius: "12px", border: "1px solid #e2e8f0" }}>
+          <table className="table template-table">
+            <thead>
+              <tr style={{ background: "#f8fafc" }}>
+                <th>ឈ្មោះ (Name)</th>
+                <th>ប្រភេទ (Format)</th>
+                <th>ទំហំ</th>
+                <th>កាលបរិច្ឆេទ</th>
+                <th style={{ textAlign: "right" }}>សកម្មភាព</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[1, 2, 3, 4, 5].map((i) => (
+                <tr key={i}>
+                  <td>
+                    <div className="skeleton-shimmer" style={{ height: "18px", width: "65%" }} />
+                  </td>
+                  <td>
+                    <div className="skeleton-shimmer" style={{ height: "20px", width: "50px", borderRadius: "12px" }} />
+                  </td>
+                  <td>
+                    <div className="skeleton-shimmer" style={{ height: "16px", width: "55px" }} />
+                  </td>
+                  <td>
+                    <div className="skeleton-shimmer" style={{ height: "16px", width: "85px" }} />
+                  </td>
+                  <td>
+                    <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.35rem" }}>
+                      <div className="skeleton-shimmer" style={{ height: "30px", width: "30px", borderRadius: "6px" }} />
+                      <div className="skeleton-shimmer" style={{ height: "30px", width: "30px", borderRadius: "6px" }} />
+                      <div className="skeleton-shimmer" style={{ height: "30px", width: "30px", borderRadius: "6px" }} />
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       ) : templates.length === 0 ? (
         <div className="card template-empty">
           <LuFileText className="template-empty-icon" />

@@ -2,13 +2,13 @@ import { useState, useEffect, useCallback } from "react";
 import {
   LuShieldCheck,
   LuClock,
-  LuCheckCircle2,
-  LuXCircle,
+  LuCircleCheck,
+  LuCircleX,
   LuChevronRight,
   LuUserCheck,
   LuMessageSquare,
   LuPenTool,
-  LuAlertCircle,
+  LuCircleAlert,
 } from "react-icons/lu";
 import { approvalsAPI, modulesAPI } from "../../api/modules";
 import { useAuth } from "../../hooks/useAuth";
@@ -85,13 +85,15 @@ export default function PendingWorkflowCard({
   // Check if current user is authorized for the active step
   const requiredRole = activeStepDef?.approver_role;
   const userRoles = user?.roles || (user?.role ? [user.role] : []);
+  const isAssignedPerson =
+    !!activeApproval?.approver_id &&
+    user?.id &&
+    String(user.id) === String(activeApproval.approver_id);
   const canUserApprove =
     !!activeApproval &&
-    (canAccess(user, FEATURES.settings) ||
-      canAccess(user, FEATURES.users) ||
-      canAccess(user, moduleKey, "update") ||
-      canAccess(user, `${moduleKey}_admin`) ||
-      (requiredRole && userRoles.includes(requiredRole)));
+    (isAssignedPerson ||
+      (user?.roles && user.roles.includes("super_admin")) ||
+      user?.role === "super_admin");
 
   const handleApproveStep = async () => {
     if (!activeApproval) return;
@@ -273,6 +275,7 @@ export default function PendingWorkflowCard({
             const isStepRejected = histItem?.status === "rejected";
             const isCurrent = activeApproval?.step_order === stepNum;
             const roleName =
+              histItem?.approver_name ||
               ROLE_LABELS_KM[s.approver_role] ||
               s.approver_role ||
               `ជំហានទី ${stepNum}`;
@@ -320,9 +323,9 @@ export default function PendingWorkflowCard({
                   }}
                 >
                   {isDone ? (
-                    <LuCheckCircle2 size={16} color="#166534" />
+                    <LuCircleCheck size={16} color="#166534" />
                   ) : isStepRejected ? (
-                    <LuXCircle size={16} color="#dc2626" />
+                    <LuCircleX size={16} color="#dc2626" />
                   ) : isCurrent ? (
                     <LuClock size={16} color="#2563eb" />
                   ) : (
@@ -393,7 +396,8 @@ export default function PendingWorkflowCard({
                   <span>
                     រង់ចាំការពិនិត្យពី ៖{" "}
                     <strong>
-                      {ROLE_LABELS_KM[requiredRole] ||
+                      {activeApproval?.approver_name ||
+                        ROLE_LABELS_KM[requiredRole] ||
                         requiredRole ||
                         "អ្នកគ្រប់គ្រង"}
                     </strong>
@@ -435,7 +439,7 @@ export default function PendingWorkflowCard({
                     disabled={processing}
                     style={{ color: "#dc2626", borderColor: "#fca5a5" }}
                   >
-                    <LuXCircle size={15} /> បដិសេធ
+                    <LuCircleX size={15} /> បដិសេធ
                   </button>
                   <button
                     type="button"
@@ -444,7 +448,7 @@ export default function PendingWorkflowCard({
                     disabled={processing}
                     style={{ fontWeight: 700 }}
                   >
-                    <LuCheckCircle2 size={15} />{" "}
+                    <LuCircleCheck size={15} />{" "}
                     {processing ? "កំពុងអនុម័ត..." : "អនុម័តជំហាននេះ"}
                   </button>
                 </div>
@@ -518,7 +522,7 @@ export default function PendingWorkflowCard({
               gap: "0.4rem",
             }}
           >
-            <LuAlertCircle size={16} /> {error}
+            <LuCircleAlert size={16} /> {error}
           </div>
         )}
         {successMsg && (
@@ -532,7 +536,7 @@ export default function PendingWorkflowCard({
               gap: "0.4rem",
             }}
           >
-            <LuCheckCircle2 size={16} /> {successMsg}
+            <LuCircleCheck size={16} /> {successMsg}
           </div>
         )}
 
@@ -616,8 +620,8 @@ export default function PendingWorkflowCard({
                   </div>
 
                   <span style={{ color: "#94a3b8", fontSize: "0.72rem" }}>
-                    {h.updated_at
-                      ? new Date(h.updated_at).toLocaleString("km-KH")
+                    {h.approved_at
+                      ? new Date(h.approved_at).toLocaleString("km-KH")
                       : "—"}
                   </span>
                 </div>

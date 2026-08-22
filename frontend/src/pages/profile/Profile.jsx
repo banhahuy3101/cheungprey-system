@@ -18,6 +18,7 @@ import {
   LuRefreshCw,
 } from "react-icons/lu";
 import { useAuth } from "../../hooks/useAuth";
+import PageHeader from "../../components/PageHeader";
 import { adminAPI } from "../../api/admin";
 import { authAPI } from "../../api/auth";
 import { partyAPI } from "../../api/party";
@@ -369,14 +370,15 @@ export default function Profile() {
 
   return (
     <div className="page">
-      <div className="page-header" style={{ marginBottom: "1rem" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-          <button className="btn-icon" onClick={() => navigate(-1)} title="ត្រឡប់ក្រោយ">
-            <LuArrowLeft size={18} />
-          </button>
-          <h2 className="section-title">ប្រវត្តិរូបគណនី</h2>
-        </div>
-      </div>
+      <PageHeader
+        showBack={true}
+        title="ប្រវត្តិរូបគណនី (User Profile)"
+        subtitle="ព័ត៌មានគណនីផ្ទាល់ខ្លួន តួនាទី និងហត្ថលេខាឌីជីថល"
+        icon={<LuUser size={20} />}
+        breadcrumbs={[
+          { label: "ប្រវត្តិរូប" },
+        ]}
+      />
 
       {success && (
         <div className="alert alert-success" style={{ marginBottom: "1rem" }}>{success}</div>
