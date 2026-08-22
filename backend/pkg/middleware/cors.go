@@ -12,7 +12,7 @@ import (
 func CORS() gin.HandlerFunc {
 	cfg := cors.Config{
 		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"},
-		AllowHeaders:     []string{"Authorization", "Content-Type", "Accept", "Origin"},
+		AllowHeaders:     []string{"Authorization", "Content-Type", "Accept", "Origin", "X-Latitude", "X-Longitude"},
 		ExposeHeaders:    []string{"Content-Length", "Content-Type", "Content-Disposition"},
 		AllowCredentials: false,
 		MaxAge:           12 * time.Hour,
@@ -46,6 +46,10 @@ func CORS() gin.HandlerFunc {
 			}
 			// Render static sites proxy /api same-origin; browser still sends Origin.
 			if strings.HasSuffix(origin, ".onrender.com") {
+				return true
+			}
+			// Cloud Run default domains for direct frontend/backend deployments.
+			if strings.HasSuffix(origin, ".run.app") {
 				return true
 			}
 			return false
