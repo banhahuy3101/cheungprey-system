@@ -56,6 +56,15 @@ export default function SponsorshipForm() {
 
   const usageTextareaRef = useRef(null);
 
+  // Close on Escape
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape" && modalOpen) closeModal();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [modalOpen, closeModal]);
+
   useEffect(() => {
     if (selectedRecord) {
       setForm({
@@ -181,7 +190,6 @@ export default function SponsorshipForm() {
   // Switch between structured Repeater and Raw Text Mode
   const toggleRawTextMode = () => {
     if (!rawTextMode) {
-      // Convert structured items to raw text
       const rawLines = items
         .filter((it) => it.item_name)
         .map((it) => `${it.item_name} ${it.item_qty} ${it.item_unit}`)
@@ -189,7 +197,6 @@ export default function SponsorshipForm() {
       setRawTextValue(rawLines);
       setRawTextMode(true);
     } else {
-      // Parse raw text back into structured items (split by comma/semicolon/newline)
       if (rawTextValue.trim()) {
         const parts = rawTextValue.split(/[,;\n]+/).map((s) => s.trim()).filter(Boolean);
         const parsedItems = parts.map((part) => {
@@ -234,7 +241,6 @@ export default function SponsorshipForm() {
   const handleSubmit = async (submitImmediately = false) => {
     setError("");
 
-    // If still in raw text mode, parse first
     let finalItems = items;
     if (rawTextMode && rawTextValue.trim()) {
       const parts = rawTextValue.split(/[,;\n]+/).map((s) => s.trim()).filter(Boolean);
@@ -269,55 +275,69 @@ export default function SponsorshipForm() {
   };
 
   return (
-    <div className="modal-backdrop" onClick={closeModal}>
-      <div
-        className="modal-content"
-        style={{ maxWidth: "880px", maxHeight: "92vh", overflowY: "auto", borderRadius: "14px" }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="modal-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid #e2e8f0", paddingBottom: "0.85rem" }}>
+    <div className="sponsorship-modal-backdrop" onClick={closeModal}>
+      <div className="sponsorship-modal-content" onClick={(e) => e.stopPropagation()}>
+        {/* Header */}
+        <div className="sponsorship-modal-header">
           <div>
-            <h3 style={{ margin: 0, fontSize: "1.25rem", color: "#1e3a8a", fontWeight: "700" }}>
+            <h3 style={{ margin: 0, fontSize: "1.2rem", fontWeight: "700", color: "#1e3a8a" }}>
               {isEdit ? "កែប្រែទិន្នន័យឧបត្ថម្ភ" : "បញ្ចូលកំណត់ត្រាឧបត្ថម្ភថ្មី (តារាងឧបសម្ព័ន្ធ)"}
             </h3>
             <span style={{ fontSize: "0.8rem", color: "#64748b" }}>
-              Ledger Line-Item Data Entry & Processing Engine (BRD Standard)
+              District Sponsorship & Donation Management System
             </span>
           </div>
-          <button type="button" className="btn-icon" onClick={closeModal} aria-label="បិទ">
-            <LuX size={20} />
+          <button
+            type="button"
+            className="btn-icon"
+            onClick={closeModal}
+            aria-label="បិទ"
+            style={{
+              background: "#ffffff",
+              border: "1px solid #cbd5e1",
+              borderRadius: "50%",
+              width: "32px",
+              height: "32px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: "#64748b",
+              cursor: "pointer",
+            }}
+          >
+            <LuX size={17} />
           </button>
         </div>
 
-        {error && (
-          <div
-            style={{
-              padding: "0.75rem 1rem",
-              background: "#fef2f2",
-              border: "1px solid #fecaca",
-              color: "#b91c1c",
-              borderRadius: "8px",
-              marginTop: "0.85rem",
-              fontSize: "0.88rem",
-              display: "flex",
-              alignItems: "center",
-              gap: "0.5rem",
-            }}
-          >
-            <LuShieldAlert size={18} />
-            <span>{error}</span>
-          </div>
-        )}
+        {/* Body */}
+        <div className="sponsorship-modal-body">
+          {error && (
+            <div
+              style={{
+                padding: "0.75rem 1rem",
+                background: "#fef2f2",
+                border: "1px solid #fecaca",
+                color: "#b91c1c",
+                borderRadius: "8px",
+                fontSize: "0.88rem",
+                display: "flex",
+                alignItems: "center",
+                gap: "0.5rem",
+              }}
+            >
+              <LuShieldAlert size={18} />
+              <span>{error}</span>
+            </div>
+          )}
 
-        <div className="modal-body" style={{ display: "flex", flexDirection: "column", gap: "1.15rem", marginTop: "0.85rem" }}>
-          {/* Section A: Header & Contributor Configuration */}
-          <div style={{ background: "#f8fafc", padding: "1.1rem", borderRadius: "10px", border: "1px solid #e2e8f0" }}>
-            <h4 style={{ margin: "0 0 0.85rem", fontSize: "0.95rem", color: "#1e3a8a", fontWeight: "700", display: "flex", alignItems: "center", gap: "0.4rem" }}>
-              <span>ផ្នែកទី ១ ៖ ព័ត៌មានអ្នកឧបត្ថម្ភ និងការចាត់ថ្នាក់ប្រតិបត្តិការ</span>
+          {/* Section 1: Header & Contributor Configuration */}
+          <div className="sponsorship-form-section tinted">
+            <h4 className="sponsorship-form-section-title">
+              ផ្នែកទី ១ ៖ ព័ត៌មានអ្នកឧបត្ថម្ភ និងការចាត់ថ្នាក់ប្រតិបត្តិការ
             </h4>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0.85rem" }}>
-              {/* Row Sequence / ID */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "0.85rem" }}>
+              {/* Row Sequence */}
               <div className="form-group">
                 <label className="form-label" style={{ fontWeight: "600" }}>
                   ល.រ (Row ID / Sequence)
@@ -332,9 +352,9 @@ export default function SponsorshipForm() {
               </div>
 
               {/* Entry Classification */}
-              <div className="form-group" style={{ gridColumn: "span 2" }}>
+              <div className="form-group">
                 <label className="form-label" style={{ fontWeight: "600" }}>
-                  ប្រភេទប្រតិបត្តិការ (Entry Classification) <span style={{ color: "red" }}>*</span>
+                  ប្រភេទប្រតិបត្តិការ (Classification) <span style={{ color: "red" }}>*</span>
                 </label>
                 <select
                   className="form-control"
@@ -351,7 +371,7 @@ export default function SponsorshipForm() {
               </div>
 
               {/* Leadership Header Section */}
-              <div className="form-group" style={{ gridColumn: "span 3" }}>
+              <div className="form-group" style={{ gridColumn: "1 / -1" }}>
                 <label className="form-label" style={{ fontWeight: "600" }}>
                   ក្រុមឧបត្ថម្ភ (Header Section Group) <span style={{ color: "red" }}>*</span>
                 </label>
@@ -370,7 +390,7 @@ export default function SponsorshipForm() {
               </div>
 
               {form.section_group === "custom" && (
-                <div className="form-group" style={{ gridColumn: "span 3" }}>
+                <div className="form-group" style={{ gridColumn: "1 / -1" }}>
                   <label className="form-label">បញ្ចូលឈ្មោះក្រុមឧបត្ថម្ភផ្ទាល់ខ្លួន</label>
                   <input
                     type="text"
@@ -383,7 +403,7 @@ export default function SponsorshipForm() {
               )}
 
               {/* Contributor / Section Name */}
-              <div className="form-group" style={{ gridColumn: "span 3" }}>
+              <div className="form-group" style={{ gridColumn: "1 / -1" }}>
                 <label className="form-label" style={{ fontWeight: "600" }}>
                   ពេញនាម និង នាម / ស្ថាប័ន (Contributor Name & Title) <span style={{ color: "red" }}>*</span>
                 </label>
@@ -396,7 +416,7 @@ export default function SponsorshipForm() {
                 />
               </div>
 
-              {/* Period & Target Location */}
+              {/* Period */}
               <div className="form-group">
                 <label className="form-label" style={{ fontWeight: "600" }}>
                   កាលបរិច្ឆេទ / ខែ (Period) <span style={{ color: "red" }}>*</span>
@@ -414,7 +434,8 @@ export default function SponsorshipForm() {
                 </select>
               </div>
 
-              <div className="form-group" style={{ gridColumn: "span 2" }}>
+              {/* Target Location */}
+              <div className="form-group">
                 <label className="form-label" style={{ fontWeight: "600" }}>
                   ឃុំ / ទីតាំងគោលដៅ (Target Area) <span style={{ color: "red" }}>*</span>
                 </label>
@@ -433,14 +454,14 @@ export default function SponsorshipForm() {
             </div>
           </div>
 
-          {/* Section B: Dual Currency Cash Inputs */}
-          <div style={{ background: "#ffffff", padding: "1.1rem", borderRadius: "10px", border: "1px solid #e2e8f0" }}>
-            <h4 style={{ margin: "0 0 0.85rem", fontSize: "0.95rem", color: "#334155", display: "flex", alignItems: "center", gap: "0.4rem" }}>
-              <LuDollarSign color="#059669" />
-              <span style={{ fontWeight: "700" }}>ផ្នែកទី ២ ៖ ថវិកាសាច់ប្រាក់ (Dual-Currency Cash Amounts)</span>
+          {/* Section 2: Dual Currency Cash Inputs */}
+          <div className="sponsorship-form-section">
+            <h4 className="sponsorship-form-section-title" style={{ color: "#059669" }}>
+              <LuDollarSign color="#059669" size={18} />
+              <span>ផ្នែកទី ២ ៖ ថវិកាសាច់ប្រាក់ (Dual-Currency Cash Amounts)</span>
             </h4>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "1rem" }}>
               {/* USD Amount */}
               <div className="form-group">
                 <label className="form-label" style={{ fontWeight: "600", color: "#059669" }}>
@@ -453,7 +474,7 @@ export default function SponsorshipForm() {
                     placeholder="0.00"
                     value={form.amount_usd}
                     onChange={(e) => setForm({ ...form, amount_usd: normalizeKhmerDigits(e.target.value) })}
-                    style={{ fontWeight: "700", fontSize: "1.1rem", color: "#059669" }}
+                    style={{ fontWeight: "700", fontSize: "1.1rem", color: "#059669", paddingRight: "30px" }}
                   />
                   <span style={{ position: "absolute", right: "12px", top: "50%", transform: "translateY(-50%)", color: "#059669", fontWeight: "bold" }}>
                     $
@@ -481,7 +502,7 @@ export default function SponsorshipForm() {
                     placeholder="0"
                     value={form.amount_khr}
                     onChange={(e) => setForm({ ...form, amount_khr: normalizeKhmerDigits(e.target.value) })}
-                    style={{ fontWeight: "700", fontSize: "1.1rem", color: "#2563eb" }}
+                    style={{ fontWeight: "700", fontSize: "1.1rem", color: "#2563eb", paddingRight: "30px" }}
                   />
                   <span style={{ position: "absolute", right: "12px", top: "50%", transform: "translateY(-50%)", color: "#2563eb", fontWeight: "bold" }}>
                     ៛
@@ -499,12 +520,12 @@ export default function SponsorshipForm() {
             </div>
           </div>
 
-          {/* Section C: Granular Physical Goods / Material Ledger */}
-          <div style={{ background: "#ffffff", padding: "1.1rem", borderRadius: "10px", border: "1px solid #e2e8f0" }}>
+          {/* Section 3: Granular Physical Goods / Material Ledger */}
+          <div className="sponsorship-form-section">
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.85rem", flexWrap: "wrap", gap: "0.5rem" }}>
-              <h4 style={{ margin: 0, fontSize: "0.95rem", color: "#334155", display: "flex", alignItems: "center", gap: "0.4rem" }}>
-                <LuPackage color="#d97706" />
-                <span style={{ fontWeight: "700" }}>ផ្នែកទី ៣ ៖ សម្ភារ ឯកតា (Granular Physical Goods Ledger)</span>
+              <h4 className="sponsorship-form-section-title" style={{ margin: 0, color: "#d97706" }}>
+                <LuPackage color="#d97706" size={18} />
+                <span>ផ្នែកទី ៣ ៖ សម្ភារ ឯកតា (Granular Physical Goods Ledger)</span>
               </h4>
 
               <div style={{ display: "flex", gap: "0.5rem" }}>
@@ -635,9 +656,9 @@ export default function SponsorshipForm() {
             )}
           </div>
 
-          {/* Section D: Purpose & Destination with Quick Helper Tags */}
-          <div style={{ background: "#ffffff", padding: "1.1rem", borderRadius: "10px", border: "1px solid #e2e8f0" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
+          {/* Section 4: Purpose & Destination with Quick Tags */}
+          <div className="sponsorship-form-section">
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem", flexWrap: "wrap", gap: "0.4rem" }}>
               <label className="form-label" style={{ fontWeight: "700", margin: 0, color: "#1e3a8a" }}>
                 ទីកន្លែងទទួល និង ប្រើប្រាស់ (Purpose & Destination) <span style={{ color: "red" }}>*</span>
               </label>
@@ -669,7 +690,7 @@ export default function SponsorshipForm() {
             />
           </div>
 
-          {/* Section E: Remarks / Miscellaneous Footnotes */}
+          {/* Section 5: Remarks */}
           <div className="form-group">
             <label className="form-label" style={{ fontWeight: "600", color: "#475569" }}>
               ផ្សេងៗ (Remarks & Unbudgeted Contingencies)
@@ -683,26 +704,25 @@ export default function SponsorshipForm() {
             />
           </div>
 
-          {/* Section F: Real-time Footer Balance Card & Variance Audit */}
+          {/* Section 6: Real-time Footer Balance Card & Variance Audit */}
           <div
             style={{
               background: "#f8fafc",
               border: "1px solid #cbd5e1",
-              borderRadius: "10px",
+              borderRadius: "12px",
               padding: "1rem",
-              marginTop: "0.25rem",
             }}
           >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.75rem" }}>
               <div>
-                <span style={{ fontSize: "0.82rem", fontWeight: "700", color: "#475569", textTransform: "uppercase" }}>
+                <span style={{ fontSize: "0.8rem", fontWeight: "700", color: "#475569", textTransform: "uppercase" }}>
                   តុល្យភាពសរុបនៃកំណត់ត្រានេះ (Batch Real-Time Balance) ៖
                 </span>
-                <div style={{ display: "flex", gap: "1.25rem", marginTop: "0.25rem", alignItems: "center" }}>
-                  <span style={{ fontSize: "1.1rem", fontWeight: "700", color: "#059669" }}>
+                <div style={{ display: "flex", gap: "1.25rem", marginTop: "0.25rem", alignItems: "center", flexWrap: "wrap" }}>
+                  <span style={{ fontSize: "1.05rem", fontWeight: "700", color: "#059669" }}>
                     USD: {toKhmerDigits(parsedUSD)} $
                   </span>
-                  <span style={{ fontSize: "1.1rem", fontWeight: "700", color: "#2563eb" }}>
+                  <span style={{ fontSize: "1.05rem", fontWeight: "700", color: "#2563eb" }}>
                     KHR: {toKhmerDigits(parsedKHR)} ៛
                   </span>
                   <span style={{ fontSize: "0.95rem", fontWeight: "600", color: "#d97706" }}>
@@ -712,7 +732,7 @@ export default function SponsorshipForm() {
               </div>
 
               {/* Audit reconciliation fields */}
-              <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+              <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
                 <span style={{ fontSize: "0.75rem", color: "#64748b" }}>
                   ផ្ទៀងផ្ទាត់តារាងក្រដាស (Audit Check):
                 </span>
@@ -777,32 +797,35 @@ export default function SponsorshipForm() {
           </div>
         </div>
 
-        <div className="modal-footer" style={{ display: "flex", justifyContent: "flex-end", gap: "0.75rem", marginTop: "1rem", borderTop: "1px solid #e2e8f0", paddingTop: "0.85rem" }}>
+        {/* Footer */}
+        <div className="sponsorship-modal-footer">
           <button type="button" className="btn btn-secondary" onClick={closeModal} disabled={saving}>
             បោះបង់
           </button>
-          {!isEdit && (
+          <div style={{ display: "flex", gap: "0.6rem" }}>
+            {!isEdit && (
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => handleSubmit(true)}
+                disabled={saving}
+                style={{ background: "#2563eb", display: "flex", alignItems: "center", gap: "0.4rem" }}
+              >
+                <LuSend size={16} />
+                <span>{saving ? "កំពុងរក្សាទុក..." : "រក្សាទុក និងដាក់ស្នើពិនិត្យ"}</span>
+              </button>
+            )}
             <button
               type="button"
-              className="btn btn-primary"
-              onClick={() => handleSubmit(true)}
+              className="btn btn-success"
+              onClick={() => handleSubmit(false)}
               disabled={saving}
-              style={{ background: "#2563eb", display: "flex", alignItems: "center", gap: "0.4rem" }}
+              style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontWeight: "600" }}
             >
-              <LuSend size={16} />
-              <span>{saving ? "កំពុងរក្សាទុក..." : "រក្សាទុក និងដាក់ស្នើពិនិត្យ"}</span>
+              <LuSave size={16} />
+              <span>{saving ? "កំពុងរក្សាទុក..." : isEdit ? "រក្សាទុកការកែប្រែ" : "រក្សាទុកជាសេចក្តីព្រាង"}</span>
             </button>
-          )}
-          <button
-            type="button"
-            className="btn btn-success"
-            onClick={() => handleSubmit(false)}
-            disabled={saving}
-            style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontWeight: "600" }}
-          >
-            <LuSave size={16} />
-            <span>{saving ? "កំពុងរក្សាទុក..." : isEdit ? "រក្សាទុកការកែប្រែ" : "រក្សាទុកជាសេចក្តីព្រាង"}</span>
-          </button>
+          </div>
         </div>
       </div>
     </div>

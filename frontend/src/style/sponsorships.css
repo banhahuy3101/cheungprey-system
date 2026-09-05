@@ -281,17 +281,126 @@
   color: #2563eb;
 }
 
+/* ========================================================= */
+/* Sponsorship Data Entry Modal Styles                      */
+/* ========================================================= */
+
+@keyframes modalBackdropFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes modalPopupScale {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.sponsorship-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.68);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  animation: modalBackdropFadeIn 0.2s ease-out;
+}
+
+.sponsorship-modal-content {
+  width: 100%;
+  max-width: 900px;
+  max-height: 92vh;
+  background: #ffffff;
+  border-radius: 16px;
+  box-shadow: 0 25px 50px -12px rgba(15, 23, 42, 0.25), 0 0 0 1px rgba(0, 0, 0, 0.06);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: modalPopupScale 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.sponsorship-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.15rem 1.5rem;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.sponsorship-modal-header h3 {
+  margin: 0;
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: #1e3a8a;
+}
+
+.sponsorship-modal-body {
+  padding: 1.25rem 1.5rem;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1.15rem;
+}
+
+.sponsorship-modal-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  padding: 1rem 1.5rem;
+  background: #f8fafc;
+  border-top: 1px solid #e2e8f0;
+}
+
+.sponsorship-form-section {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 1.15rem;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+}
+
+.sponsorship-form-section.tinted {
+  background: #f8fafc;
+  border-color: #e2e8f0;
+}
+
+.sponsorship-form-section-title {
+  margin: 0 0 0.85rem;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #1e3a8a;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
 /* Dynamic Line Items Table in Form */
 .form-items-table {
   width: 100%;
   border-collapse: collapse;
   margin-top: 0.5rem;
-  margin-bottom: 0.75rem;
+  margin-bottom: 0.5rem;
 }
 
 .form-items-table th,
 .form-items-table td {
-  padding: 0.5rem;
+  padding: 0.5rem 0.6rem;
   border: 1px solid #e2e8f0;
   font-size: 0.85rem;
 }
@@ -301,6 +410,22 @@
   font-weight: 600;
   color: #475569;
   text-align: left;
+}
+
+@media (max-width: 768px) {
+  .sponsorship-modal-content {
+    max-height: 96vh;
+    border-radius: 12px;
+  }
+  .sponsorship-modal-header {
+    padding: 0.9rem 1rem;
+  }
+  .sponsorship-modal-body {
+    padding: 1rem;
+  }
+  .sponsorship-modal-footer {
+    padding: 0.85rem 1rem;
+  }
 }
 
 /* Inventory Summary Rollup Card */
