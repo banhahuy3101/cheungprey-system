@@ -338,6 +338,7 @@ export default function SettingsMenuItemForm() {
         toast.success("បានបង្កើតម៉ឺនុយថ្មីបានសម្រេច!");
       }
 
+      localStorage.removeItem("menu_items_cache");
       navigate("/settings/menu-items");
     } catch (err) {
       toast.error(err.response?.data?.error || "រក្សាទុកមិនបានសម្រេច");

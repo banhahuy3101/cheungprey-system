@@ -60,6 +60,7 @@ export default function AuthProvider({ children }) {
         localStorage.removeItem("access_token");
         localStorage.removeItem("refresh_token");
         localStorage.removeItem("cached_user_profile");
+        localStorage.removeItem("menu_items_cache");
         setRolePermissions([]);
         setUser(null);
         return null;
@@ -128,6 +129,7 @@ export default function AuthProvider({ children }) {
     localStorage.removeItem("access_token");
     localStorage.removeItem("refresh_token");
     localStorage.removeItem("cached_user_profile");
+    localStorage.removeItem("menu_items_cache");
 
     const { data } = await authAPI.login({
       email: credentials?.email?.trim() ?? "",
@@ -161,6 +163,7 @@ export default function AuthProvider({ children }) {
     localStorage.removeItem("access_token");
     localStorage.removeItem("refresh_token");
     localStorage.removeItem("cached_user_profile");
+    localStorage.removeItem("menu_items_cache");
 
     const { data } = await authAPI.qrLogin(qrToken);
     const inner = data.data || data;
@@ -186,6 +189,7 @@ export default function AuthProvider({ children }) {
     localStorage.removeItem("access_token");
     localStorage.removeItem("refresh_token");
     localStorage.removeItem("cached_user_profile");
+    localStorage.removeItem("menu_items_cache");
     setUser(null);
     setRolePermissions([]);
   };

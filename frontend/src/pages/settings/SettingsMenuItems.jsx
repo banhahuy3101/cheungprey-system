@@ -35,6 +35,7 @@ export default function SettingsMenuItems() {
     if (!window.confirm(`តើអ្នកពិតជាចង់លុបម៉ឺនុយ "${item.title}" នេះមែនទេ?`)) return;
     try {
       await menuItemsAPI.delete(item.id);
+      localStorage.removeItem("menu_items_cache");
       toast.success("បានលុបម៉ឺនុយបានសម្រេច");
       fetchItems();
     } catch (err) {

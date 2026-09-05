@@ -46,15 +46,33 @@ export default function Layout() {
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem("sidebar_collapsed") === "true");
-  const [menuTree, setMenuTree] = useState([]);
-  const [loadingMenu, setLoadingMenu] = useState(true);
+  const [menuTree, setMenuTree] = useState(() => {
+    try {
+      const cached = localStorage.getItem("menu_items_cache");
+      return cached ? JSON.parse(cached) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [loadingMenu, setLoadingMenu] = useState(() => {
+    try {
+      const cached = localStorage.getItem("menu_items_cache");
+      return !cached || JSON.parse(cached).length === 0;
+    } catch {
+      return true;
+    }
+  });
   const [openSubMenus, setOpenSubMenus] = useState({});
 
   useEffect(() => {
     let mounted = true;
+    const hasCached = !!localStorage.getItem("menu_items_cache");
+    if (!hasCached) {
+      setLoadingMenu(true);
+    }
+
     (async () => {
       try {
-        setLoadingMenu(true);
         const res = await menuItemsAPI.getTree();
         const data = res.data?.data || res.data || [];
         if (mounted && Array.isArray(data) && data.length > 0) {
@@ -78,9 +96,16 @@ export default function Layout() {
             topLevel.sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
           }
           setMenuTree(topLevel);
+          try {
+            localStorage.setItem("menu_items_cache", JSON.stringify(topLevel));
+          } catch {
+            // ignore quota errors
+          }
         }
       } catch {
-        if (mounted) setMenuTree([]);
+        if (mounted && !hasCached) {
+          setMenuTree([]);
+        }
       } finally {
         if (mounted) setLoadingMenu(false);
       }
