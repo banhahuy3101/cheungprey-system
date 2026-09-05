@@ -147,13 +147,10 @@ export function checkDiscrepancy(computed, manual) {
  * Validate sponsorship form inputs based on BRD rules
  */
 export function validateSponsorshipPayload(form, items) {
-  const section =
-    form.section_group === "custom"
-      ? normalizeKhmerText(form.custom_section)
-      : normalizeKhmerText(form.section_group);
+  const section = normalizeKhmerText(form.section_group || form.custom_section);
 
   if (!section) {
-    return { valid: false, error: "សូមជ្រើសរើស ឬបញ្ចូលក្រុមឧបត្ថម្ភ (Header Section is required)" };
+    return { valid: false, error: "សូមបញ្ចូលក្រុមឧបត្ថម្ភ (Header Section is required)" };
   }
   const contributor = normalizeKhmerText(form.contributor_name);
   if (!contributor) {

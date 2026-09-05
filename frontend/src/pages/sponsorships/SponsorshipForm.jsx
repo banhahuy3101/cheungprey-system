@@ -70,12 +70,8 @@ export default function SponsorshipForm() {
       setForm({
         entry_no: selectedRecord.entry_no ? String(selectedRecord.entry_no) : "",
         entry_classification: selectedRecord.entry_classification || "donation",
-        section_group: COMMON_SECTIONS.includes(selectedRecord.section_group)
-          ? selectedRecord.section_group
-          : "custom",
-        custom_section: !COMMON_SECTIONS.includes(selectedRecord.section_group)
-          ? selectedRecord.section_group
-          : "",
+        section_group: selectedRecord.section_group || COMMON_SECTIONS[0],
+        custom_section: "",
         contributor_name: selectedRecord.contributor_name || "",
         record_period: selectedRecord.record_period || COMMON_PERIODS[0],
         target_location: selectedRecord.target_location || COMMON_COMMUNES[0],
@@ -345,7 +341,7 @@ export default function SponsorshipForm() {
                 <input
                   type="text"
                   className="form-control"
-                  placeholder="ស្វ័យប្រវត្តិ (Auto)"
+                  placeholder="ស្វ័យប្រវត្តិ (Auto) ឬបញ្ចូលលេខ (1, 2, 3...)"
                   value={form.entry_no}
                   onChange={(e) => setForm({ ...form, entry_no: normalizeKhmerDigits(e.target.value) })}
                 />
@@ -356,18 +352,22 @@ export default function SponsorshipForm() {
                 <label className="form-label" style={{ fontWeight: "600" }}>
                   ប្រភេទប្រតិបត្តិការ (Classification) <span style={{ color: "red" }}>*</span>
                 </label>
-                <select
+                <input
+                  type="text"
+                  list="classifications-datalist"
                   className="form-control"
+                  placeholder="ជ្រើសរើស ឬវាយបញ្ចូលប្រភេទប្រតិបត្តិការ..."
                   value={form.entry_classification}
                   onChange={(e) => setForm({ ...form, entry_classification: e.target.value })}
                   style={{ fontWeight: "600" }}
-                >
+                />
+                <datalist id="classifications-datalist">
                   {ENTRY_CLASSIFICATIONS.map((cl) => (
                     <option key={cl.value} value={cl.value}>
                       {cl.label}
                     </option>
                   ))}
-                </select>
+                </datalist>
               </div>
 
               {/* Leadership Header Section */}
@@ -375,32 +375,21 @@ export default function SponsorshipForm() {
                 <label className="form-label" style={{ fontWeight: "600" }}>
                   ក្រុមឧបត្ថម្ភ (Header Section Group) <span style={{ color: "red" }}>*</span>
                 </label>
-                <select
+                <input
+                  type="text"
+                  list="sections-datalist"
                   className="form-control"
+                  placeholder="វាយបញ្ចូល ឬជ្រើសរើសក្រុមឧបត្ថម្ភ..."
                   value={form.section_group}
                   onChange={(e) => setForm({ ...form, section_group: e.target.value })}
-                >
+                  style={{ fontWeight: "600" }}
+                />
+                <datalist id="sections-datalist">
                   {COMMON_SECTIONS.map((sec) => (
-                    <option key={sec} value={sec}>
-                      {sec}
-                    </option>
+                    <option key={sec} value={sec} />
                   ))}
-                  <option value="custom">+ បញ្ចូលឈ្មោះក្រុមផ្សេងទៀត (Custom)...</option>
-                </select>
+                </datalist>
               </div>
-
-              {form.section_group === "custom" && (
-                <div className="form-group" style={{ gridColumn: "1 / -1" }}>
-                  <label className="form-label">បញ្ចូលឈ្មោះក្រុមឧបត្ថម្ភផ្ទាល់ខ្លួន</label>
-                  <input
-                    type="text"
-                    className="form-control"
-                    placeholder="ឧ. ការឧបត្ថម្ភរបស់..."
-                    value={form.custom_section}
-                    onChange={(e) => setForm({ ...form, custom_section: e.target.value })}
-                  />
-                </div>
-              )}
 
               {/* Contributor / Section Name */}
               <div className="form-group" style={{ gridColumn: "1 / -1" }}>
@@ -421,17 +410,19 @@ export default function SponsorshipForm() {
                 <label className="form-label" style={{ fontWeight: "600" }}>
                   កាលបរិច្ឆេទ / ខែ (Period) <span style={{ color: "red" }}>*</span>
                 </label>
-                <select
+                <input
+                  type="text"
+                  list="periods-datalist"
                   className="form-control"
+                  placeholder="វាយបញ្ចូលកាលបរិច្ឆេទ ឬខែ (ឧ. ខែតុលា ឆ្នាំ២០២៥)..."
                   value={form.record_period}
                   onChange={(e) => setForm({ ...form, record_period: e.target.value })}
-                >
+                />
+                <datalist id="periods-datalist">
                   {COMMON_PERIODS.map((p) => (
-                    <option key={p} value={p}>
-                      {p}
-                    </option>
+                    <option key={p} value={p} />
                   ))}
-                </select>
+                </datalist>
               </div>
 
               {/* Target Location */}
@@ -439,17 +430,19 @@ export default function SponsorshipForm() {
                 <label className="form-label" style={{ fontWeight: "600" }}>
                   ឃុំ / ទីតាំងគោលដៅ (Target Area) <span style={{ color: "red" }}>*</span>
                 </label>
-                <select
+                <input
+                  type="text"
+                  list="locations-datalist"
                   className="form-control"
+                  placeholder="វាយបញ្ចូលទីតាំង ឬឃុំ (ឧ. ឃុំស្ដៅជុំ, ទូទាំងស្រុក)..."
                   value={form.target_location}
                   onChange={(e) => setForm({ ...form, target_location: e.target.value })}
-                >
+                />
+                <datalist id="locations-datalist">
                   {COMMON_COMMUNES.map((loc) => (
-                    <option key={loc} value={loc}>
-                      {loc}
-                    </option>
+                    <option key={loc} value={loc} />
                   ))}
-                </select>
+                </datalist>
               </div>
             </div>
           </div>
