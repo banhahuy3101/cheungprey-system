@@ -36,7 +36,7 @@ services:
     healthCheckPath: /
     envVars:
       - key: API_UPSTREAM
-        value: http://18.143.148.194:8080
+        value: https://cheungprey-api.onrender.com
 
   # Existing static site — requires Dashboard rewrites (Render ignores public/_redirects).
   - type: web
@@ -47,11 +47,11 @@ services:
     staticPublishPath: dist
     envVars:
       - key: VITE_API_URL
-        value: /api
+        value: https://cheungprey-api.onrender.com/api
     routes:
       - type: rewrite
         source: /api/*
-        destination: http://18.143.148.194:8080/api/*
+        destination: https://cheungprey-api.onrender.com/api/*
       - type: rewrite
         source: /*
         destination: /index.html
