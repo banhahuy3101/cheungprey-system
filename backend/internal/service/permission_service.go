@@ -42,6 +42,23 @@ func (s *PermissionService) GetUserAccess(userID uuid.UUID) (*models.UserAccess,
 	}
 
 	merged := models.MergePermissions(rolePerms, roles)
+
+	// Filter out permissions for disabled modules dynamically
+	if moduleConfigs, err := s.repo.ListModuleConfigs(); err == nil {
+		disabledModules := make(map[string]bool)
+		for _, mc := range moduleConfigs {
+			if !mc.Enabled {
+				disabledModules[mc.ModuleKey] = true
+			}
+		}
+		for f := range merged {
+			mod := models.FeatureModule(f)
+			if mod != "" && disabledModules[mod] {
+				delete(merged, f)
+			}
+		}
+	}
+
 	primary := models.PrimaryRole(roles)
 
 	profile.Role = primary

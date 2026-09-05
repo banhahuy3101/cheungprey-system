@@ -132,3 +132,36 @@ export function isAdmin(user) {
 export function hasAnyFeature(user, features) {
   return features.some((f) => canAccess(user, f));
 }
+
+export function getModuleForFeature(feature) {
+  if (!feature) return null;
+  if (
+    feature.startsWith("members") ||
+    feature === "membership_write" ||
+    feature === "membership_dues" ||
+    feature === "membership_admin" ||
+    feature === "membership_cards" ||
+    feature === "membership_delete"
+  ) {
+    return "membership";
+  }
+  if (feature.startsWith("voters")) {
+    return "voters";
+  }
+  if (feature.startsWith("files")) {
+    return "files";
+  }
+  if (feature.startsWith("records")) {
+    return "records";
+  }
+  if (feature.startsWith("reports")) {
+    return "reports";
+  }
+  if (feature.startsWith("performance") || feature === "performance_admin") {
+    return "performance";
+  }
+  if (feature === "finances") {
+    return "finances";
+  }
+  return null;
+}

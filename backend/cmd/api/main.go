@@ -325,6 +325,7 @@ func main() {
 			}
 
 			reportDocs := protected.Group("/report-documents")
+			reportDocs.Use(moduleEnabled(repo, "reports"))
 			reportDocs.Use(auth.RequireFeature(models.FeatureReports))
 			{
 				reportDocs.GET("/:id/pdf", auth.RequireFeatureAction(models.FeatureReports, "read"), reportDocumentHandler.DownloadPDF)
@@ -343,6 +344,7 @@ func main() {
 			}
 
 			reportTemplates := protected.Group("/report-templates")
+			reportTemplates.Use(moduleEnabled(repo, "reports"))
 			reportTemplates.Use(auth.RequireFeature(models.FeatureReports))
 			{
 				reportTemplates.GET("", auth.RequireFeatureAction(models.FeatureReports, "read"), reportTemplateHandler.List)
@@ -379,6 +381,7 @@ func main() {
 			}
 
 			performanceAdmin := protected.Group("/performance")
+			performanceAdmin.Use(moduleEnabled(repo, "performance"))
 			performanceAdmin.Use(auth.RequireFeature(models.FeaturePerformanceAdmin))
 			{
 				performanceAdmin.POST("/domains", performanceHandler.CreateDomain)

@@ -96,6 +96,7 @@ import {
   LuSplit,
   LuCombine,
   LuSearch,
+  LuX,
 } from "react-icons/lu";
 
 const theme = {
@@ -505,6 +506,102 @@ function $createImageNode(src, altText, width, alignment) {
   return new ImageNode(src, altText, width || 400, alignment || "inline");
 }
 
+class DropCapNode extends DecoratorNode {
+  __letter;
+  __size;
+  __spacing;
+  __weight;
+
+  static getType() { return "drop-cap"; }
+  static clone(node) {
+    return new DropCapNode(node.__letter, node.__size, node.__spacing, node.__weight, node.__key);
+  }
+
+  constructor(letter, size, spacing, weight, key) {
+    super(key);
+    this.__letter = letter || "";
+    this.__size = size || 3;
+    this.__spacing = spacing || 4;
+    this.__weight = weight || 700;
+  }
+
+  createDOM() {
+    const span = document.createElement("span");
+    span.style.display = "inline";
+    return span;
+  }
+
+  updateDOM() { return false; }
+  isInline() { return true; }
+
+  exportJSON() {
+    return {
+      type: "drop-cap",
+      version: 1,
+      letter: this.__letter,
+      size: this.__size,
+      spacing: this.__spacing,
+      weight: this.__weight,
+    };
+  }
+
+  static importJSON(serializedNode) {
+    return new DropCapNode(
+      serializedNode.letter,
+      serializedNode.size,
+      serializedNode.spacing,
+      serializedNode.weight,
+    );
+  }
+
+  exportDOM() {
+    const span = document.createElement("span");
+    span.textContent = this.__letter;
+    span.dataset.dropCap = "true";
+    span.setAttribute("style", `float:left;font-size:${this.__size}em;line-height:1;margin-right:${this.__spacing}px;font-weight:${this.__weight}`);
+    return { element: span };
+  }
+
+  static importDOM() {
+    return {
+      span: (domNode) => {
+        if (!(domNode instanceof HTMLSpanElement) || domNode.dataset.dropCap !== "true") return null;
+        return {
+          conversion: (node) => {
+            const style = node.style;
+            const size = parseFloat(style.fontSize) || 3;
+            const spacing = parseInt(style.marginRight, 10) || 4;
+            const weight = parseInt(style.fontWeight, 10) || 700;
+            return { node: new DropCapNode(node.textContent || "", size, spacing, weight) };
+          },
+          priority: 2,
+        };
+      },
+    };
+  }
+
+  decorate() {
+    return (
+      <span
+        data-drop-cap="true"
+        style={{
+          float: "left",
+          fontSize: `${this.__size}em`,
+          lineHeight: 1,
+          marginRight: `${this.__spacing}px`,
+          fontWeight: this.__weight,
+        }}
+      >
+        {this.__letter}
+      </span>
+    );
+  }
+}
+
+function $createDropCapNode(letter, size, spacing, weight) {
+  return new DropCapNode(letter, size, spacing, weight);
+}
+
 
 function onError(error) {
   console.error("Lexical Error:", error);
@@ -794,6 +891,12 @@ function WordRibbonToolbar({ activeTab, setActiveTab, zoomLevel, setZoomLevel, i
   const [showBorders, setShowBorders] = useState(false);
   const [showSymbols, setShowSymbols] = useState(false);
   const [showParagraphMarks, setShowParagraphMarks] = useState(false);
+  const [showWatermarkMenu, setShowWatermarkMenu] = useState(false);
+  const [watermarkText, setWatermarkText] = useState("");
+  const [showDropCapMenu, setShowDropCapMenu] = useState(false);
+  const [dropCapSize, setDropCapSize] = useState(3);
+  const [dropCapSpacing, setDropCapSpacing] = useState(4);
+  const [dropCapWeight, setDropCapWeight] = useState(700);
   const [saved, setSaved] = useState(false);
 
   const updateToolbar = useCallback(() => {
@@ -1116,20 +1219,23 @@ function WordRibbonToolbar({ activeTab, setActiveTab, zoomLevel, setZoomLevel, i
     });
   };
 
-  const insertDropCap = () => {
+  const applyDropCap = () => {
     editor.update(() => {
       const selection = $getSelection();
       if ($isRangeSelection(selection)) {
         const text = selection.getTextContent();
         if (text.length > 0) {
-          const dropHtml = `<span style="float:left;font-size:3em;line-height:1;margin-right:4px;font-weight:700">${text[0]}</span>${text.slice(1)}`;
-          const parser = new DOMParser();
-          const dom = parser.parseFromString(dropHtml, "text/html");
-          const nodes = $generateNodesFromDOM(editor, dom);
-          $insertNodes(nodes);
+          const size = Math.max(1.5, Math.min(8, Number(dropCapSize) || 3));
+          const spacing = Math.max(0, Math.min(32, Number(dropCapSpacing) || 0));
+          const weight = Math.max(400, Math.min(900, Number(dropCapWeight) || 700));
+          const nodes = [$createDropCapNode(text[0], size, spacing, weight)];
+          const rest = text.slice(1);
+          if (rest) nodes.push($createTextNode(rest));
+          selection.insertNodes(nodes);
         }
       }
     });
+    setShowDropCapMenu(false);
   };
 
   const toggleTextDirection = () => {
@@ -1172,6 +1278,98 @@ function WordRibbonToolbar({ activeTab, setActiveTab, zoomLevel, setZoomLevel, i
     const kh = ["មករា","កុម្ភៈ","មីនា","មេសា","ឧសភា","មិថុនា","កក្កដា","សីហា","កញ្ញា","តុលា","វិច្ឆិកា","ធ្នូ"];
     const s = `ថ្ងៃទី${now.getDate()} ខែ${kh[now.getMonth()]} ឆ្នាំ${now.getFullYear()}`;
     editor.update(() => { const sel = $getSelection(); if ($isRangeSelection(sel)) sel.insertNodes([$createTextNode(s)]); });
+  };
+
+  const applyWatermark = (text) => {
+    const sheet = document.querySelector(".word-a4-sheet");
+    if (!sheet) return;
+    const old = sheet.querySelector(".watermark-overlay");
+    if (old) old.remove();
+    const label = String(text || "").trim();
+    if (!label) return;
+    const wm = document.createElement("div");
+    wm.className = "watermark-overlay";
+    wm.style.cssText = "position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:0;opacity:0.08;font-size:5rem;font-weight:900;color:#000;transform:rotate(-30deg);user-select:none;text-align:center;white-space:pre-wrap";
+    wm.textContent = label;
+    sheet.style.position = "relative";
+    sheet.appendChild(wm);
+  };
+
+  const insertHtmlBlock = (html) => {
+    editor.update(() => {
+      const selection = $getSelection();
+      if (!$isRangeSelection(selection)) return;
+      const parser = new DOMParser();
+      const dom = parser.parseFromString(html, "text/html");
+      $insertNodes($generateNodesFromDOM(editor, dom));
+    });
+  };
+
+  const insertOfficialHeader = () => {
+    insertHtmlBlock(`
+      <div style="text-align:center; line-height:1.7; margin-bottom:24px;">
+        <p style="margin:0; font-family:'Khmer OS Muol Light'; font-size:18px;">ព្រះរាជាណាចក្រកម្ពុជា</p>
+        <p style="margin:0; font-family:'Khmer OS Muol Light'; font-size:16px;">ជាតិ សាសនា ព្រះមហាក្សត្រ</p>
+        <p style="margin:8px 0 0 0;">3</p>
+      </div>
+      <p style="text-align:center; font-family:'Khmer OS Muol Light'; font-size:18px; margin:16px 0;">ចំណងជើងរបាយការណ៍</p>
+    `);
+  };
+
+  const insertReportMetaTable = () => {
+    insertHtmlBlock(`
+      <table style="width:100%; border-collapse:collapse; margin:12px 0; font-size:14px;">
+        <tbody>
+          <tr>
+            <td style="border:1px solid #cbd5e1; padding:8px; width:28%; background:#f8fafc; font-weight:700;">ប្រធានបទ</td>
+            <td style="border:1px solid #cbd5e1; padding:8px;">...</td>
+          </tr>
+          <tr>
+            <td style="border:1px solid #cbd5e1; padding:8px; background:#f8fafc; font-weight:700;">កាលបរិច្ឆេទ</td>
+            <td style="border:1px solid #cbd5e1; padding:8px;">...</td>
+          </tr>
+          <tr>
+            <td style="border:1px solid #cbd5e1; padding:8px; background:#f8fafc; font-weight:700;">ទីតាំង</td>
+            <td style="border:1px solid #cbd5e1; padding:8px;">...</td>
+          </tr>
+          <tr>
+            <td style="border:1px solid #cbd5e1; padding:8px; background:#f8fafc; font-weight:700;">អ្នករៀបចំ</td>
+            <td style="border:1px solid #cbd5e1; padding:8px;">...</td>
+          </tr>
+        </tbody>
+      </table>
+    `);
+  };
+
+  const insertSignatureBlock = () => {
+    insertHtmlBlock(`
+      <table style="width:100%; border-collapse:collapse; margin-top:36px; text-align:center; font-size:14px;">
+        <tbody>
+          <tr>
+            <td style="width:50%; padding:8px; border:none;">
+              <p style="margin:0 0 56px 0; font-weight:700;">អ្នករៀបចំ</p>
+              <p style="margin:0;">ឈ្មោះ: ........................</p>
+            </td>
+            <td style="width:50%; padding:8px; border:none;">
+              <p style="margin:0 0 56px 0; font-weight:700;">អ្នកអនុម័ត</p>
+              <p style="margin:0;">ឈ្មោះ: ........................</p>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    `);
+  };
+
+  const insertRecipientsBlock = () => {
+    insertHtmlBlock(`
+      <div style="margin-top:18px; font-size:14px; line-height:1.8;">
+        <p style="margin:0; font-weight:700;">ចម្លងជូន៖</p>
+        <ul style="margin-top:4px;">
+          <li>ការិយាល័យពាក់ព័ន្ធ</li>
+          <li>ឯកសារ - កាលប្បវត្តិ</li>
+        </ul>
+      </div>
+    `);
   };
 
   const handleFindNext = useCallback(() => {
@@ -1639,7 +1837,22 @@ function WordRibbonToolbar({ activeTab, setActiveTab, zoomLevel, setZoomLevel, i
         )}
 
         {activeTab === "insert" && (
-          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", paddingRight: "0.75rem", borderRight: "1px solid #cbd5e1" }}>
+              <span style={{ fontSize: "0.78rem", color: "#64748b", fontWeight: 700 }}>Report blocks:</span>
+              <button type="button" className="btn btn-secondary btn-sm" onClick={insertOfficialHeader} style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }} title="Insert official Khmer report heading">
+                <LuFileText size={15} /> Header
+              </button>
+              <button type="button" className="btn btn-secondary btn-sm" onClick={insertReportMetaTable} style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }} title="Insert report metadata table">
+                <LuTable size={15} /> Meta
+              </button>
+              <button type="button" className="btn btn-secondary btn-sm" onClick={insertSignatureBlock} style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }} title="Insert signature and approval block">
+                <LuSquareCheck size={15} /> Sign
+              </button>
+              <button type="button" className="btn btn-secondary btn-sm" onClick={insertRecipientsBlock} style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }} title="Insert copied recipients block">
+                <LuList size={15} /> CC
+              </button>
+            </div>
             <button type="button" className="btn btn-secondary btn-sm" onClick={insertTable} style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}>
               <LuTable size={15} /> Table
             </button>
@@ -1657,7 +1870,7 @@ function WordRibbonToolbar({ activeTab, setActiveTab, zoomLevel, setZoomLevel, i
               <LuFileText size={15} /> Page Break
             </button>
             <div style={{ width: "1px", height: "20px", background: "#cbd5e1" }} />
-            <button type="button" className="btn btn-secondary btn-sm" onClick={insertDropCap} style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}>
+            <button type="button" className="btn btn-secondary btn-sm" onClick={() => setShowDropCapMenu(true)} style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}>
               <span style={{ fontWeight: 700, fontSize: "15px" }}>A</span><span style={{ fontSize: "10px" }}>a</span> Drop Cap
             </button>
             <div style={{ position: "relative" }}>
@@ -1748,21 +1961,14 @@ function WordRibbonToolbar({ activeTab, setActiveTab, zoomLevel, setZoomLevel, i
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", paddingRight: "0.85rem", borderRight: "1px solid #cbd5e1" }}>
               <span style={{ fontSize: "0.8rem", color: "#64748b", fontWeight: 600 }}>Watermark:</span>
-              {["None","DRAFT","CONFIDENTIAL","DO NOT COPY","SAMPLE"].map((w) => (
-                <button key={w} type="button" className="btn btn-secondary btn-sm" style={{ fontSize: "0.78rem" }} onClick={() => {
-                  const sheet = document.querySelector(".word-a4-sheet");
-                  if (!sheet) return;
-                  const old = sheet.querySelector(".watermark-overlay");
-                  if (old) old.remove();
-                  if (w === "None") return;
-                  const wm = document.createElement("div");
-                  wm.className = "watermark-overlay";
-                  wm.style.cssText = "position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:0;opacity:0.08;font-size:5rem;font-weight:900;color:#000;transform:rotate(-30deg);user-select:none";
-                  wm.textContent = w;
-                  sheet.style.position = "relative";
-                  sheet.appendChild(wm);
-                }}>{w}</button>
-              ))}
+              <button
+                type="button"
+                className={`btn-icon btn-sm ${showWatermarkMenu ? "active" : ""}`}
+                title="Watermark"
+                onClick={() => setShowWatermarkMenu(true)}
+              >
+                <LuFileText size={15} />
+              </button>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
               <span style={{ fontSize: "0.8rem", color: "#64748b", fontWeight: 600 }}>Page Border:</span>
@@ -1987,6 +2193,139 @@ function WordRibbonToolbar({ activeTab, setActiveTab, zoomLevel, setZoomLevel, i
           <button type="button" className="btn-icon btn-sm" onClick={() => setShowFindReplace(false)} style={{ border: "none", color: "#92400e" }}><LuX size={14} /></button>
         </div>
       )}
+
+      {showWatermarkMenu && (
+        <div
+          onClick={() => setShowWatermarkMenu(false)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 10020,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            background: "rgba(15, 23, 42, 0.38)",
+            padding: "1rem",
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: "min(420px, 100%)",
+              background: "#ffffff",
+              border: "1px solid #cbd5e1",
+              borderRadius: "12px",
+              boxShadow: "0 24px 60px rgba(15, 23, 42, 0.24)",
+              overflow: "hidden",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0.85rem 1rem", borderBottom: "1px solid #e2e8f0" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontWeight: 800, color: "#0f172a" }}>
+                <LuFileText size={17} /> Watermark
+              </div>
+              <button type="button" className="btn-icon" title="Close" onClick={() => setShowWatermarkMenu(false)} style={{ width: 30, height: 30 }}>
+                <LuX size={16} />
+              </button>
+            </div>
+            <div style={{ padding: "1rem" }}>
+              <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, color: "#334155", marginBottom: "0.4rem" }}>
+                Label
+              </label>
+              <input
+                value={watermarkText}
+                onChange={(e) => setWatermarkText(e.target.value)}
+                placeholder="Enter watermark label"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    applyWatermark(watermarkText);
+                    setShowWatermarkMenu(false);
+                  }
+                  if (e.key === "Escape") setShowWatermarkMenu(false);
+                }}
+                style={{ width: "100%", padding: "0.65rem 0.75rem", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "0.9rem", boxSizing: "border-box" }}
+                autoFocus
+              />
+            </div>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem", padding: "0.85rem 1rem", borderTop: "1px solid #e2e8f0", background: "#f8fafc" }}>
+              <button type="button" className="btn btn-secondary btn-sm" onClick={() => { applyWatermark(""); setWatermarkText(""); setShowWatermarkMenu(false); }}>
+                Clear
+              </button>
+              <button type="button" className="btn btn-primary btn-sm" onClick={() => { applyWatermark(watermarkText); setShowWatermarkMenu(false); }}>
+                Apply
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showDropCapMenu && (
+        <div
+          onClick={() => setShowDropCapMenu(false)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 10020,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            background: "rgba(15, 23, 42, 0.38)",
+            padding: "1rem",
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: "min(430px, 100%)",
+              background: "#ffffff",
+              border: "1px solid #cbd5e1",
+              borderRadius: "12px",
+              boxShadow: "0 24px 60px rgba(15, 23, 42, 0.24)",
+              overflow: "hidden",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0.85rem 1rem", borderBottom: "1px solid #e2e8f0" }}>
+              <div style={{ display: "flex", alignItems: "baseline", gap: "0.35rem", fontWeight: 800, color: "#0f172a" }}>
+                <span style={{ fontSize: "1.25rem", lineHeight: 1 }}>A</span>
+                <span style={{ fontSize: "0.82rem" }}>Drop Cap</span>
+              </div>
+              <button type="button" className="btn-icon" title="Close" onClick={() => setShowDropCapMenu(false)} style={{ width: 30, height: 30 }}>
+                <LuX size={16} />
+              </button>
+            </div>
+            <div style={{ padding: "1rem", display: "grid", gap: "0.85rem" }}>
+              <label style={{ display: "grid", gap: "0.35rem", fontSize: "0.8rem", fontWeight: 700, color: "#334155" }}>
+                Size
+                <input type="number" min="1.5" max="8" step="0.5" value={dropCapSize} onChange={(e) => setDropCapSize(e.target.value)} style={{ padding: "0.6rem 0.7rem", border: "1px solid #cbd5e1", borderRadius: "8px" }} />
+              </label>
+              <label style={{ display: "grid", gap: "0.35rem", fontSize: "0.8rem", fontWeight: 700, color: "#334155" }}>
+                Spacing
+                <input type="number" min="0" max="32" step="1" value={dropCapSpacing} onChange={(e) => setDropCapSpacing(e.target.value)} style={{ padding: "0.6rem 0.7rem", border: "1px solid #cbd5e1", borderRadius: "8px" }} />
+              </label>
+              <label style={{ display: "grid", gap: "0.35rem", fontSize: "0.8rem", fontWeight: 700, color: "#334155" }}>
+                Weight
+                <select value={dropCapWeight} onChange={(e) => setDropCapWeight(e.target.value)} style={{ padding: "0.6rem 0.7rem", border: "1px solid #cbd5e1", borderRadius: "8px", background: "#fff" }}>
+                  <option value={400}>Regular</option>
+                  <option value={600}>Semi Bold</option>
+                  <option value={700}>Bold</option>
+                  <option value={900}>Black</option>
+                </select>
+              </label>
+              <div style={{ padding: "0.85rem", borderRadius: "10px", background: "#f8fafc", border: "1px solid #e2e8f0", color: "#475569", fontSize: "0.82rem" }}>
+                Select the paragraph text first, then apply Drop Cap.
+              </div>
+            </div>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem", padding: "0.85rem 1rem", borderTop: "1px solid #e2e8f0", background: "#f8fafc" }}>
+              <button type="button" className="btn btn-secondary btn-sm" onClick={() => setShowDropCapMenu(false)}>
+                Cancel
+              </button>
+              <button type="button" className="btn btn-primary btn-sm" onClick={applyDropCap}>
+                Apply
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -2044,6 +2383,7 @@ export default function TextEditor({
       AutoLinkNode,
       LinkNode,
       ImageNode,
+      DropCapNode,
     ],
   };
 

@@ -478,6 +478,19 @@ type SettingsNavItem struct {
 	Features  []string `json:"features,omitempty"`
 }
 
+func resolveFunctionalModuleKey(subModule string) string {
+	switch subModule {
+	case "report_templates":
+		return "reports"
+	case "performance_period", "performance":
+		return "performance"
+	case "zone_chiefs":
+		return "zone_chiefs"
+	default:
+		return subModule
+	}
+}
+
 func (h *AdminHandler) GetSettingsCatalog(c *gin.Context) {
 	moduleConfigs, _ := h.repo.ListModuleConfigs()
 	enabledMap := make(map[string]bool)
@@ -504,8 +517,9 @@ func (h *AdminHandler) GetSettingsCatalog(c *gin.Context) {
 		if len(dynamicCatalog) > 0 {
 			var filtered []SettingsNavItem
 			for _, item := range dynamicCatalog {
-				if item.ModuleKey != "" {
-					if enabled, ok := enabledMap[item.ModuleKey]; ok && !enabled {
+				funcModule := resolveFunctionalModuleKey(item.ModuleKey)
+				if funcModule != "" {
+					if enabled, ok := enabledMap[funcModule]; ok && !enabled {
 						continue
 					}
 				}

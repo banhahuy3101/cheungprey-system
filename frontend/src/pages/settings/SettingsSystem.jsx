@@ -61,8 +61,24 @@ export default function SettingsSystem() {
   };
 
   useEffect(() => {
-    fetchDbSettings();
-    fetchDbTables();
+    const loadAll = async () => {
+      try {
+        const [settingsRes, tablesRes] = await Promise.all([
+          adminAPI.listSystemSettings(),
+          adminAPI.listDatabaseTables(),
+        ]);
+        const settingsItems = settingsRes.data?.data || settingsRes.data || [];
+        const tablesItems = tablesRes.data?.data || tablesRes.data || [];
+        setDbSettings(Array.isArray(settingsItems) ? settingsItems : []);
+        setDbTables(Array.isArray(tablesItems) ? tablesItems : []);
+      } catch {
+        setDbTables([]);
+      } finally {
+        setLoadingDbSettings(false);
+        setLoadingDbTables(false);
+      }
+    };
+    loadAll();
   }, []);
 
   if (!isAdmin(user)) {

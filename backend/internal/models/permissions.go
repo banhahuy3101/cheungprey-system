@@ -246,6 +246,28 @@ func MergePermissions(rolePerms map[UserRole]PermissionSet, roles []UserRole) Pe
 	return merged
 }
 
+func FeatureModule(f Feature) string {
+	switch f {
+	case FeatureMembers, FeatureMembersCreate, FeatureMembersRead, FeatureMembersUpdate, FeatureMembersDelete,
+		FeatureMembershipWrite, FeatureMembershipDues, FeatureMembershipAdmin, FeatureMembershipCards, FeatureMembershipDelete:
+		return "membership"
+	case FeatureVoters, FeatureVotersCreate, FeatureVotersRead, FeatureVotersUpdate, FeatureVotersDelete:
+		return "voters"
+	case FeatureFiles, FeatureFilesCreate, FeatureFilesRead, FeatureFilesUpdate, FeatureFilesDelete:
+		return "files"
+	case FeatureRecords, FeatureRecordsCreate, FeatureRecordsRead, FeatureRecordsUpdate, FeatureRecordsDelete:
+		return "records"
+	case FeatureReports, FeatureReportsCreate, FeatureReportsRead, FeatureReportsUpdate, FeatureReportsDelete:
+		return "reports"
+	case FeaturePerformance, FeaturePerformanceCreate, FeaturePerformanceRead, FeaturePerformanceUpdate, FeaturePerformanceDelete, FeaturePerformanceAdmin:
+		return "performance"
+	case FeatureFinances:
+		return "finances"
+	default:
+		return ""
+	}
+}
+
 func DefaultPermissionsForRole(role UserRole) PermissionSet {
 	p := make(PermissionSet, len(AllFeatures))
 	if role == RoleSuperAdmin {

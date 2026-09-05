@@ -1,6 +1,7 @@
 import { Navigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
-import { canAccess, hasAnyFeature, isAdmin } from "../utils/permissions";
+import { canAccess, hasAnyFeature, isAdmin, getModuleForFeature } from "../utils/permissions";
+import { useModules } from "../hooks/useModules";
 import Forbidden from "../pages/Forbidden";
 
 export default function ProtectedRoute({
@@ -9,14 +10,21 @@ export default function ProtectedRoute({
   feature = null,
   action = null,
   features = null,
+  module = null,
 }) {
   const { user, loading } = useAuth();
+  const { isEnabled } = useModules();
 
   if (!loading && !user) {
     return <Navigate to="/login" replace />;
   }
 
   if (!loading) {
+    const moduleKey = module || getModuleForFeature(feature);
+    if (moduleKey && !isEnabled(moduleKey)) {
+      return <Navigate to="/" replace />;
+    }
+
     if (adminOnly && !isAdmin(user)) {
       return <Forbidden />;
     }

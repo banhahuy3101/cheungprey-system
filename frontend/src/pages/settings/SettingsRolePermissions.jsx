@@ -325,6 +325,14 @@ export default function SettingsRolePermissions() {
       const nextVal = !p[fKey];
       p[fKey] = nextVal;
 
+      // If Access checkbox (base feature key) is unticked, untick all CRUD actions in the same row
+      if (!nextVal) {
+        p[`${fKey}_read`] = false;
+        p[`${fKey}_create`] = false;
+        p[`${fKey}_update`] = false;
+        p[`${fKey}_delete`] = false;
+      }
+
       const parts = fKey.split("_");
       const last = parts[parts.length - 1];
       if (["create", "read", "update", "delete"].includes(last)) {

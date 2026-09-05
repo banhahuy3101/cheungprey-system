@@ -42,7 +42,6 @@ export default function UserEdit() {
 
   useEffect(() => {
     if (!id) return;
-    setLoading(true);
     adminAPI
       .getUserById(id)
       .then((res) => {
