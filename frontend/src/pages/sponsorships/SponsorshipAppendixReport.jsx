@@ -216,6 +216,11 @@ export default function SponsorshipAppendixReport() {
                         <td style={{ fontSize: "0.85rem" }}>
                           <div style={{ fontWeight: "600", color: "#1e3a8a" }}>{r.target_location}</div>
                           <div style={{ whiteSpace: "pre-wrap", color: "#334155" }}>{r.usage_description}</div>
+                          {r.remarks && (
+                            <div style={{ fontSize: "0.78rem", color: "#4b5563", marginTop: "0.2rem", fontStyle: "italic" }}>
+                              *ផ្សេងៗ ៖ {r.remarks}
+                            </div>
+                          )}
                         </td>
                       </tr>
                     ))}

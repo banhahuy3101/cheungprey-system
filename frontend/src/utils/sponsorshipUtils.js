@@ -2,6 +2,18 @@
  * Sponsorships & Appendix Business Utilities & Constants
  */
 
+export const ENTRY_CLASSIFICATIONS = [
+  { value: "donation", label: "ថវិកាឧបត្ថម្ភ (Donation / Budget Support)", badgeClass: "badge-donation" },
+  { value: "expense", label: "ការចំណាយ (Direct Expense)", badgeClass: "badge-expense" },
+  { value: "subtotal", label: "សរុប (Subtotal Entry)", badgeClass: "badge-subtotal" },
+];
+
+export const CLASSIFICATION_MAP = {
+  donation: { label: "ថវិកាឧបត្ថម្ភ", color: "#059669", bg: "#ecfdf5" },
+  expense: { label: "ការចំណាយ", color: "#dc2626", bg: "#fef2f2" },
+  subtotal: { label: "សរុប", color: "#4f46e5", bg: "#eef2ff" },
+};
+
 export const COMMON_SECTIONS = [
   "ការឧបត្ថម្ភរបស់សម្តេចតេជោ ហ៊ុន សែន និងសម្តេចកិត្តិព្រឹទ្ធបណ្ឌិត",
   "ការឧបត្ថម្ភរបស់សម្តេចមហាបវរធិបតី ហ៊ុន ម៉ាណែត និងលោកជំទាវបណ្ឌិត",
@@ -12,14 +24,14 @@ export const COMMON_SECTIONS = [
 
 export const COMMON_PERIODS = [
   "សរុប ៩ខែ",
-  "ខែតុលា",
-  "ខែវិច្ឆិកា",
-  "ខែធ្នូ",
+  "ខែតុលា ឆ្នាំ២០២៥",
+  "ខែវិច្ឆិកា ឆ្នាំ២០២៥",
+  "ខែធ្នូ ឆ្នាំ២០២៥",
   "ប្រចាំត្រីមាសទី១",
   "ប្រចាំត្រីមាសទី២",
   "ប្រចាំត្រីមាសទី៣",
   "ប្រចាំត្រីមាសទី៤",
-  "ប្រចាំឆ្នាំ",
+  "ប្រចាំឆ្នាំ ២០២៥",
 ];
 
 export const COMMON_COMMUNES = [
@@ -39,15 +51,27 @@ export const COMMON_COMMUNES = [
 export const COMMON_UNITS = [
   "គ.ក",
   "កេស",
-  "យូរ",
+  "យួរ",
   "ឈុត",
   "ដើម",
   "សម្រាប់",
   "ឡាន",
   "កញ្ចប់",
   "ដប",
+  "ធុង",
+  "លីត្រ",
   "គូ",
   "សន្លឹក",
+  "កំប៉ុង",
+];
+
+export const QUICK_TAGS = [
+  { label: "• បញ្ជីចំណុច", text: "• " },
+  { label: "ទូទាំងស្រុក", text: "ទូទាំងស្រុកជើងព្រៃ" },
+  { label: "ទីទ័លក្រ", text: "ប្រជាពលរដ្ឋទីទ័លក្រ" },
+  { label: "ចាស់ជរា", text: "លោកយាយ លោកតា ចាស់ជរា" },
+  { label: "បុណ្យសព", text: "ឧបត្ថម្ភបុណ្យសព" },
+  { label: "រយៈពេល ៩ខែ", text: "ក្នុងរយៈពេល ០៩ ខែ" },
 ];
 
 export const STATUS_OPTIONS = [
@@ -68,32 +92,86 @@ export const STATUS_MAP = {
 };
 
 /**
- * Validate sponsorship form inputs based on BRD Rule 1 & Rule 2
+ * Normalizes Khmer digits (០-៩) to ASCII digits (0-9) and sanitizes zero-width space
+ */
+export function normalizeKhmerDigits(val) {
+  if (val === null || val === undefined) return "";
+  const str = String(val);
+  const khmerDigitMap = {
+    "០": "0", "១": "1", "២": "2", "៣": "3", "៤": "4",
+    "៥": "5", "៦": "6", "៧": "7", "៨": "8", "៩": "9",
+  };
+  return str.replace(/[០-៩]/g, (ch) => khmerDigitMap[ch] || ch);
+}
+
+/**
+ * Sanitizes Khmer text (normalizes zero-width space U+200B and trims)
+ */
+export function normalizeKhmerText(val) {
+  if (!val) return "";
+  return String(val).replace(/[\u200B\u200C\u200D\uFEFF]/g, "").trim();
+}
+
+/**
+ * Parses user numeric input, stripping currency symbols and converting Khmer digits
+ */
+export function parseNumericInput(val, isInteger = false) {
+  if (val === null || val === undefined || val === "") return 0;
+  let clean = normalizeKhmerDigits(String(val))
+    .replace(/[$៛,USDusdKHRkhr\s]/g, "")
+    .trim();
+  if (!clean) return 0;
+  const num = isInteger ? parseInt(clean, 10) : parseFloat(clean);
+  return isNaN(num) ? 0 : num;
+}
+
+/**
+ * Checks for mathematical discrepancy between computed subtotal vs manual input
+ */
+export function checkDiscrepancy(computed, manual) {
+  if (manual === "" || manual === null || manual === undefined) return null;
+  const manNum = parseNumericInput(manual);
+  if (manNum === 0 && computed === 0) return null;
+  const diff = Math.abs(computed - manNum);
+  if (diff > 0.009) {
+    return {
+      hasDiscrepancy: true,
+      variance: manNum - computed,
+      message: "Mathematical discrepancy detected between item breakdown and ledger summary (រកឃើញភាពមិនស៊ីគ្នាផ្នែកគណិតវិទ្យារវាងផលបូកជាក់ស្តែង និងតួលេខសរុបលើតារាង)",
+    };
+  }
+  return { hasDiscrepancy: false, variance: 0 };
+}
+
+/**
+ * Validate sponsorship form inputs based on BRD rules
  */
 export function validateSponsorshipPayload(form, items) {
   const section =
     form.section_group === "custom"
-      ? (form.custom_section || "").trim()
-      : (form.section_group || "").trim();
+      ? normalizeKhmerText(form.custom_section)
+      : normalizeKhmerText(form.section_group);
 
   if (!section) {
     return { valid: false, error: "សូមជ្រើសរើស ឬបញ្ចូលក្រុមឧបត្ថម្ភ (Header Section is required)" };
   }
-  if (!form.contributor_name || !form.contributor_name.trim()) {
+  const contributor = normalizeKhmerText(form.contributor_name);
+  if (!contributor) {
     return { valid: false, error: "សូមបញ្ចូលគោត្តនាម និងនាមអ្នកឧបត្ថម្ភ (Contributor Name is required)" };
   }
-  if (!form.usage_description || !form.usage_description.trim()) {
+  const usage = normalizeKhmerText(form.usage_description);
+  if (!usage) {
     return { valid: false, error: "សូមបញ្ចូលព័ត៌មានទីកន្លែងទទួល និងការប្រើប្រាស់ (Usage Details is required)" };
   }
 
-  const usdVal = parseFloat(form.amount_usd) || 0;
-  const khrVal = parseInt(form.amount_khr, 10) || 0;
+  const usdVal = parseNumericInput(form.amount_usd, false);
+  const khrVal = parseNumericInput(form.amount_khr, true);
 
   const validItems = (items || []).filter(
-    (it) => it.item_name && it.item_name.trim() !== "" && parseFloat(it.item_qty) > 0
+    (it) => normalizeKhmerText(it.item_name) !== "" && parseNumericInput(it.item_qty) > 0
   );
 
-  // Rule 1: Must contain non-zero cash OR at least one valid material line item
+  // BR-RULE-01: Must contain non-zero cash OR at least one valid material line item
   if (usdVal <= 0 && khrVal <= 0 && validItems.length === 0) {
     return {
       valid: false,
@@ -101,24 +179,28 @@ export function validateSponsorshipPayload(form, items) {
     };
   }
 
+  const entryNo = form.entry_no ? parseNumericInput(form.entry_no, true) : undefined;
+
   return {
     valid: true,
     data: {
-      entry_no: form.entry_no ? parseInt(form.entry_no, 10) : undefined,
+      entry_no: entryNo && entryNo > 0 ? entryNo : undefined,
+      entry_classification: form.entry_classification || "donation",
       section_group: section,
-      contributor_name: form.contributor_name.trim(),
-      record_period: (form.record_period || "").trim(),
-      target_location: (form.target_location || "").trim(),
+      contributor_name: contributor,
+      record_period: normalizeKhmerText(form.record_period),
+      target_location: normalizeKhmerText(form.target_location),
       amount_usd: usdVal,
       amount_khr: khrVal,
-      usage_description: form.usage_description.trim(),
+      usage_description: usage,
+      remarks: normalizeKhmerText(form.remarks),
       items: validItems.map((it) => ({
-        item_name: it.item_name.trim(),
-        item_qty: parseFloat(it.item_qty) || 1,
-        item_unit: (it.item_unit || "គ.ក").trim(),
-        cash_allocation_usd: parseFloat(it.cash_allocation_usd) || 0,
-        cash_allocation_khr: parseInt(it.cash_allocation_khr, 10) || 0,
-        item_notes: (it.item_notes || "").trim(),
+        item_name: normalizeKhmerText(it.item_name),
+        item_qty: parseNumericInput(it.item_qty, false) || 1,
+        item_unit: normalizeKhmerText(it.item_unit) || "គ.ក",
+        cash_allocation_usd: parseNumericInput(it.cash_allocation_usd, false),
+        cash_allocation_khr: parseNumericInput(it.cash_allocation_khr, true),
+        item_notes: normalizeKhmerText(it.item_notes),
       })),
     },
   };
@@ -150,8 +232,8 @@ export function calculateSponsorshipTotals(records = []) {
 
     if (rec.items && Array.isArray(rec.items)) {
       rec.items.forEach((it) => {
-        const name = (it.item_name || "").trim();
-        const unit = (it.item_unit || "").trim();
+        const name = normalizeKhmerText(it.item_name);
+        const unit = normalizeKhmerText(it.item_unit);
         if (!name) return;
         const key = `${name}|${unit}`;
         if (!inventoryMap[key]) {
@@ -173,3 +255,4 @@ export function calculateSponsorshipTotals(records = []) {
     inventoryRollup: Object.values(inventoryMap),
   };
 }
+

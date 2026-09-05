@@ -100,16 +100,23 @@ func (h *SponsorshipHandler) Create(c *gin.Context) {
 		entryNo = *req.EntryNo
 	}
 
+	classification := strings.TrimSpace(req.EntryClassification)
+	if classification == "" {
+		classification = "donation"
+	}
+
 	record := models.SponsorshipRecord{
-		EntryNo:          entryNo,
-		SectionGroup:     strings.TrimSpace(req.SectionGroup),
-		ContributorName:  strings.TrimSpace(req.ContributorName),
-		RecordPeriod:     strings.TrimSpace(req.RecordPeriod),
-		TargetLocation:   strings.TrimSpace(req.TargetLocation),
-		AmountUSD:        req.AmountUSD,
-		AmountKHR:        req.AmountKHR,
-		UsageDescription: strings.TrimSpace(req.UsageDescription),
-		Status:           status,
+		EntryNo:             entryNo,
+		EntryClassification: classification,
+		SectionGroup:        strings.TrimSpace(req.SectionGroup),
+		ContributorName:     strings.TrimSpace(req.ContributorName),
+		RecordPeriod:        strings.TrimSpace(req.RecordPeriod),
+		TargetLocation:      strings.TrimSpace(req.TargetLocation),
+		AmountUSD:           req.AmountUSD,
+		AmountKHR:           req.AmountKHR,
+		UsageDescription:    strings.TrimSpace(req.UsageDescription),
+		Remarks:             strings.TrimSpace(req.Remarks),
+		Status:              status,
 	}
 	if userID != uuid.Nil {
 		record.CreatedBy = &userID
@@ -178,15 +185,25 @@ func (h *SponsorshipHandler) Update(c *gin.Context) {
 		entryNo = *req.EntryNo
 	}
 
+	classification := strings.TrimSpace(req.EntryClassification)
+	if classification == "" {
+		classification = existing.EntryClassification
+		if classification == "" {
+			classification = "donation"
+		}
+	}
+
 	record := models.SponsorshipRecord{
-		EntryNo:          entryNo,
-		SectionGroup:     strings.TrimSpace(req.SectionGroup),
-		ContributorName:  strings.TrimSpace(req.ContributorName),
-		RecordPeriod:     strings.TrimSpace(req.RecordPeriod),
-		TargetLocation:   strings.TrimSpace(req.TargetLocation),
-		AmountUSD:        req.AmountUSD,
-		AmountKHR:        req.AmountKHR,
-		UsageDescription: strings.TrimSpace(req.UsageDescription),
+		EntryNo:             entryNo,
+		EntryClassification: classification,
+		SectionGroup:        strings.TrimSpace(req.SectionGroup),
+		ContributorName:     strings.TrimSpace(req.ContributorName),
+		RecordPeriod:        strings.TrimSpace(req.RecordPeriod),
+		TargetLocation:      strings.TrimSpace(req.TargetLocation),
+		AmountUSD:           req.AmountUSD,
+		AmountKHR:           req.AmountKHR,
+		UsageDescription:    strings.TrimSpace(req.UsageDescription),
+		Remarks:             strings.TrimSpace(req.Remarks),
 	}
 
 	updated, err := h.repo.UpdateSponsorship(id, &record, req.Items)

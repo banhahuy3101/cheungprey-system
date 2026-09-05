@@ -23,6 +23,8 @@ import {
   COMMON_COMMUNES,
   STATUS_OPTIONS,
   STATUS_MAP,
+  ENTRY_CLASSIFICATIONS,
+  CLASSIFICATION_MAP,
   groupSponsorshipsBySection,
 } from "../../utils/sponsorshipUtils";
 import SponsorshipForm from "./SponsorshipForm";
@@ -345,6 +347,7 @@ function SponsorshipsContent() {
                   <tbody>
                     {secRecords.map((r, rIdx) => {
                       const statusInfo = STATUS_MAP[r.status] || STATUS_MAP.draft;
+                      const classif = CLASSIFICATION_MAP[r.entry_classification] || CLASSIFICATION_MAP.donation;
 
                       return (
                         <tr key={r.id}>
@@ -352,15 +355,37 @@ function SponsorshipsContent() {
                             {toKhmerDigits(r.entry_no || rIdx + 1)}
                           </td>
                           <td>
-                            <div style={{ fontWeight: "600", color: "#1e293b" }}>
-                              {r.contributor_name}
+                            <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", flexWrap: "wrap" }}>
+                              <span style={{ fontWeight: "600", color: "#1e293b" }}>
+                                {r.contributor_name}
+                              </span>
+                              {r.entry_classification && (
+                                <span
+                                  style={{
+                                    fontSize: "0.68rem",
+                                    padding: "0.1rem 0.4rem",
+                                    borderRadius: "4px",
+                                    background: classif.bg,
+                                    color: classif.color,
+                                    fontWeight: "600",
+                                    border: `1px solid ${classif.color}33`,
+                                  }}
+                                >
+                                  {classif.label}
+                                </span>
+                              )}
                             </div>
                             <div style={{ fontSize: "0.78rem", color: "#64748b", marginTop: "0.15rem" }}>
                               {r.record_period} • <strong style={{ color: "#1e3a8a" }}>{r.target_location}</strong>
                             </div>
                             {r.usage_description && (
-                              <div style={{ fontSize: "0.78rem", color: "#475569", marginTop: "0.25rem", fontStyle: "italic" }}>
+                              <div style={{ fontSize: "0.78rem", color: "#475569", marginTop: "0.25rem", fontStyle: "italic", whiteSpace: "pre-line" }}>
                                 {r.usage_description}
+                              </div>
+                            )}
+                            {r.remarks && (
+                              <div style={{ fontSize: "0.75rem", color: "#6b7280", marginTop: "0.2rem", background: "#f8fafc", padding: "0.15rem 0.4rem", borderRadius: "4px", border: "1px dashed #cbd5e1" }}>
+                                <strong>ផ្សេងៗ ៖</strong> {r.remarks}
                               </div>
                             )}
                           </td>
