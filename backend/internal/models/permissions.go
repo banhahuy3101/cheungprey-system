@@ -23,12 +23,20 @@ const (
 	FeatureMembershipCards  Feature = "membership_cards"
 	FeatureMembershipDelete Feature = "membership_delete"
 
+	// Sponsorship / Appendix Feature Keys
+	FeatureSponsorships        Feature = "sponsorships"
+	FeatureSponsorshipsCreate  Feature = "sponsorships_create"
+	FeatureSponsorshipsRead    Feature = "sponsorships_read"
+	FeatureSponsorshipsUpdate  Feature = "sponsorships_update"
+	FeatureSponsorshipsDelete  Feature = "sponsorships_delete"
+	FeatureSponsorshipsReview  Feature = "sponsorships_review"
+	FeatureSponsorshipsApprove Feature = "sponsorships_approve"
+
 	// CRUD Granular Permissions
 	FeatureReportsCreate Feature = "reports_create"
 	FeatureReportsRead   Feature = "reports_read"
 	FeatureReportsUpdate Feature = "reports_update"
 	FeatureReportsDelete Feature = "reports_delete"
-
 
 	FeatureFilesCreate Feature = "files_create"
 	FeatureFilesRead   Feature = "files_read"
@@ -81,6 +89,13 @@ var AllFeatures = []Feature{
 	FeaturePerformanceUpdate,
 	FeaturePerformanceDelete,
 	FeaturePerformanceAdmin,
+	FeatureSponsorships,
+	FeatureSponsorshipsCreate,
+	FeatureSponsorshipsRead,
+	FeatureSponsorshipsUpdate,
+	FeatureSponsorshipsDelete,
+	FeatureSponsorshipsReview,
+	FeatureSponsorshipsApprove,
 	FeatureSettings,
 	FeatureUsers,
 	FeatureUsersCreate,
@@ -96,45 +111,52 @@ var AllFeatures = []Feature{
 }
 
 var FeatureLabels = map[Feature]string{
-	FeatureDashboard:         "ទំព័រដើម",
-	FeatureMembers:           "សមាជិក",
-	FeatureMembersCreate:     "បង្កើតសមាជិក (Create)",
-	FeatureMembersRead:       "មើលសមាជិក (Read)",
-	FeatureMembersUpdate:     "កែប្រែសមាជិក (Update)",
-	FeatureMembersDelete:     "លុបសមាជិក (Delete)",
-	FeatureVoters:            "អ្នកបោះឆ្នោត",
-	FeatureVotersCreate:      "បង្កើតអ្នកបោះឆ្នោត (Create)",
-	FeatureVotersRead:        "មើលអ្នកបោះឆ្នោត (Read)",
-	FeatureVotersUpdate:      "កែប្រែអ្នកបោះឆ្នោត (Update)",
-	FeatureVotersDelete:      "លុបអ្នកបោះឆ្នោត (Delete)",
-	FeatureFiles:             "ឯកសារ",
-	FeatureFilesCreate:       "បង្កើតឯកសារ (Create)",
-	FeatureFilesRead:         "មើលឯកសារ (Read)",
-	FeatureFilesUpdate:       "កែប្រែឯកសារ (Update)",
-	FeatureFilesDelete:       "លុបឯកសារ (Delete)",
-	FeatureReports:           "របាយការណ៍",
-	FeatureReportsCreate:     "បង្កើតរបាយការណ៍ (Create)",
-	FeatureReportsRead:       "មើលរបាយការណ៍ (Read)",
-	FeatureReportsUpdate:     "កែប្រែរបាយការណ៍ (Update)",
-	FeatureReportsDelete:     "លុបរបាយការណ៍ (Delete)",
-	FeaturePerformance:       "លទ្ធផលការងារ",
-	FeaturePerformanceCreate: "បង្កើតលទ្ធផលការងារ (Create)",
-	FeaturePerformanceRead:   "មើលលទ្ធផលការងារ (Read)",
-	FeaturePerformanceUpdate: "កែប្រែលទ្ធផលការងារ (Update)",
-	FeaturePerformanceDelete: "លុបលទ្ធផលការងារ (Delete)",
-	FeaturePerformanceAdmin:  "គ្រប់គ្រង Performance",
-	FeatureSettings:          "ការកំណត់",
-	FeatureUsers:             "គ្រប់គ្រងអ្នកប្រើ",
-	FeatureUsersCreate:       "បង្កើតអ្នកប្រើប្រាស់ (Create)",
-	FeatureUsersRead:         "មើលអ្នកប្រើប្រាស់ (Read)",
-	FeatureUsersUpdate:       "កែប្រែអ្នកប្រើប្រាស់ (Update)",
-	FeatureUsersDelete:       "លុបអ្នកប្រើប្រាស់ (Delete)",
-	FeatureTechnical:         "Technical",
-	FeatureMembershipWrite:   "សរសេរសមាជិក",
-	FeatureMembershipDues:    "តារាងសមាជិក",
-	FeatureMembershipAdmin:   "គ្រប់គ្រងសមាជិក",
-	FeatureMembershipCards:   "កាតសមាជិក",
-	FeatureMembershipDelete:  "លុបសមាជិក",
+	FeatureDashboard:           "ទំព័រដើម",
+	FeatureMembers:             "សមាជិក",
+	FeatureMembersCreate:       "បង្កើតសមាជិក (Create)",
+	FeatureMembersRead:         "មើលសមាជិក (Read)",
+	FeatureMembersUpdate:       "កែប្រែសមាជិក (Update)",
+	FeatureMembersDelete:       "លុបសមាជិក (Delete)",
+	FeatureVoters:              "អ្នកបោះឆ្នោត",
+	FeatureVotersCreate:        "បង្កើតអ្នកបោះឆ្នោត (Create)",
+	FeatureVotersRead:          "មើលអ្នកបោះឆ្នោត (Read)",
+	FeatureVotersUpdate:        "កែប្រែអ្នកបោះឆ្នោត (Update)",
+	FeatureVotersDelete:        "លុបអ្នកបោះឆ្នោត (Delete)",
+	FeatureFiles:               "ឯកសារ",
+	FeatureFilesCreate:         "បង្កើតឯកសារ (Create)",
+	FeatureFilesRead:           "មើលឯកសារ (Read)",
+	FeatureFilesUpdate:         "កែប្រែឯកសារ (Update)",
+	FeatureFilesDelete:         "លុបឯកសារ (Delete)",
+	FeatureReports:             "របាយការណ៍",
+	FeatureReportsCreate:       "បង្កើតរបាយការណ៍ (Create)",
+	FeatureReportsRead:         "មើលរបាយការណ៍ (Read)",
+	FeatureReportsUpdate:       "កែប្រែរបាយការណ៍ (Update)",
+	FeatureReportsDelete:       "លុបរបាយការណ៍ (Delete)",
+	FeaturePerformance:         "លទ្ធផលការងារ",
+	FeaturePerformanceCreate:   "បង្កើតលទ្ធផលការងារ (Create)",
+	FeaturePerformanceRead:     "មើលលទ្ធផលការងារ (Read)",
+	FeaturePerformanceUpdate:   "កែប្រែលទ្ធផលការងារ (Update)",
+	FeaturePerformanceDelete:   "លុបលទ្ធផលការងារ (Delete)",
+	FeaturePerformanceAdmin:    "គ្រប់គ្រង Performance",
+	FeatureSponsorships:        "តារាងឧបសម្ព័ន្ធ ថវិកា សម្ភារ",
+	FeatureSponsorshipsCreate:  "បង្កើតតារាងឧបសម្ព័ន្ធ (Create)",
+	FeatureSponsorshipsRead:    "មើលតារាងឧបសម្ព័ន្ធ (Read)",
+	FeatureSponsorshipsUpdate:  "កែប្រែតារាងឧបសម្ព័ន្ធ (Update)",
+	FeatureSponsorshipsDelete:  "លុបតារាងឧបសម្ព័ន្ធ (Delete)",
+	FeatureSponsorshipsReview:  "ពិនិត្យតារាងឧបសម្ព័ន្ធ (Review)",
+	FeatureSponsorshipsApprove: "អនុម័តតារាងឧបសម្ព័ន្ធ (Approve)",
+	FeatureSettings:            "ការកំណត់",
+	FeatureUsers:               "គ្រប់គ្រងអ្នកប្រើ",
+	FeatureUsersCreate:         "បង្កើតអ្នកប្រើប្រាស់ (Create)",
+	FeatureUsersRead:           "មើលអ្នកប្រើប្រាស់ (Read)",
+	FeatureUsersUpdate:         "កែប្រែអ្នកប្រើប្រាស់ (Update)",
+	FeatureUsersDelete:         "លុបអ្នកប្រើប្រាស់ (Delete)",
+	FeatureTechnical:           "Technical",
+	FeatureMembershipWrite:     "សរសេរសមាជិក",
+	FeatureMembershipDues:      "តារាងសមាជិក",
+	FeatureMembershipAdmin:     "គ្រប់គ្រងសមាជិក",
+	FeatureMembershipCards:     "កាតសមាជិក",
+	FeatureMembershipDelete:    "លុបសមាជិក",
 }
 
 type PermissionSet map[Feature]bool
@@ -144,12 +166,12 @@ type PermissionSet map[Feature]bool
 func CompleteCRUDDefaults(perms PermissionSet) PermissionSet {
 	for _, module := range []Feature{
 		FeatureMembers, FeatureVoters, FeatureFiles,
-		FeatureReports, FeaturePerformance, FeatureFinances, FeatureUsers,
+		FeatureReports, FeaturePerformance, FeatureFinances, FeatureUsers, FeatureSponsorships,
 	} {
 		if !perms[module] {
 			continue
 		}
-		for _, action := range []string{"create", "read", "update", "delete"} {
+		for _, action := range []string{"create", "read", "update", "delete", "review", "approve"} {
 			key := Feature(string(module) + "_" + action)
 			perms[key] = true
 		}
@@ -218,9 +240,9 @@ func MergePermissions(rolePerms map[UserRole]PermissionSet, roles []UserRole) Pe
 	}
 
 	// Auto-infer base module permissions if any granular CRUD action key is true
-	featuresWithCrud := []string{"reports", "members", "voters", "files", "performance", "users"}
+	featuresWithCrud := []string{"reports", "members", "voters", "files", "performance", "users", "sponsorships"}
 	for _, mod := range featuresWithCrud {
-		for _, act := range []string{"read", "create", "update", "delete"} {
+		for _, act := range []string{"read", "create", "update", "delete", "review", "approve"} {
 			if merged[Feature(fmt.Sprintf("%s_%s", mod, act))] {
 				merged[Feature(mod)] = true
 				break
@@ -246,6 +268,8 @@ func FeatureModule(f Feature) string {
 		return "performance"
 	case FeatureFinances:
 		return "finances"
+	case FeatureSponsorships, FeatureSponsorshipsCreate, FeatureSponsorshipsRead, FeatureSponsorshipsUpdate, FeatureSponsorshipsDelete, FeatureSponsorshipsReview, FeatureSponsorshipsApprove:
+		return "sponsorships"
 	default:
 		return ""
 	}

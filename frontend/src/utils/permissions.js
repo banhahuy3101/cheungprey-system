@@ -35,6 +35,15 @@ export const FEATURES = {
   performance_update: "performance_update",
   performance_delete: "performance_delete",
   performance_admin: "performance_admin",
+
+  sponsorships: "sponsorships",
+  sponsorships_create: "sponsorships_create",
+  sponsorships_read: "sponsorships_read",
+  sponsorships_update: "sponsorships_update",
+  sponsorships_delete: "sponsorships_delete",
+  sponsorships_review: "sponsorships_review",
+  sponsorships_approve: "sponsorships_approve",
+
   settings: "settings",
   users: "users",
   users_create: "users_create",
@@ -75,6 +84,15 @@ export const FEATURE_LABELS = {
 
   performance: "លទ្ធផលការងារ",
   performance_admin: "គ្រប់គ្រង Performance",
+
+  sponsorships: "តារាងឧបសម្ព័ន្ធ ថវិកា សម្ភារ",
+  sponsorships_create: "បង្កើតតារាងឧបសម្ព័ន្ធ (Create)",
+  sponsorships_read: "មើលតារាងឧបសម្ព័ន្ធ (Read)",
+  sponsorships_update: "កែប្រែតារាងឧបសម្ព័ន្ធ (Update)",
+  sponsorships_delete: "លុបតារាងឧបសម្ព័ន្ធ (Delete)",
+  sponsorships_review: "ពិនិត្យតារាងឧបសម្ព័ន្ធ (Review)",
+  sponsorships_approve: "អនុម័តតារាងឧបសម្ព័ន្ធ (Approve)",
+
   settings: "ការកំណត់",
   users: "គ្រប់គ្រងអ្នកប្រើ",
   technical: "Technical",
@@ -147,6 +165,9 @@ export function getModuleForFeature(feature) {
   }
   if (feature === "finances") {
     return "finances";
+  }
+  if (feature.startsWith("sponsorships")) {
+    return "sponsorships";
   }
   return null;
 }

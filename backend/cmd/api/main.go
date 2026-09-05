@@ -34,7 +34,7 @@ func membershipApprovalMiddleware() gin.HandlerFunc {
 func moduleEnabled(repo *repository.Repository, key string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		cfg, err := repo.GetModuleConfig(key)
-		if err != nil || cfg == nil || !cfg.Enabled {
+		if err == nil && cfg != nil && !cfg.Enabled {
 			c.AbortWithStatusJSON(503, gin.H{"error": "Module disabled"})
 			return
 		}
@@ -87,6 +87,7 @@ func main() {
 	zoneChiefHandler := handlers.NewZoneChiefHandler(repo)
 	moduleConfigHandler := handlers.NewModuleConfigHandler(repo)
 	menuItemHandler := handlers.NewMenuItemHandler(repo)
+	sponsorshipHandler := handlers.NewSponsorshipHandler(repo)
 
 	r := gin.Default()
 	r.Use(middleware.CORS())
@@ -416,6 +417,22 @@ func main() {
 
 				// Audit Log
 				fms.GET("/audit", auth.RequireFeatureAction(models.FeatureFinances, "read"), fmsHandler.ListFMSAuditLog)
+			}
+
+			// Sponsorships & Appendix Module (តារាងឧបសម្ព័ន្ធ ថវិកា សម្ភារ)
+			sponsorships := protected.Group("/sponsorships")
+			sponsorships.Use(moduleEnabled(repo, "sponsorships"))
+			sponsorships.Use(auth.RequireFeature(models.FeatureSponsorships))
+			{
+				sponsorships.GET("", auth.RequireFeatureAction(models.FeatureSponsorships, "read"), sponsorshipHandler.List)
+				sponsorships.GET("/summary", auth.RequireFeatureAction(models.FeatureSponsorships, "read"), sponsorshipHandler.GetSummary)
+				sponsorships.GET("/:id", auth.RequireFeatureAction(models.FeatureSponsorships, "read"), sponsorshipHandler.GetByID)
+				sponsorships.POST("", auth.RequireFeatureAction(models.FeatureSponsorships, "create"), sponsorshipHandler.Create)
+				sponsorships.PUT("/:id", auth.RequireFeatureAction(models.FeatureSponsorships, "update"), sponsorshipHandler.Update)
+				sponsorships.DELETE("/:id", auth.RequireFeatureAction(models.FeatureSponsorships, "delete"), sponsorshipHandler.Delete)
+				sponsorships.POST("/:id/submit", auth.RequireFeatureAction(models.FeatureSponsorships, "create"), sponsorshipHandler.Submit)
+				sponsorships.POST("/:id/review", auth.RequireFeature(models.FeatureSponsorshipsReview), sponsorshipHandler.Review)
+				sponsorships.POST("/:id/approve", auth.RequireFeature(models.FeatureSponsorshipsApprove), sponsorshipHandler.Approve)
 			}
 		}
 	}

@@ -30,6 +30,8 @@ import SettingsMenuItems from "./pages/settings/SettingsMenuItems";
 import SettingsMenuItemForm from "./pages/settings/SettingsMenuItemForm";
 import Forbidden from "./pages/Forbidden";
 import ReportCreateFromTemplate from "./pages/reports/ReportCreateFromTemplate";
+import Sponsorships from "./pages/sponsorships/Sponsorships";
+import SponsorshipAppendixReport from "./pages/sponsorships/SponsorshipAppendixReport";
 import Admin from "./pages/admin/Admin";
 import UserCreate from "./pages/admin/UserCreate";
 import UserEdit from "./pages/admin/UserEdit";
@@ -84,6 +86,9 @@ function App() {
               <Route path="performance/create" element={<FeatureRoute feature={FEATURES.performance} action="create"><Performance /></FeatureRoute>} />
               <Route path="performance/edit" element={<FeatureRoute feature={FEATURES.performance} action="update"><Performance /></FeatureRoute>} />
               <Route path="performance/:id" element={<FeatureRoute feature={FEATURES.performance}><Performance /></FeatureRoute>} />
+
+              <Route path="sponsorships" element={<FeatureRoute feature={FEATURES.sponsorships}><Sponsorships /></FeatureRoute>} />
+              <Route path="sponsorships/appendix" element={<FeatureRoute feature={FEATURES.sponsorships}><SponsorshipAppendixReport /></FeatureRoute>} />
 
               <Route path="settings" element={<FeatureRoute feature={FEATURES.settings}><Settings /></FeatureRoute>} />
               <Route path="settings/users" element={<ProtectedRoute adminOnly feature={FEATURES.users} action="read"><Admin /></ProtectedRoute>} />

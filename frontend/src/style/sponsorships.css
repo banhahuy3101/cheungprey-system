@@ -1,0 +1,553 @@
+/* ===== Sponsorships & Appendix (តារាងឧបសម្ព័ន្ធ ថវិកា សម្ភារ) ===== */
+
+.sponsorship-page {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding-bottom: 2rem;
+}
+
+/* Header & Actions */
+.sponsorship-hero {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  padding: 1.25rem 1.5rem;
+  background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 60%, #3b82f6 100%);
+  color: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 4px 14px rgba(30, 64, 175, 0.18);
+}
+
+.sponsorship-hero-title {
+  margin: 0 0 0.25rem;
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.sponsorship-hero-sub {
+  margin: 0;
+  font-size: 0.85rem;
+  opacity: 0.9;
+  color: #e0e7ff;
+}
+
+.sponsorship-hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+/* KPI Summary Cards */
+.sponsorship-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.sponsorship-kpi-card {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.15rem 1.25rem;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.sponsorship-kpi-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
+}
+
+.sponsorship-kpi-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.4rem;
+  flex-shrink: 0;
+}
+
+.sponsorship-kpi-icon.usd {
+  background: #ecfdf5;
+  color: #059669;
+}
+
+.sponsorship-kpi-icon.khr {
+  background: #eff6ff;
+  color: #2563eb;
+}
+
+.sponsorship-kpi-icon.material {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.sponsorship-kpi-icon.pending {
+  background: #fdf2f8;
+  color: #db2777;
+}
+
+.sponsorship-kpi-value {
+  display: block;
+  font-size: 1.35rem;
+  font-weight: 700;
+  line-height: 1.2;
+  color: #0f172a;
+  font-variant-numeric: tabular-nums;
+}
+
+.sponsorship-kpi-label {
+  font-size: 0.8rem;
+  color: #64748b;
+  font-weight: 500;
+}
+
+/* Filters Bar */
+.sponsorship-filters-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 1rem 1.25rem;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+.sponsorship-filters-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.85rem;
+  align-items: flex-end;
+}
+
+.sponsorship-filters-grid .form-group {
+  margin: 0;
+}
+
+/* Section Groups in Ledger */
+.sponsorship-section-block {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  margin-bottom: 1.5rem;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+}
+
+.sponsorship-section-header {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.9rem 1.25rem;
+  background: linear-gradient(90deg, #f8fafc 0%, #f1f5f9 100%);
+  border-bottom: 1px solid #e2e8f0;
+  gap: 0.75rem;
+}
+
+.sponsorship-section-title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #1e3a8a;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.sponsorship-section-subtotals {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.65rem;
+  font-size: 0.85rem;
+}
+
+.subtotal-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.65rem;
+  border-radius: 20px;
+  font-weight: 600;
+  font-size: 0.8rem;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+}
+
+.subtotal-pill.usd {
+  color: #047857;
+  border-color: #a7f3d0;
+  background: #f0fdf4;
+}
+
+.subtotal-pill.khr {
+  color: #1d4ed8;
+  border-color: #bfdbfe;
+  background: #eff6ff;
+}
+
+/* Items List Badges inside table cells */
+.material-items-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.material-item-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  background: #fefce8;
+  border: 1px solid #fef08a;
+  color: #854d0e;
+  padding: 0.2rem 0.5rem;
+  border-radius: 6px;
+  font-size: 0.78rem;
+  font-weight: 500;
+  width: fit-content;
+}
+
+.material-item-chip .qty {
+  font-weight: 700;
+  color: #713f12;
+}
+
+/* Status Badges */
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+
+.status-pill.draft {
+  background: #f1f5f9;
+  color: #475569;
+  border: 1px solid #cbd5e1;
+}
+
+.status-pill.submitted {
+  background: #eff6ff;
+  color: #1d4ed8;
+  border: 1px solid #bfdbfe;
+}
+
+.status-pill.reviewed {
+  background: #faf5ff;
+  color: #7e22ce;
+  border: 1px solid #e9d5ff;
+}
+
+.status-pill.approved {
+  background: #ecfdf5;
+  color: #047857;
+  border: 1px solid #a7f3d0;
+}
+
+.status-pill.returned {
+  background: #fef2f2;
+  color: #b91c1c;
+  border: 1px solid #fecaca;
+}
+
+/* Currency Cell formatting */
+.amount-cell {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.amount-usd {
+  color: #059669;
+}
+
+.amount-khr {
+  color: #2563eb;
+}
+
+/* Dynamic Line Items Table in Form */
+.form-items-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.form-items-table th,
+.form-items-table td {
+  padding: 0.5rem;
+  border: 1px solid #e2e8f0;
+  font-size: 0.85rem;
+}
+
+.form-items-table th {
+  background: #f8fafc;
+  font-weight: 600;
+  color: #475569;
+  text-align: left;
+}
+
+/* Inventory Summary Rollup Card */
+.inventory-rollup-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 1.25rem;
+  margin-bottom: 1.5rem;
+}
+
+.inventory-rollup-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+
+.inventory-rollup-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.65rem 0.85rem;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 0.85rem;
+}
+
+.inventory-rollup-name {
+  font-weight: 600;
+  color: #334155;
+}
+
+.inventory-rollup-qty {
+  font-weight: 700;
+  color: #1e40af;
+}
+
+/* ========================================================= */
+/* Official Appendix Print View (តារាងឧបសម្ព័ន្ធ)            */
+/* ========================================================= */
+
+.appendix-print-container {
+  background: #ffffff;
+  padding: 2.5rem;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  max-width: 1200px;
+  margin: 0 auto;
+  color: #000000;
+  font-family: var(--font-khmer, "Kantumruy Pro", sans-serif);
+}
+
+.appendix-header {
+  text-align: center;
+  margin-bottom: 1.5rem;
+  position: relative;
+}
+
+.appendix-top-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 1.5rem;
+}
+
+.appendix-org-info {
+  text-align: left;
+}
+
+.appendix-org-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  margin: 0 0 0.15rem;
+}
+
+.appendix-org-sub {
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.appendix-nation-info {
+  text-align: right;
+}
+
+.appendix-nation-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin: 0 0 0.2rem;
+}
+
+.appendix-motto {
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin: 0 0 0.4rem;
+}
+
+.appendix-title-block {
+  text-align: center;
+  margin: 1.5rem 0 1.25rem;
+}
+
+.appendix-main-title {
+  font-size: 1.35rem;
+  font-weight: 700;
+  margin: 0 0 0.35rem;
+  color: #000000;
+}
+
+.appendix-period-title {
+  font-size: 1.05rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+/* Official Print Table */
+.appendix-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 1.5rem;
+  font-size: 0.9rem;
+}
+
+.appendix-table th,
+.appendix-table td {
+  border: 1px solid #333333;
+  padding: 0.5rem 0.6rem;
+  vertical-align: top;
+}
+
+.appendix-table th {
+  background: #f1f5f9;
+  font-weight: 700;
+  text-align: center;
+  vertical-align: middle;
+}
+
+.appendix-table-section-row td {
+  background: #f8fafc;
+  font-weight: 700;
+  color: #1e3a8a;
+  padding: 0.6rem;
+}
+
+.appendix-table-subtotal-row td {
+  background: #f1f5f9;
+  font-weight: 700;
+}
+
+.appendix-table-grand-total td {
+  background: #e2e8f0;
+  font-weight: 800;
+  font-size: 0.95rem;
+}
+
+/* Official Summary Footer */
+.appendix-footer-summary {
+  margin: 1.5rem 0;
+  padding: 1rem 1.25rem;
+  border: 1px solid #475569;
+  border-radius: 8px;
+  background: #fdfdfd;
+  font-size: 0.95rem;
+  line-height: 1.8;
+}
+
+.appendix-footer-summary h4 {
+  margin: 0 0 0.5rem;
+  font-size: 1.05rem;
+  font-weight: 700;
+  text-decoration: underline;
+}
+
+/* 3-Tier Signature Block */
+.appendix-signatures {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 1.5rem;
+  margin-top: 2.5rem;
+  text-align: center;
+  page-break-inside: avoid;
+}
+
+.signature-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-size: 0.9rem;
+}
+
+.signature-date {
+  font-style: italic;
+  margin-bottom: 0.25rem;
+  font-size: 0.85rem;
+}
+
+.signature-role {
+  font-weight: 700;
+  margin-bottom: 4.5rem; /* space for physical signature & seal */
+}
+
+.signature-name {
+  font-weight: 700;
+  border-top: 1px dotted #94a3b8;
+  padding-top: 0.35rem;
+  width: 80%;
+}
+
+/* Print Media Query */
+@media print {
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+
+  .sidebar,
+  .topbar,
+  .mobile-bottom-nav,
+  .no-print,
+  button,
+  .sponsorship-hero-actions,
+  .sponsorship-filters-card {
+    display: none !important;
+  }
+
+  .main-content {
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+  }
+
+  .content-area {
+    padding: 0 !important;
+  }
+
+  .appendix-print-container {
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  .appendix-table th,
+  .appendix-table td {
+    border-color: #000000 !important;
+  }
+}

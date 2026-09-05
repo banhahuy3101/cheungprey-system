@@ -57,12 +57,95 @@ export default function Layout() {
         const res = await menuItemsAPI.getTree();
         const data = res.data?.data || res.data || [];
         if (Array.isArray(data) && data.length > 0) {
-          const topLevel = data.filter((item) => !item.parent_id);
-          if (topLevel.length > 0) {
-            setMenuTree(topLevel);
+          let topLevel = data.filter((item) => !item.parent_id);
+          const hasSponsorships = topLevel.some(
+            (item) => item.path === "/sponsorships" || item.module_key === "sponsorships"
+          );
+          if (!hasSponsorships) {
+            topLevel.push({
+              id: "sponsorships-module-nav",
+              title: "តារាងឧបសម្ព័ន្ធ ថវិកា សម្ភារ",
+              title_en: "Sponsorships & Materials",
+              module_key: "sponsorships",
+              feature_key: "sponsorships",
+              path: "/sponsorships",
+              icon: "LuScrollText",
+              sort_order: 45,
+              is_active: true,
+              is_visible: true,
+            });
+            topLevel.sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
           }
+          setMenuTree(topLevel);
+        } else {
+          setMenuTree([
+            {
+              id: "dashboard-nav",
+              title: "ទំព័រដើម",
+              path: "/",
+              icon: "LuLayoutDashboard",
+              sort_order: 1,
+              is_active: true,
+              is_visible: true,
+            },
+            {
+              id: "members-nav",
+              title: "សមាជិក",
+              path: "/membership",
+              feature_key: "members",
+              module_key: "membership",
+              icon: "LuUsers",
+              sort_order: 10,
+              is_active: true,
+              is_visible: true,
+            },
+            {
+              id: "reports-nav",
+              title: "របាយការណ៍",
+              path: "/reports",
+              feature_key: "reports",
+              module_key: "reports",
+              icon: "LuFileText",
+              sort_order: 20,
+              is_active: true,
+              is_visible: true,
+            },
+            {
+              id: "sponsorships-nav",
+              title: "តារាងឧបសម្ព័ន្ធ ថវិកា សម្ភារ",
+              path: "/sponsorships",
+              feature_key: "sponsorships",
+              module_key: "sponsorships",
+              icon: "LuScrollText",
+              sort_order: 30,
+              is_active: true,
+              is_visible: true,
+            },
+            {
+              id: "performance-nav",
+              title: "លទ្ធផលការងារ",
+              path: "/performance",
+              feature_key: "performance",
+              module_key: "performance",
+              icon: "LuTrendingUp",
+              sort_order: 40,
+              is_active: true,
+              is_visible: true,
+            },
+            {
+              id: "settings-nav",
+              title: "ការកំណត់",
+              path: "/settings",
+              feature_key: "settings",
+              module_key: "settings",
+              icon: "LuSettings",
+              sort_order: 50,
+              is_active: true,
+              is_visible: true,
+            },
+          ]);
         }
-      } catch (err) {
+      } catch {
         setMenuTree([]);
       } finally {
         setLoadingMenu(false);
