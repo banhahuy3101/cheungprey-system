@@ -1,0 +1,19 @@
+name: Weekly Clear Cache & Deploy
+
+on:
+  schedule:
+    # Runs every Sunday at 00:00 UTC (07:00 AM Cambodia/Indochina Time)
+    - cron: '0 0 * * 0'
+  workflow_dispatch: # Allows manual trigger from GitHub Actions tab
+
+jobs:
+  clear-cache-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Render Deploy with Cleared Cache
+        env:
+          DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK || 'https://api.render.com/deploy/srv-dadpru2d0e5s73dt2beg?key=X482vCZGPT0' }}
+        run: |
+          echo "Triggering weekly deploy with clear cache..."
+          response=$(curl -s -w "\nHTTP_STATUS: %{http_code}" -X POST "${DEPLOY_HOOK}&clearCache=clear")
+          echo "$response"
