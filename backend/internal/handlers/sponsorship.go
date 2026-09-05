@@ -3,6 +3,7 @@ package handlers
 import (
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -72,10 +73,44 @@ func (h *SponsorshipHandler) Create(c *gin.Context) {
 		return
 	}
 
+	// Support BRD alias mappings
+	usd := req.AmountUSD
+	if usd == 0 && req.CurrencyUSD != 0 {
+		usd = req.CurrencyUSD
+	}
+	khr := req.AmountKHR
+	if khr == 0 && req.CurrencyKHR != 0 {
+		khr = req.CurrencyKHR
+	}
+	donor := strings.TrimSpace(req.ContributorName)
+	if donor == "" {
+		donor = strings.TrimSpace(req.DonorName)
+	}
+	usage := strings.TrimSpace(req.UsageDescription)
+	if usage == "" {
+		usage = strings.TrimSpace(req.AllocationPurpose)
+	}
+	category := strings.TrimSpace(req.Category)
+	if category == "" {
+		category = strings.TrimSpace(req.EntryClassification)
+	}
+	if category == "" {
+		category = "donation"
+	}
+	items := req.Items
+	if len(items) == 0 && len(req.InKindItems) > 0 {
+		items = req.InKindItems
+	}
+
+	fiscalYear := req.FiscalYear
+	if fiscalYear <= 0 {
+		fiscalYear = time.Now().Year()
+	}
+
 	// Validate Rule 1 (Entry Completeness): Must have non-zero cash OR at least one material item with qty > 0
-	hasCash := req.AmountUSD > 0 || req.AmountKHR > 0
+	hasCash := usd > 0 || khr > 0
 	hasMaterial := false
-	for _, item := range req.Items {
+	for _, item := range items {
 		if strings.TrimSpace(item.ItemName) != "" && item.ItemQty > 0 {
 			hasMaterial = true
 			break
@@ -98,23 +133,33 @@ func (h *SponsorshipHandler) Create(c *gin.Context) {
 	entryNo := 0
 	if req.EntryNo != nil {
 		entryNo = *req.EntryNo
+	} else if req.RecordID != nil {
+		entryNo = *req.RecordID
 	}
 
-	classification := strings.TrimSpace(req.EntryClassification)
-	if classification == "" {
-		classification = "donation"
+	sectionGroup := strings.TrimSpace(req.SectionGroup)
+	if sectionGroup == "" {
+		sectionGroup = "ការឧបត្ថម្ភទូទៅ"
 	}
 
 	record := models.SponsorshipRecord{
 		EntryNo:             entryNo,
-		EntryClassification: classification,
-		SectionGroup:        strings.TrimSpace(req.SectionGroup),
-		ContributorName:     strings.TrimSpace(req.ContributorName),
+		RecordID:            entryNo,
+		FiscalYear:          fiscalYear,
+		EntryClassification: category,
+		Category:            category,
+		SectionGroup:        sectionGroup,
+		ContributorName:     donor,
+		DonorName:           donor,
+		Representatives:     strings.TrimSpace(req.Representatives),
 		RecordPeriod:        strings.TrimSpace(req.RecordPeriod),
 		TargetLocation:      strings.TrimSpace(req.TargetLocation),
-		AmountUSD:           req.AmountUSD,
-		AmountKHR:           req.AmountKHR,
-		UsageDescription:    strings.TrimSpace(req.UsageDescription),
+		AmountUSD:           usd,
+		CurrencyUSD:         usd,
+		AmountKHR:           khr,
+		CurrencyKHR:         khr,
+		UsageDescription:    usage,
+		AllocationPurpose:   usage,
 		Remarks:             strings.TrimSpace(req.Remarks),
 		Status:              status,
 	}
@@ -122,7 +167,7 @@ func (h *SponsorshipHandler) Create(c *gin.Context) {
 		record.CreatedBy = &userID
 	}
 
-	created, err := h.repo.CreateSponsorship(&record, req.Items)
+	created, err := h.repo.CreateSponsorship(&record, items)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -164,10 +209,50 @@ func (h *SponsorshipHandler) Update(c *gin.Context) {
 		return
 	}
 
+	// Support BRD alias mappings
+	usd := req.AmountUSD
+	if usd == 0 && req.CurrencyUSD != 0 {
+		usd = req.CurrencyUSD
+	}
+	khr := req.AmountKHR
+	if khr == 0 && req.CurrencyKHR != 0 {
+		khr = req.CurrencyKHR
+	}
+	donor := strings.TrimSpace(req.ContributorName)
+	if donor == "" {
+		donor = strings.TrimSpace(req.DonorName)
+	}
+	usage := strings.TrimSpace(req.UsageDescription)
+	if usage == "" {
+		usage = strings.TrimSpace(req.AllocationPurpose)
+	}
+	category := strings.TrimSpace(req.Category)
+	if category == "" {
+		category = strings.TrimSpace(req.EntryClassification)
+	}
+	if category == "" {
+		category = existing.EntryClassification
+		if category == "" {
+			category = "donation"
+		}
+	}
+	items := req.Items
+	if len(items) == 0 && len(req.InKindItems) > 0 {
+		items = req.InKindItems
+	}
+
+	fiscalYear := req.FiscalYear
+	if fiscalYear <= 0 {
+		fiscalYear = existing.FiscalYear
+		if fiscalYear <= 0 {
+			fiscalYear = time.Now().Year()
+		}
+	}
+
 	// Validate Rule 1
-	hasCash := req.AmountUSD > 0 || req.AmountKHR > 0
+	hasCash := usd > 0 || khr > 0
 	hasMaterial := false
-	for _, item := range req.Items {
+	for _, item := range items {
 		if strings.TrimSpace(item.ItemName) != "" && item.ItemQty > 0 {
 			hasMaterial = true
 			break
@@ -183,30 +268,40 @@ func (h *SponsorshipHandler) Update(c *gin.Context) {
 	entryNo := existing.EntryNo
 	if req.EntryNo != nil && *req.EntryNo > 0 {
 		entryNo = *req.EntryNo
+	} else if req.RecordID != nil && *req.RecordID > 0 {
+		entryNo = *req.RecordID
 	}
 
-	classification := strings.TrimSpace(req.EntryClassification)
-	if classification == "" {
-		classification = existing.EntryClassification
-		if classification == "" {
-			classification = "donation"
+	sectionGroup := strings.TrimSpace(req.SectionGroup)
+	if sectionGroup == "" {
+		sectionGroup = existing.SectionGroup
+		if sectionGroup == "" {
+			sectionGroup = "ការឧបត្ថម្ភទូទៅ"
 		}
 	}
 
 	record := models.SponsorshipRecord{
 		EntryNo:             entryNo,
-		EntryClassification: classification,
-		SectionGroup:        strings.TrimSpace(req.SectionGroup),
-		ContributorName:     strings.TrimSpace(req.ContributorName),
+		RecordID:            entryNo,
+		FiscalYear:          fiscalYear,
+		EntryClassification: category,
+		Category:            category,
+		SectionGroup:        sectionGroup,
+		ContributorName:     donor,
+		DonorName:           donor,
+		Representatives:     strings.TrimSpace(req.Representatives),
 		RecordPeriod:        strings.TrimSpace(req.RecordPeriod),
 		TargetLocation:      strings.TrimSpace(req.TargetLocation),
-		AmountUSD:           req.AmountUSD,
-		AmountKHR:           req.AmountKHR,
-		UsageDescription:    strings.TrimSpace(req.UsageDescription),
+		AmountUSD:           usd,
+		CurrencyUSD:         usd,
+		AmountKHR:           khr,
+		CurrencyKHR:         khr,
+		UsageDescription:    usage,
+		AllocationPurpose:   usage,
 		Remarks:             strings.TrimSpace(req.Remarks),
 	}
 
-	updated, err := h.repo.UpdateSponsorship(id, &record, req.Items)
+	updated, err := h.repo.UpdateSponsorship(id, &record, items)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

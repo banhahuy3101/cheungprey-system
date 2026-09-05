@@ -356,10 +356,15 @@ function SponsorshipsContent() {
                           </td>
                           <td>
                             <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", flexWrap: "wrap" }}>
-                              <span style={{ fontWeight: "600", color: "#1e293b" }}>
-                                {r.contributor_name}
+                              <span style={{ fontWeight: "700", color: "#1e293b", fontSize: "0.95rem" }}>
+                                {r.contributor_name || r.donor_name}
                               </span>
-                              {r.entry_classification && (
+                              {r.fiscal_year && (
+                                <span style={{ fontSize: "0.72rem", background: "#f1f5f9", color: "#475569", padding: "0.1rem 0.35rem", borderRadius: "4px", fontWeight: "600" }}>
+                                  ឆ្នាំ {toKhmerDigits(r.fiscal_year)}
+                                </span>
+                              )}
+                              {(r.entry_classification || r.category) && (
                                 <span
                                   style={{
                                     fontSize: "0.68rem",
@@ -375,12 +380,17 @@ function SponsorshipsContent() {
                                 </span>
                               )}
                             </div>
+                            {r.representatives && (
+                              <div style={{ fontSize: "0.78rem", color: "#4f46e5", fontWeight: "500", marginTop: "0.15rem" }}>
+                                <strong>{r.representatives}</strong>
+                              </div>
+                            )}
                             <div style={{ fontSize: "0.78rem", color: "#64748b", marginTop: "0.15rem" }}>
                               {r.record_period} • <strong style={{ color: "#1e3a8a" }}>{r.target_location}</strong>
                             </div>
-                            {r.usage_description && (
+                            {(r.usage_description || r.allocation_purpose) && (
                               <div style={{ fontSize: "0.78rem", color: "#475569", marginTop: "0.25rem", fontStyle: "italic", whiteSpace: "pre-line" }}>
-                                {r.usage_description}
+                                {r.usage_description || r.allocation_purpose}
                               </div>
                             )}
                             {r.remarks && (

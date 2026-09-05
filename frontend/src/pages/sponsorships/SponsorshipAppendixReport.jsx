@@ -185,10 +185,15 @@ export default function SponsorshipAppendixReport() {
                           {toKhmerDigits(r.entry_no || itemIdx + 1)}
                         </td>
                         <td>
-                          <div style={{ fontWeight: "600" }}>{r.contributor_name}</div>
-                          {r.record_period && (
+                          <div style={{ fontWeight: "700" }}>{r.contributor_name || r.donor_name}</div>
+                          {r.representatives && (
+                            <div style={{ fontSize: "0.82rem", color: "#312e81", fontWeight: "600" }}>
+                              {r.representatives}
+                            </div>
+                          )}
+                          {(r.record_period || r.fiscal_year) && (
                             <div style={{ fontSize: "0.8rem", color: "#475569" }}>
-                              កាលបរិច្ឆេទ ៖ {r.record_period}
+                              {r.fiscal_year ? `ឆ្នាំ ${toKhmerDigits(r.fiscal_year)} • ` : ""}កាលបរិច្ឆេទ ៖ {r.record_period}
                             </div>
                           )}
                         </td>

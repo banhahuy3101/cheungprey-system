@@ -34,10 +34,13 @@ export default function SponsorshipForm() {
 
   const [form, setForm] = useState({
     entry_no: "",
+    fiscal_year: String(new Date().getFullYear()),
     entry_classification: "donation",
+    category: "donation",
     section_group: COMMON_SECTIONS[0],
     custom_section: "",
     contributor_name: "",
+    representatives: "",
     record_period: COMMON_PERIODS[0],
     target_location: COMMON_COMMUNES[0],
     amount_usd: "",
@@ -68,22 +71,26 @@ export default function SponsorshipForm() {
   useEffect(() => {
     if (selectedRecord) {
       setForm({
-        entry_no: selectedRecord.entry_no ? String(selectedRecord.entry_no) : "",
-        entry_classification: selectedRecord.entry_classification || "donation",
+        entry_no: selectedRecord.entry_no ? String(selectedRecord.entry_no) : selectedRecord.record_id ? String(selectedRecord.record_id) : "",
+        fiscal_year: selectedRecord.fiscal_year ? String(selectedRecord.fiscal_year) : String(new Date().getFullYear()),
+        entry_classification: selectedRecord.entry_classification || selectedRecord.category || "donation",
+        category: selectedRecord.category || selectedRecord.entry_classification || "donation",
         section_group: selectedRecord.section_group || COMMON_SECTIONS[0],
         custom_section: "",
-        contributor_name: selectedRecord.contributor_name || "",
+        contributor_name: selectedRecord.contributor_name || selectedRecord.donor_name || "",
+        representatives: selectedRecord.representatives || "",
         record_period: selectedRecord.record_period || COMMON_PERIODS[0],
         target_location: selectedRecord.target_location || COMMON_COMMUNES[0],
-        amount_usd: selectedRecord.amount_usd !== undefined && selectedRecord.amount_usd !== null ? String(selectedRecord.amount_usd) : "",
-        amount_khr: selectedRecord.amount_khr !== undefined && selectedRecord.amount_khr !== null ? String(selectedRecord.amount_khr) : "",
-        usage_description: selectedRecord.usage_description || "",
+        amount_usd: selectedRecord.amount_usd !== undefined && selectedRecord.amount_usd !== null ? String(selectedRecord.amount_usd) : selectedRecord.currency_usd !== undefined ? String(selectedRecord.currency_usd) : "",
+        amount_khr: selectedRecord.amount_khr !== undefined && selectedRecord.amount_khr !== null ? String(selectedRecord.amount_khr) : selectedRecord.currency_khr !== undefined ? String(selectedRecord.currency_khr) : "",
+        usage_description: selectedRecord.usage_description || selectedRecord.allocation_purpose || "",
         remarks: selectedRecord.remarks || "",
       });
 
-      if (selectedRecord.items && selectedRecord.items.length > 0) {
+      const recordItems = selectedRecord.items || selectedRecord.in_kind_items || [];
+      if (recordItems && recordItems.length > 0) {
         setItems(
-          selectedRecord.items.map((it) => ({
+          recordItems.map((it) => ({
             item_name: it.item_name || "",
             item_qty: it.item_qty !== undefined ? String(it.item_qty) : "1",
             item_unit: it.item_unit || "គ.ក",
@@ -98,10 +105,13 @@ export default function SponsorshipForm() {
     } else {
       setForm({
         entry_no: "",
+        fiscal_year: String(new Date().getFullYear()),
         entry_classification: "donation",
+        category: "donation",
         section_group: COMMON_SECTIONS[0],
         custom_section: "",
         contributor_name: "",
+        representatives: "",
         record_period: COMMON_PERIODS[0],
         target_location: COMMON_COMMUNES[0],
         amount_usd: "",
@@ -347,18 +357,32 @@ export default function SponsorshipForm() {
                 />
               </div>
 
-              {/* Entry Classification */}
+              {/* Fiscal Year */}
               <div className="form-group">
                 <label className="form-label" style={{ fontWeight: "600" }}>
-                  ប្រភេទប្រតិបត្តិការ (Classification) <span style={{ color: "red" }}>*</span>
+                  ឆ្នាំប្រតិបត្តិការ (Fiscal Year) <span style={{ color: "red" }}>*</span>
+                </label>
+                <input
+                  type="text"
+                  className="form-control"
+                  placeholder="ឧ. 2025"
+                  value={form.fiscal_year}
+                  onChange={(e) => setForm({ ...form, fiscal_year: normalizeKhmerDigits(e.target.value) })}
+                />
+              </div>
+
+              {/* Entry Classification / Category */}
+              <div className="form-group" style={{ gridColumn: "1 / -1" }}>
+                <label className="form-label" style={{ fontWeight: "600" }}>
+                  ប្រភេទប្រតិបត្តិការ / វិស័យ (Operational Category) <span style={{ color: "red" }}>*</span>
                 </label>
                 <input
                   type="text"
                   list="classifications-datalist"
                   className="form-control"
-                  placeholder="ជ្រើសរើស ឬវាយបញ្ចូលប្រភេទប្រតិបត្តិការ..."
+                  placeholder="ជ្រើសរើស ឬវាយបញ្ចូលប្រភេទប្រតិបត្តិការ/វិស័យ..."
                   value={form.entry_classification}
-                  onChange={(e) => setForm({ ...form, entry_classification: e.target.value })}
+                  onChange={(e) => setForm({ ...form, entry_classification: e.target.value, category: e.target.value })}
                   style={{ fontWeight: "600" }}
                 />
                 <datalist id="classifications-datalist">
@@ -367,13 +391,16 @@ export default function SponsorshipForm() {
                       {cl.label}
                     </option>
                   ))}
+                  {BRD_CATEGORIES.map((cat, idx) => (
+                    <option key={idx} value={cat} />
+                  ))}
                 </datalist>
               </div>
 
               {/* Leadership Header Section */}
               <div className="form-group" style={{ gridColumn: "1 / -1" }}>
                 <label className="form-label" style={{ fontWeight: "600" }}>
-                  ក្រុមឧបត្ថម្ភ (Header Section Group) <span style={{ color: "red" }}>*</span>
+                  ក្រុមឧបត្ថម្ភ / ប្រភពថវិកា (Header Section / Stream) <span style={{ color: "red" }}>*</span>
                 </label>
                 <input
                   type="text"
@@ -391,24 +418,38 @@ export default function SponsorshipForm() {
                 </datalist>
               </div>
 
-              {/* Contributor / Section Name */}
-              <div className="form-group" style={{ gridColumn: "1 / -1" }}>
+              {/* Contributor / Donor Name */}
+              <div className="form-group">
                 <label className="form-label" style={{ fontWeight: "600" }}>
-                  ពេញនាម និង នាម / ស្ថាប័ន (Contributor Name & Title) <span style={{ color: "red" }}>*</span>
+                  អ្នកឧបត្ថម្ភ (Primary Donor / Patron) <span style={{ color: "red" }}>*</span>
                 </label>
                 <input
                   type="text"
                   className="form-control"
-                  placeholder="ឧ. សម្តេចតេជោ ហ៊ុន សែន (តាមរយៈ ឯកឧត្តមបណ្ឌិត ម៉ា ឈឿន)"
+                  placeholder="ឧ. សម្តេចតេជោ ហ៊ុន សែន"
                   value={form.contributor_name}
                   onChange={(e) => setForm({ ...form, contributor_name: e.target.value })}
+                />
+              </div>
+
+              {/* Representatives / Liaisons */}
+              <div className="form-group">
+                <label className="form-label" style={{ fontWeight: "600" }}>
+                  តាមរយៈ / តំណាង (Representatives / Liaisons)
+                </label>
+                <input
+                  type="text"
+                  className="form-control"
+                  placeholder="ឧ. តាមរយៈ ឯកឧត្តមបណ្ឌិត ម៉ា ឈឿន"
+                  value={form.representatives}
+                  onChange={(e) => setForm({ ...form, representatives: e.target.value })}
                 />
               </div>
 
               {/* Period */}
               <div className="form-group">
                 <label className="form-label" style={{ fontWeight: "600" }}>
-                  កាលបរិច្ឆេទ / ខែ (Period) <span style={{ color: "red" }}>*</span>
+                  កាលបរិច្ឆេទ / រយៈពេល (Period) <span style={{ color: "red" }}>*</span>
                 </label>
                 <input
                   type="text"
@@ -428,7 +469,7 @@ export default function SponsorshipForm() {
               {/* Target Location */}
               <div className="form-group">
                 <label className="form-label" style={{ fontWeight: "600" }}>
-                  ឃុំ / ទីតាំងគោលដៅ (Target Area) <span style={{ color: "red" }}>*</span>
+                  ទីតាំងគោលដៅ ស្រុក/ឃុំ/ភូមិ (Target Location) <span style={{ color: "red" }}>*</span>
                 </label>
                 <input
                   type="text"

@@ -4,12 +4,30 @@
 
 export const ENTRY_CLASSIFICATIONS = [
   { value: "donation", label: "ថវិកាឧបត្ថម្ភ (Donation / Budget Support)", badgeClass: "badge-donation" },
+  { value: "grassroots_operations", label: "ការងារមូលដ្ឋាន និងប្រតិបត្តិការ (Grassroots Operations)", badgeClass: "badge-subtotal" },
+  { value: "social_humanitarian", label: "កិច្ចគាំពារសង្គម និងមនុស្សធម៌ (Social & Humanitarian)", badgeClass: "badge-donation" },
+  { value: "education_support", label: "វិស័យអប់រំ និងការបណ្តុះបណ្តាល (Education Support)", badgeClass: "badge-subtotal" },
+  { value: "public_infrastructure", label: "ហេដ្ឋារចនាសម្ព័ន្ធរូបវន្ត (Public Infrastructure)", badgeClass: "badge-subtotal" },
   { value: "expense", label: "ការចំណាយ (Direct Expense)", badgeClass: "badge-expense" },
   { value: "subtotal", label: "សរុប (Subtotal Entry)", badgeClass: "badge-subtotal" },
 ];
 
+export const BRD_CATEGORIES = [
+  "ការងារមូលដ្ឋាន និងប្រតិបត្តិការ (Grassroots Operations)",
+  "កិច្ចគាំពារសង្គម និងមនុស្សធម៌ (Social & Humanitarian Assistance)",
+  "វិស័យអប់រំ និងការបណ្តុះបណ្តាល (Education Support)",
+  "ហេដ្ឋារចនាសម្ព័ន្ធរូបវន្ត (Public Infrastructure)",
+  "ថវិកាឧបត្ថម្ភទូទៅ (General Donation)",
+  "ការចំណាយផ្ទាល់ (Direct Expense)",
+  "ផ្សេងៗ (Other)",
+];
+
 export const CLASSIFICATION_MAP = {
   donation: { label: "ថវិកាឧបត្ថម្ភ", color: "#059669", bg: "#ecfdf5" },
+  grassroots_operations: { label: "ការងារមូលដ្ឋាន", color: "#2563eb", bg: "#eff6ff" },
+  social_humanitarian: { label: "សង្គមកិច្ច/មនុស្សធម៌", color: "#0d9488", bg: "#f0fdfa" },
+  education_support: { label: "វិស័យអប់រំ", color: "#7c3aed", bg: "#f5f3ff" },
+  public_infrastructure: { label: "ហេដ្ឋារចនាសម្ព័ន្ធ", color: "#d97706", bg: "#fffbeb" },
   expense: { label: "ការចំណាយ", color: "#dc2626", bg: "#fef2f2" },
   subtotal: { label: "សរុប", color: "#4f46e5", bg: "#eef2ff" },
 };
@@ -177,21 +195,38 @@ export function validateSponsorshipPayload(form, items) {
   }
 
   const entryNo = form.entry_no ? parseNumericInput(form.entry_no, true) : undefined;
+  const fiscalYear = form.fiscal_year ? parseNumericInput(form.fiscal_year, true) : new Date().getFullYear();
 
   return {
     valid: true,
     data: {
       entry_no: entryNo && entryNo > 0 ? entryNo : undefined,
-      entry_classification: form.entry_classification || "donation",
+      record_id: entryNo && entryNo > 0 ? entryNo : undefined,
+      fiscal_year: fiscalYear,
+      entry_classification: form.entry_classification || form.category || "donation",
+      category: form.category || form.entry_classification || "donation",
       section_group: section,
       contributor_name: contributor,
+      donor_name: contributor,
+      representatives: normalizeKhmerText(form.representatives),
       record_period: normalizeKhmerText(form.record_period),
       target_location: normalizeKhmerText(form.target_location),
       amount_usd: usdVal,
+      currency_usd: usdVal,
       amount_khr: khrVal,
+      currency_khr: khrVal,
       usage_description: usage,
+      allocation_purpose: usage,
       remarks: normalizeKhmerText(form.remarks),
       items: validItems.map((it) => ({
+        item_name: normalizeKhmerText(it.item_name),
+        item_qty: parseNumericInput(it.item_qty, false) || 1,
+        item_unit: normalizeKhmerText(it.item_unit) || "គ.ក",
+        cash_allocation_usd: parseNumericInput(it.cash_allocation_usd, false),
+        cash_allocation_khr: parseNumericInput(it.cash_allocation_khr, true),
+        item_notes: normalizeKhmerText(it.item_notes),
+      })),
+      in_kind_items: validItems.map((it) => ({
         item_name: normalizeKhmerText(it.item_name),
         item_qty: parseNumericInput(it.item_qty, false) || 1,
         item_unit: normalizeKhmerText(it.item_unit) || "គ.ក",

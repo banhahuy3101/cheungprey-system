@@ -9,14 +9,22 @@ import (
 type SponsorshipRecord struct {
 	ID                  uuid.UUID  `json:"id"`
 	EntryNo             int        `json:"entry_no"`
-	EntryClassification string     `json:"entry_classification"` // donation, expense, subtotal
+	RecordID            int        `json:"record_id"` // BRD alias for entry_no
+	FiscalYear          int        `json:"fiscal_year"`
+	EntryClassification string     `json:"entry_classification"` // donation, expense, subtotal, grassroots_operations, social_humanitarian, education_support, public_infrastructure
+	Category            string     `json:"category"`             // BRD alias for classification / stream
 	SectionGroup        string     `json:"section_group"`
 	ContributorName     string     `json:"contributor_name"`
+	DonorName           string     `json:"donor_name"` // BRD alias for contributor_name
+	Representatives     string     `json:"representatives,omitempty"`
 	RecordPeriod        string     `json:"record_period"`
 	TargetLocation      string     `json:"target_location"`
 	AmountUSD           float64    `json:"amount_usd"`
+	CurrencyUSD         float64    `json:"currency_usd"` // BRD alias for amount_usd
 	AmountKHR           int64      `json:"amount_khr"`
+	CurrencyKHR         int64      `json:"currency_khr"` // BRD alias for amount_khr
 	UsageDescription    string     `json:"usage_description"`
+	AllocationPurpose   string     `json:"allocation_purpose"` // BRD alias for usage_description
 	Remarks             string     `json:"remarks,omitempty"`
 	Status              string     `json:"status"` // draft, submitted, reviewed, approved, returned
 	CreatedBy           *uuid.UUID `json:"created_by,omitempty"`
@@ -54,6 +62,7 @@ type SponsorshipItemInput struct {
 type SponsorshipWithItems struct {
 	SponsorshipRecord
 	Items         []SponsorshipItem `json:"items"`
+	InKindItems   []SponsorshipItem `json:"in_kind_items"` // BRD alias
 	CreatedByName string            `json:"created_by_name,omitempty"`
 	ReviewerName  string            `json:"reviewer_name,omitempty"`
 	ApproverName  string            `json:"approver_name,omitempty"`
@@ -61,31 +70,49 @@ type SponsorshipWithItems struct {
 
 type CreateSponsorshipRequest struct {
 	EntryNo             *int                   `json:"entry_no"`
+	RecordID            *int                   `json:"record_id"`
+	FiscalYear          int                    `json:"fiscal_year"`
 	EntryClassification string                 `json:"entry_classification"`
-	SectionGroup        string                 `json:"section_group" binding:"required"`
-	ContributorName     string                 `json:"contributor_name" binding:"required"`
-	RecordPeriod        string                 `json:"record_period" binding:"required"`
+	Category            string                 `json:"category"`
+	SectionGroup        string                 `json:"section_group"`
+	ContributorName     string                 `json:"contributor_name"`
+	DonorName           string                 `json:"donor_name"`
+	Representatives     string                 `json:"representatives"`
+	RecordPeriod        string                 `json:"record_period"`
 	TargetLocation      string                 `json:"target_location" binding:"required"`
 	AmountUSD           float64                `json:"amount_usd"`
+	CurrencyUSD         float64                `json:"currency_usd"`
 	AmountKHR           int64                  `json:"amount_khr"`
-	UsageDescription    string                 `json:"usage_description" binding:"required"`
+	CurrencyKHR         int64                  `json:"currency_khr"`
+	UsageDescription    string                 `json:"usage_description"`
+	AllocationPurpose   string                 `json:"allocation_purpose"`
 	Remarks             string                 `json:"remarks"`
 	Items               []SponsorshipItemInput `json:"items"`
+	InKindItems         []SponsorshipItemInput `json:"in_kind_items"`
 	SubmitImmediately   bool                   `json:"submit_immediately"`
 }
 
 type UpdateSponsorshipRequest struct {
 	EntryNo             *int                   `json:"entry_no"`
+	RecordID            *int                   `json:"record_id"`
+	FiscalYear          int                    `json:"fiscal_year"`
 	EntryClassification string                 `json:"entry_classification"`
-	SectionGroup        string                 `json:"section_group" binding:"required"`
-	ContributorName     string                 `json:"contributor_name" binding:"required"`
-	RecordPeriod        string                 `json:"record_period" binding:"required"`
+	Category            string                 `json:"category"`
+	SectionGroup        string                 `json:"section_group"`
+	ContributorName     string                 `json:"contributor_name"`
+	DonorName           string                 `json:"donor_name"`
+	Representatives     string                 `json:"representatives"`
+	RecordPeriod        string                 `json:"record_period"`
 	TargetLocation      string                 `json:"target_location" binding:"required"`
 	AmountUSD           float64                `json:"amount_usd"`
+	CurrencyUSD         float64                `json:"currency_usd"`
 	AmountKHR           int64                  `json:"amount_khr"`
-	UsageDescription    string                 `json:"usage_description" binding:"required"`
+	CurrencyKHR         int64                  `json:"currency_khr"`
+	UsageDescription    string                 `json:"usage_description"`
+	AllocationPurpose   string                 `json:"allocation_purpose"`
 	Remarks             string                 `json:"remarks"`
 	Items               []SponsorshipItemInput `json:"items"`
+	InKindItems         []SponsorshipItemInput `json:"in_kind_items"`
 }
 
 type SponsorshipStatusRequest struct {
@@ -93,7 +120,10 @@ type SponsorshipStatusRequest struct {
 }
 
 type SponsorshipFilterParams struct {
+	FiscalYear     int    `form:"fiscal_year"`
 	SectionGroup   string `form:"section_group"`
+	Category       string `form:"category"`
+	DonorName      string `form:"donor_name"`
 	RecordPeriod   string `form:"record_period"`
 	TargetLocation string `form:"target_location"`
 	Status         string `form:"status"`
@@ -117,12 +147,12 @@ type SectionSubtotal struct {
 }
 
 type SponsorshipSummary struct {
-	TotalUSD        float64               `json:"total_usd"`
-	TotalKHR        int64                 `json:"total_khr"`
-	TotalRecords    int                   `json:"total_records"`
-	DraftRecords    int                   `json:"draft_records"`
-	PendingReview   int                   `json:"pending_review"`
-	ApprovedRecords int                   `json:"approved_records"`
-	SectionSubtotals []SectionSubtotal    `json:"section_subtotals"`
+	TotalUSD         float64               `json:"total_usd"`
+	TotalKHR         int64                 `json:"total_khr"`
+	TotalRecords     int                   `json:"total_records"`
+	DraftRecords     int                   `json:"draft_records"`
+	PendingReview    int                   `json:"pending_review"`
+	ApprovedRecords  int                   `json:"approved_records"`
+	SectionSubtotals []SectionSubtotal     `json:"section_subtotals"`
 	InventoryRollup  []InventoryRollupItem `json:"inventory_rollup"`
 }
