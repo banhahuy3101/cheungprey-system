@@ -131,7 +131,7 @@ func (h *AuthHandler) QRLogin(c *gin.Context) {
 		utils.Unauthorized(c, "Invalid QR code")
 		return
 	}
-	if time.Now().After(token.ExpiresAt) {
+	if !token.ExpiresAt.IsZero() && time.Now().After(token.ExpiresAt) {
 		utils.Unauthorized(c, "QR code has expired")
 		return
 	}

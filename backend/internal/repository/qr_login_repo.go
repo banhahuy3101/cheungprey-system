@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/supabase-community/postgrest-go"
 )
 
 type QRLoginToken struct {
@@ -42,6 +43,23 @@ func (r *Repository) GetQRLoginToken(token string) (*QRLoginToken, error) {
 		ExecuteTo(&rows)
 	if err != nil {
 		return nil, fmt.Errorf("get qr login token: %w", err)
+	}
+	if len(rows) == 0 {
+		return nil, nil
+	}
+	return &rows[0], nil
+}
+
+func (r *Repository) GetActiveQRLoginTokenByUserID(userID uuid.UUID) (*QRLoginToken, error) {
+	var rows []QRLoginToken
+	_, err := r.AdminClient.From("qr_login_tokens").
+		Select("*", "exact", false).
+		Eq("user_id", userID.String()).
+		Order("created_at", &postgrest.OrderOpts{Ascending: false}).
+		Limit(1, "").
+		ExecuteTo(&rows)
+	if err != nil {
+		return nil, fmt.Errorf("get active qr login token: %w", err)
 	}
 	if len(rows) == 0 {
 		return nil, nil

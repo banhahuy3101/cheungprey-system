@@ -136,21 +136,29 @@ func (h *AdminHandler) GetUserQRCode(c *gin.Context) {
 		return
 	}
 
-	raw := make([]byte, 32)
-	if _, err := rand.Read(raw); err != nil {
-		utils.InternalError(c, "Failed to generate QR code")
-		return
-	}
-	token := base64.RawURLEncoding.EncodeToString(raw)
+	var token string
+	existing, err := h.repo.GetActiveQRLoginTokenByUserID(id)
+	if err == nil && existing != nil && (existing.ExpiresAt.IsZero() || time.Now().Before(existing.ExpiresAt)) {
+		token = existing.Token
+	} else {
+		raw := make([]byte, 32)
+		if _, err := rand.Read(raw); err != nil {
+			utils.InternalError(c, "Failed to generate QR code")
+			return
+		}
+		token = base64.RawURLEncoding.EncodeToString(raw)
 
-	createdBy, _ := auth.GetUserID(c)
-	var createdByPtr *uuid.UUID
-	if createdBy != uuid.Nil {
-		createdByPtr = &createdBy
-	}
-	if err := h.repo.CreateQRLoginToken(id, token, time.Now().Add(24*time.Hour), createdByPtr); err != nil {
-		utils.InternalError(c, "Failed to generate QR code")
-		return
+		createdBy, _ := auth.GetUserID(c)
+		var createdByPtr *uuid.UUID
+		if createdBy != uuid.Nil {
+			createdByPtr = &createdBy
+		}
+		// Permanent validity (100 years - never expires / no timeout)
+		expiresAt := time.Now().Add(100 * 365 * 24 * time.Hour)
+		if err := h.repo.CreateQRLoginToken(id, token, expiresAt, createdByPtr); err != nil {
+			utils.InternalError(c, "Failed to generate QR code")
+			return
+		}
 	}
 
 	base := resolveQRBaseURL(c.Query("origin"), h.cfg.FrontendURL)
@@ -163,9 +171,10 @@ func (h *AdminHandler) GetUserQRCode(c *gin.Context) {
 	}
 
 	utils.JSON(c, http.StatusOK, gin.H{
-		"qr_data_uri": "data:image/png;base64," + base64.StdEncoding.EncodeToString(png),
-		"login_url":   loginURL,
-		"expires_at":  time.Now().Add(24 * time.Hour).UTC().Format(time.RFC3339),
+		"qr_data_uri":   "data:image/png;base64," + base64.StdEncoding.EncodeToString(png),
+		"login_url":     loginURL,
+		"never_expires": true,
+		"expires_at":    time.Now().Add(100 * 365 * 24 * time.Hour).UTC().Format(time.RFC3339),
 	})
 }
 
