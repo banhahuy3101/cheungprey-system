@@ -37,73 +37,6 @@ function resolveFeatureKey(key) {
   return clean;
 }
 
-const DEFAULT_MENU_TREE = [
-  {
-    id: "dashboard-nav",
-    title: "ទំព័រដើម",
-    path: "/",
-    icon: "LuLayoutDashboard",
-    sort_order: 1,
-    is_active: true,
-    is_visible: true,
-  },
-  {
-    id: "members-nav",
-    title: "សមាជិក",
-    path: "/membership",
-    feature_key: "members",
-    module_key: "membership",
-    icon: "LuUsers",
-    sort_order: 10,
-    is_active: true,
-    is_visible: true,
-  },
-  {
-    id: "reports-nav",
-    title: "របាយការណ៍",
-    path: "/reports",
-    feature_key: "reports",
-    module_key: "reports",
-    icon: "LuFileText",
-    sort_order: 20,
-    is_active: true,
-    is_visible: true,
-  },
-  {
-    id: "sponsorships-nav",
-    title: "តារាងឧបសម្ព័ន្ធ ថវិកា សម្ភារ",
-    path: "/sponsorships",
-    feature_key: "sponsorships",
-    module_key: "sponsorships",
-    icon: "LuScrollText",
-    sort_order: 30,
-    is_active: true,
-    is_visible: true,
-  },
-  {
-    id: "performance-nav",
-    title: "លទ្ធផលការងារ",
-    path: "/performance",
-    feature_key: "performance",
-    module_key: "performance",
-    icon: "LuTrendingUp",
-    sort_order: 40,
-    is_active: true,
-    is_visible: true,
-  },
-  {
-    id: "settings-nav",
-    title: "ការកំណត់",
-    path: "/settings",
-    feature_key: "settings",
-    module_key: "settings",
-    icon: "LuSettings",
-    sort_order: 50,
-    is_active: true,
-    is_visible: true,
-  },
-];
-
 export default function Layout() {
   const { user, logout } = useAuth();
   const { isEnabled } = useModules();
@@ -113,7 +46,7 @@ export default function Layout() {
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem("sidebar_collapsed") === "true");
-  const [menuTree, setMenuTree] = useState(DEFAULT_MENU_TREE);
+  const [menuTree, setMenuTree] = useState([]);
   const [loadingMenu, setLoadingMenu] = useState(true);
   const [openSubMenus, setOpenSubMenus] = useState({});
 
@@ -147,7 +80,7 @@ export default function Layout() {
           setMenuTree(topLevel);
         }
       } catch {
-        // Retain default menu tree on network error
+        if (mounted) setMenuTree([]);
       } finally {
         if (mounted) setLoadingMenu(false);
       }
@@ -187,15 +120,15 @@ export default function Layout() {
     return true;
   };
 
-  const currentNavItems = menuTree.length > 0 ? menuTree : DEFAULT_MENU_TREE;
-
-  const filteredNav = currentNavItems.filter((item) => {
-    if (item.is_active === false || item.is_visible === false) return false;
-    const fKey = resolveFeatureKey(item.feature_key);
-    const hasPerm = !fKey || canAccess(user, fKey);
-    const hasMod = checkModuleEnabled(item);
-    return hasPerm && hasMod;
-  });
+  const filteredNav = loadingMenu
+    ? []
+    : menuTree.filter((item) => {
+      if (item.is_active === false || item.is_visible === false) return false;
+      const fKey = resolveFeatureKey(item.feature_key);
+      const hasPerm = !fKey || canAccess(user, fKey);
+      const hasMod = checkModuleEnabled(item);
+      return hasPerm && hasMod;
+    });
 
   const roleLabel = user?.roles?.length
     ? user.roles.map((r) => roleLabelMap[r] || r).join(", ")
