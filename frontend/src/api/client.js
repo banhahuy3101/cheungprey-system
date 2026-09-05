@@ -9,7 +9,7 @@ export const TWO_MINUTE_TIMEOUT = 120_000;
 
 const client = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 15000,
+  timeout: 45000,
 });
 
 let cachedCoords = null;
@@ -128,8 +128,11 @@ client.interceptors.response.use(
         return client(originalRequest);
       } catch (refreshError) {
         processQueue(refreshError, null);
-        clearAuthStorage();
-        redirectToLoginIfNeeded();
+        const status = refreshError.response?.status;
+        if (status === 400 || status === 401 || status === 403) {
+          clearAuthStorage();
+          redirectToLoginIfNeeded();
+        }
         return Promise.reject(refreshError);
       } finally {
         isRefreshing = false;

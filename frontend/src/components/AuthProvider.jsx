@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import AuthContext from "../context/AuthContext";
 import { authAPI } from "../api/auth";
 import { adminAPI } from "../api/admin";
@@ -13,7 +13,13 @@ export default function AuthProvider({ children }) {
     }
   });
   const [rolePermissions, setRolePermissions] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => {
+    const token = localStorage.getItem("access_token");
+    const cached = localStorage.getItem("cached_user_profile");
+    return !(token && cached);
+  });
+
+  const lastCheckedRef = useRef(Date.now());
 
   const fetchRolePermissions = useCallback(async () => {
     try {
@@ -22,7 +28,6 @@ export default function AuthProvider({ children }) {
       setRolePermissions(list);
       return list;
     } catch {
-      setRolePermissions([]);
       return [];
     }
   }, []);
@@ -32,6 +37,7 @@ export default function AuthProvider({ children }) {
     if (!token) {
       localStorage.removeItem("cached_user_profile");
       setRolePermissions([]);
+      setUser(null);
       return null;
     }
     try {
@@ -41,13 +47,34 @@ export default function AuthProvider({ children }) {
       ]);
       const inner = data.data || data;
       const profile = inner.profile || inner;
-      localStorage.setItem("cached_user_profile", JSON.stringify(profile));
+      if (profile) {
+        localStorage.setItem("cached_user_profile", JSON.stringify(profile));
+        setUser(profile);
+      }
+      lastCheckedRef.current = Date.now();
       return profile;
-    } catch {
-      localStorage.removeItem("access_token");
-      localStorage.removeItem("refresh_token");
-      localStorage.removeItem("cached_user_profile");
-      setRolePermissions([]);
+    } catch (err) {
+      const status = err.response?.status;
+      // Only clear storage if explicitly 401/403 (unauthorized/forbidden)
+      if (status === 401 || status === 403) {
+        localStorage.removeItem("access_token");
+        localStorage.removeItem("refresh_token");
+        localStorage.removeItem("cached_user_profile");
+        setRolePermissions([]);
+        setUser(null);
+        return null;
+      }
+      // On network failure or backend cold start / 5xx, preserve cached session
+      try {
+        const cached = localStorage.getItem("cached_user_profile");
+        if (cached) {
+          const profile = JSON.parse(cached);
+          setUser(profile);
+          return profile;
+        }
+      } catch {
+        // ignore
+      }
       return null;
     }
   }, [fetchRolePermissions]);
@@ -62,17 +89,38 @@ export default function AuthProvider({ children }) {
     }
 
     let cancelled = false;
-    loadProfile().then((profile) => {
+    loadProfile().finally(() => {
       if (!cancelled) {
-        if (profile) {
-          setUser(profile);
-        }
         setLoading(false);
       }
     });
 
     return () => {
       cancelled = true;
+    };
+  }, [loadProfile]);
+
+  // Silently re-check profile / refresh token when user refocuses the tab after being away
+  useEffect(() => {
+    const handleVisibilityOrFocus = () => {
+      if (document.visibilityState === "visible") {
+        const now = Date.now();
+        // Check if more than 60 seconds have elapsed since last check
+        if (now - lastCheckedRef.current > 60000) {
+          const token = localStorage.getItem("access_token");
+          if (token) {
+            loadProfile().catch(() => {});
+          }
+        }
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityOrFocus);
+    window.addEventListener("focus", handleVisibilityOrFocus);
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityOrFocus);
+      window.removeEventListener("focus", handleVisibilityOrFocus);
     };
   }, [loadProfile]);
 
@@ -99,6 +147,7 @@ export default function AuthProvider({ children }) {
       localStorage.setItem("cached_user_profile", JSON.stringify(loggedUser));
     }
     setUser(loggedUser);
+    lastCheckedRef.current = Date.now();
     fetchRolePermissions().catch(() => {});
     return inner;
   };
@@ -128,6 +177,7 @@ export default function AuthProvider({ children }) {
       localStorage.setItem("cached_user_profile", JSON.stringify(loggedUser));
     }
     setUser(loggedUser);
+    lastCheckedRef.current = Date.now();
     fetchRolePermissions().catch(() => {});
     return inner;
   };
@@ -154,7 +204,6 @@ export default function AuthProvider({ children }) {
 
   const refreshProfile = useCallback(async () => {
     const profile = await loadProfile();
-    setUser(profile);
     return profile;
   }, [loadProfile]);
 
