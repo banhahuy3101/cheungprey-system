@@ -67,7 +67,7 @@ export default function AuthProvider({ children }) {
   }, [fetchRolePermissions]);
 
   useEffect(() => {
-    const token = localStorage.getItem("access_token");
+    const token = cacheService.get(CACHE_KEYS.ACCESS_TOKEN);
     if (!token) {
       setUser(null);
       setRolePermissions([]);
@@ -94,7 +94,7 @@ export default function AuthProvider({ children }) {
         const now = Date.now();
         // Check if more than 60 seconds have elapsed since last check
         if (now - lastCheckedRef.current > 60000) {
-          const token = localStorage.getItem("access_token");
+          const token = cacheService.get(CACHE_KEYS.ACCESS_TOKEN);
           if (token) {
             loadProfile().catch(() => {});
           }

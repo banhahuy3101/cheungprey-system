@@ -5,6 +5,7 @@ import { reportDocumentsAPI } from "../../api/reportDocuments";
 import TextEditor from "../TextEditor";
 import ReportHero from "./ReportHero";
 import Modal from "../../pages/settings/Modal";
+import cacheService, { CACHE_KEYS } from "../../services/cacheService";
 import {
   emptySimpleReportForm,
   buildSimpleReportPayload,
@@ -307,7 +308,7 @@ function PdfViewer({ reportId }) {
 
   useEffect(() => {
     let cancelled = false;
-    const token = localStorage.getItem("access_token");
+    const token = cacheService.get(CACHE_KEYS.ACCESS_TOKEN);
     fetch(`/api/report-documents/${reportId}/pdf`, {
       headers: { Authorization: `Bearer ${token}` },
     })

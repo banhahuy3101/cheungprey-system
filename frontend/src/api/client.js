@@ -1,4 +1,5 @@
 import axios from "axios";
+import cacheService, { CACHE_KEYS } from "../services/cacheService";
 
 // Use relative path during dev (Vite proxy handles /api -> localhost:8080)
 // In production, set VITE_API_URL to the absolute backend URL
@@ -23,7 +24,7 @@ if (typeof window !== "undefined" && navigator.geolocation) {
           lng: pos.coords.longitude.toFixed(6),
         };
       },
-      () => {},
+      () => { },
       { timeout: 5000, maximumAge: 60000 }
     );
   } catch {
@@ -41,8 +42,10 @@ client.interceptors.request.use(
     if (isAuthRequest(config.url)) {
       return config;
     }
-    const token = localStorage.getItem("access_token");
+    let token = cacheService.get(CACHE_KEYS.ACCESS_TOKEN);
     if (token) {
+      // Ensure token is clean without wrapping quotes
+      token = String(token).replace(/^"(.*)"$/, "$1");
       config.headers.Authorization = `Bearer ${token}`;
     }
     return config;
@@ -66,8 +69,7 @@ function isPublicAuthPage() {
 }
 
 function clearAuthStorage() {
-  localStorage.removeItem("access_token");
-  localStorage.removeItem("refresh_token");
+  cacheService.clearAuthSession();
 }
 
 function redirectToLoginIfNeeded() {
@@ -107,7 +109,10 @@ client.interceptors.response.use(
       originalRequest._retry = true;
       isRefreshing = true;
 
-      const refreshToken = localStorage.getItem("refresh_token");
+      let refreshToken = cacheService.get(CACHE_KEYS.REFRESH_TOKEN);
+      if (refreshToken) {
+        refreshToken = String(refreshToken).replace(/^"(.*)"$/, "$1");
+      }
       if (!refreshToken) {
         clearAuthStorage();
         redirectToLoginIfNeeded();
@@ -119,12 +124,14 @@ client.interceptors.response.use(
           refresh_token: refreshToken,
         });
         const inner = data.data || data;
-        localStorage.setItem("access_token", inner.access_token);
+        const newAccessToken = String(inner.access_token).replace(/^"(.*)"$/, "$1");
+        cacheService.set(CACHE_KEYS.ACCESS_TOKEN, newAccessToken);
         if (inner.refresh_token) {
-          localStorage.setItem("refresh_token", inner.refresh_token);
+          const newRefreshToken = String(inner.refresh_token).replace(/^"(.*)"$/, "$1");
+          cacheService.set(CACHE_KEYS.REFRESH_TOKEN, newRefreshToken);
         }
-        processQueue(null, inner.access_token);
-        originalRequest.headers.Authorization = `Bearer ${inner.access_token}`;
+        processQueue(null, newAccessToken);
+        originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
         return client(originalRequest);
       } catch (refreshError) {
         processQueue(refreshError, null);

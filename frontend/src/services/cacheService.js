@@ -50,31 +50,30 @@ export const cacheService = {
         return defaultValue;
       }
 
-      const parsed = JSON.parse(raw);
-
-      // Support TTL wrapper if present
-      if (parsed && typeof parsed === "object" && parsed.__isCacheWrapper && parsed.expiresAt) {
-        if (Date.now() > parsed.expiresAt) {
-          this.remove(key);
-          return defaultValue;
-        }
-        return parsed.data;
-      }
-
-      return parsed;
-    } catch {
-      // If parsing fails (e.g. raw string stored), return raw string or default
+      // Try parsing JSON if it looks like JSON
       try {
-        const rawString = hasLocalStorage ? window.localStorage.getItem(key) : MEMORY_FALLBACK.get(key);
-        return rawString !== null && rawString !== undefined ? rawString : defaultValue;
+        const parsed = JSON.parse(raw);
+        // Support TTL wrapper if present
+        if (parsed && typeof parsed === "object" && parsed.__isCacheWrapper && parsed.expiresAt) {
+          if (Date.now() > parsed.expiresAt) {
+            this.remove(key);
+            return defaultValue;
+          }
+          return parsed.data;
+        }
+        return parsed;
       } catch {
-        return defaultValue;
+        // If not JSON (plain string / JWT token), return raw string
+        return raw;
       }
+    } catch {
+      return defaultValue;
     }
   },
 
   /**
    * Generic set item with JSON serialization and optional TTL (ms)
+   * If value is a plain string without TTL, stores as raw string for maximum compatibility.
    * @param {string} key
    * @param {any} value
    * @param {number|null} ttlMs
@@ -82,29 +81,33 @@ export const cacheService = {
    */
   set(key, value, ttlMs = null) {
     try {
-      let payload = value;
+      if (value === null || value === undefined) {
+        this.remove(key);
+        return true;
+      }
+
+      let stringValue;
       if (ttlMs && typeof ttlMs === "number" && ttlMs > 0) {
-        payload = {
+        stringValue = JSON.stringify({
           __isCacheWrapper: true,
           data: value,
           cachedAt: Date.now(),
           expiresAt: Date.now() + ttlMs,
-        };
+        });
+      } else if (typeof value === "string") {
+        // Store raw string directly (e.g. JWT tokens) to prevent double-quote issues
+        stringValue = value;
+      } else {
+        stringValue = JSON.stringify(value);
       }
 
-      const serialized = JSON.stringify(payload);
       if (hasLocalStorage) {
-        window.localStorage.setItem(key, serialized);
+        window.localStorage.setItem(key, stringValue);
       }
-      MEMORY_FALLBACK.set(key, serialized);
+      MEMORY_FALLBACK.set(key, stringValue);
       return true;
     } catch (err) {
       console.warn(`[CacheService] Failed to set cache key "${key}":`, err);
-      try {
-        MEMORY_FALLBACK.set(key, JSON.stringify(value));
-      } catch {
-        // ignore
-      }
       return false;
     }
   },
