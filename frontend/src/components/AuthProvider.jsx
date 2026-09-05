@@ -2,20 +2,14 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import AuthContext from "../context/AuthContext";
 import { authAPI } from "../api/auth";
 import { adminAPI } from "../api/admin";
+import cacheService, { CACHE_KEYS } from "../services/cacheService";
 
 export default function AuthProvider({ children }) {
-  const [user, setUser] = useState(() => {
-    try {
-      const cached = localStorage.getItem("cached_user_profile");
-      return cached ? JSON.parse(cached) : null;
-    } catch {
-      return null;
-    }
-  });
+  const [user, setUser] = useState(() => cacheService.getUserProfile());
   const [rolePermissions, setRolePermissions] = useState([]);
   const [loading, setLoading] = useState(() => {
-    const token = localStorage.getItem("access_token");
-    const cached = localStorage.getItem("cached_user_profile");
+    const token = cacheService.get(CACHE_KEYS.ACCESS_TOKEN);
+    const cached = cacheService.getUserProfile();
     return !(token && cached);
   });
 
@@ -33,9 +27,9 @@ export default function AuthProvider({ children }) {
   }, []);
 
   const loadProfile = useCallback(async () => {
-    const token = localStorage.getItem("access_token");
+    const token = cacheService.get(CACHE_KEYS.ACCESS_TOKEN);
     if (!token) {
-      localStorage.removeItem("cached_user_profile");
+      cacheService.clearUserProfile();
       setRolePermissions([]);
       setUser(null);
       return null;
@@ -48,7 +42,7 @@ export default function AuthProvider({ children }) {
       const inner = data.data || data;
       const profile = inner.profile || inner;
       if (profile) {
-        localStorage.setItem("cached_user_profile", JSON.stringify(profile));
+        cacheService.setUserProfile(profile);
         setUser(profile);
       }
       lastCheckedRef.current = Date.now();
@@ -57,24 +51,16 @@ export default function AuthProvider({ children }) {
       const status = err.response?.status;
       // Only clear storage if explicitly 401/403 (unauthorized/forbidden)
       if (status === 401 || status === 403) {
-        localStorage.removeItem("access_token");
-        localStorage.removeItem("refresh_token");
-        localStorage.removeItem("cached_user_profile");
-        localStorage.removeItem("menu_items_cache");
+        cacheService.clearAuthSession();
         setRolePermissions([]);
         setUser(null);
         return null;
       }
       // On network failure or backend cold start / 5xx, preserve cached session
-      try {
-        const cached = localStorage.getItem("cached_user_profile");
-        if (cached) {
-          const profile = JSON.parse(cached);
-          setUser(profile);
-          return profile;
-        }
-      } catch {
-        // ignore
+      const cached = cacheService.getUserProfile();
+      if (cached) {
+        setUser(cached);
+        return cached;
       }
       return null;
     }
@@ -126,10 +112,7 @@ export default function AuthProvider({ children }) {
   }, [loadProfile]);
 
   const login = async (credentials) => {
-    localStorage.removeItem("access_token");
-    localStorage.removeItem("refresh_token");
-    localStorage.removeItem("cached_user_profile");
-    localStorage.removeItem("menu_items_cache");
+    cacheService.clearAuthSession();
 
     const { data } = await authAPI.login({
       email: credentials?.email?.trim() ?? "",
@@ -140,13 +123,13 @@ export default function AuthProvider({ children }) {
       const msg = inner?.error || data?.error || "Login failed: missing access token";
       throw Object.assign(new Error(msg), { response: { data: { error: msg } } });
     }
-    localStorage.setItem("access_token", inner.access_token);
+    cacheService.set(CACHE_KEYS.ACCESS_TOKEN, inner.access_token);
     if (inner.refresh_token) {
-      localStorage.setItem("refresh_token", inner.refresh_token);
+      cacheService.set(CACHE_KEYS.REFRESH_TOKEN, inner.refresh_token);
     }
     const loggedUser = inner.user || null;
     if (loggedUser) {
-      localStorage.setItem("cached_user_profile", JSON.stringify(loggedUser));
+      cacheService.setUserProfile(loggedUser);
     }
     setUser(loggedUser);
     lastCheckedRef.current = Date.now();
@@ -160,10 +143,7 @@ export default function AuthProvider({ children }) {
   };
 
   const loginWithQR = async (qrToken) => {
-    localStorage.removeItem("access_token");
-    localStorage.removeItem("refresh_token");
-    localStorage.removeItem("cached_user_profile");
-    localStorage.removeItem("menu_items_cache");
+    cacheService.clearAuthSession();
 
     const { data } = await authAPI.qrLogin(qrToken);
     const inner = data.data || data;
@@ -171,13 +151,13 @@ export default function AuthProvider({ children }) {
       const msg = inner?.error || data?.error || "QR login failed";
       throw Object.assign(new Error(msg), { response: { data: { error: msg } } });
     }
-    localStorage.setItem("access_token", inner.access_token);
+    cacheService.set(CACHE_KEYS.ACCESS_TOKEN, inner.access_token);
     if (inner.refresh_token) {
-      localStorage.setItem("refresh_token", inner.refresh_token);
+      cacheService.set(CACHE_KEYS.REFRESH_TOKEN, inner.refresh_token);
     }
     const loggedUser = inner.user || null;
     if (loggedUser) {
-      localStorage.setItem("cached_user_profile", JSON.stringify(loggedUser));
+      cacheService.setUserProfile(loggedUser);
     }
     setUser(loggedUser);
     lastCheckedRef.current = Date.now();
@@ -186,10 +166,7 @@ export default function AuthProvider({ children }) {
   };
 
   const logout = () => {
-    localStorage.removeItem("access_token");
-    localStorage.removeItem("refresh_token");
-    localStorage.removeItem("cached_user_profile");
-    localStorage.removeItem("menu_items_cache");
+    cacheService.clearAuthSession();
     setUser(null);
     setRolePermissions([]);
   };
@@ -200,7 +177,7 @@ export default function AuthProvider({ children }) {
     const updated = inner.profile || inner;
     setUser((prev) => {
       const next = { ...prev, ...updated };
-      localStorage.setItem("cached_user_profile", JSON.stringify(next));
+      cacheService.setUserProfile(next);
       return next;
     });
     return inner;

@@ -7,6 +7,7 @@ import {
 import PageHeader from "../../components/PageHeader";
 import { useToast } from "../../components/Toast";
 import { menuItemsAPI } from "../../api/menuItems";
+import cacheService from "../../services/cacheService";
 
 export default function SettingsMenuItems() {
   const navigate = useNavigate();
@@ -35,7 +36,7 @@ export default function SettingsMenuItems() {
     if (!window.confirm(`តើអ្នកពិតជាចង់លុបម៉ឺនុយ "${item.title}" នេះមែនទេ?`)) return;
     try {
       await menuItemsAPI.delete(item.id);
-      localStorage.removeItem("menu_items_cache");
+      cacheService.clearMenuItems();
       toast.success("បានលុបម៉ឺនុយបានសម្រេច");
       fetchItems();
     } catch (err) {

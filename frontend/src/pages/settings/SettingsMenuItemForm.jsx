@@ -6,6 +6,7 @@ import PageHeader from "../../components/PageHeader";
 import { useToast } from "../../components/Toast";
 import { menuItemsAPI } from "../../api/menuItems";
 import Select from "../../components/Select";
+import cacheService from "../../services/cacheService";
 
 // Dynamically load all available Lucide icons from react-icons/lu
 const ALL_LUCIDE_ICONS = Object.keys(Icons)
@@ -338,7 +339,7 @@ export default function SettingsMenuItemForm() {
         toast.success("បានបង្កើតម៉ឺនុយថ្មីបានសម្រេច!");
       }
 
-      localStorage.removeItem("menu_items_cache");
+      cacheService.clearMenuItems();
       navigate("/settings/menu-items");
     } catch (err) {
       toast.error(err.response?.data?.error || "រក្សាទុកមិនបានសម្រេច");

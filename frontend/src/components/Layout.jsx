@@ -24,6 +24,7 @@ import { useModules } from "../hooks/useModules";
 import { canAccess, FEATURES } from "../utils/permissions";
 import { useRoleOptions } from "../hooks/useRoleOptions";
 import { menuItemsAPI } from "../api/menuItems";
+import cacheService, { CACHE_KEYS } from "../services/cacheService";
 
 function DynamicIcon({ name }) {
   const IconComp = name && Icons[name] ? Icons[name] : LuFolder;
@@ -45,29 +46,15 @@ export default function Layout() {
   const location = useLocation();
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [collapsed, setCollapsed] = useState(() => localStorage.getItem("sidebar_collapsed") === "true");
-  const [menuTree, setMenuTree] = useState(() => {
-    try {
-      const cached = localStorage.getItem("menu_items_cache");
-      return cached ? JSON.parse(cached) : [];
-    } catch {
-      return [];
-    }
-  });
-  const [loadingMenu, setLoadingMenu] = useState(() => {
-    try {
-      const cached = localStorage.getItem("menu_items_cache");
-      return !cached || JSON.parse(cached).length === 0;
-    } catch {
-      return true;
-    }
-  });
+  const [collapsed, setCollapsed] = useState(() => cacheService.get(CACHE_KEYS.SIDEBAR_COLLAPSED, false) === true);
+  const [menuTree, setMenuTree] = useState(() => cacheService.getMenuItems());
+  const [loadingMenu, setLoadingMenu] = useState(() => cacheService.getMenuItems().length === 0);
   const [openSubMenus, setOpenSubMenus] = useState({});
 
   useEffect(() => {
     let mounted = true;
-    const hasCached = !!localStorage.getItem("menu_items_cache");
-    if (!hasCached) {
+    const initialItems = cacheService.getMenuItems();
+    if (initialItems.length === 0) {
       setLoadingMenu(true);
     }
 
@@ -96,14 +83,10 @@ export default function Layout() {
             topLevel.sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
           }
           setMenuTree(topLevel);
-          try {
-            localStorage.setItem("menu_items_cache", JSON.stringify(topLevel));
-          } catch {
-            // ignore quota errors
-          }
+          cacheService.setMenuItems(topLevel);
         }
       } catch {
-        if (mounted && !hasCached) {
+        if (mounted && initialItems.length === 0) {
           setMenuTree([]);
         }
       } finally {
@@ -123,7 +106,7 @@ export default function Layout() {
   const toggleCollapsed = () => {
     setCollapsed((prev) => {
       const next = !prev;
-      localStorage.setItem("sidebar_collapsed", String(next));
+      cacheService.set(CACHE_KEYS.SIDEBAR_COLLAPSED, next);
       return next;
     });
   };
