@@ -23,12 +23,6 @@ export const FEATURES = {
   files_update: "files_update",
   files_delete: "files_delete",
 
-  records: "records",
-  records_create: "records_create",
-  records_read: "records_read",
-  records_update: "records_update",
-  records_delete: "records_delete",
-
   reports: "reports",
   reports_create: "reports_create",
   reports_read: "reports_read",
@@ -72,12 +66,6 @@ export const FEATURE_LABELS = {
   files_read: "មើលឯកសារ (Read)",
   files_update: "កែប្រែឯកសារ (Update)",
   files_delete: "លុបឯកសារ (Delete)",
-
-  records: "កំណត់ត្រា",
-  records_create: "បង្កើតកំណត់ត្រា (Create)",
-  records_read: "មើលកំណត់ត្រា (Read)",
-  records_update: "កែប្រែកំណត់ត្រា (Update)",
-  records_delete: "លុបកំណត់ត្រា (Delete)",
 
   reports: "របាយការណ៍",
   reports_create: "បង្កើតរបាយការណ៍ (Create)",
@@ -150,9 +138,6 @@ export function getModuleForFeature(feature) {
   }
   if (feature.startsWith("files")) {
     return "files";
-  }
-  if (feature.startsWith("records")) {
-    return "records";
   }
   if (feature.startsWith("reports")) {
     return "reports";

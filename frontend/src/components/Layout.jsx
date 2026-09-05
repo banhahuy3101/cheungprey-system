@@ -232,21 +232,22 @@ export default function Layout() {
       )}
 
       <main className={`main-content ${collapsed ? "collapsed" : ""}`}>
-        <header className="topbar" style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+        <header className="topbar">
           <button
+            type="button"
             className="menu-toggle"
             onClick={() => setSidebarOpen(true)}
+            aria-label="បើកម៉ឺនុយ"
           >
-            <LuMenu size={24} />
+            <LuMenu size={22} />
           </button>
 
           <button
             type="button"
-            className="btn-icon"
+            className="btn-icon sidebar-collapse-btn desktop-only"
             onClick={toggleCollapsed}
             title={collapsed ? "ពង្រីកម៉ឺនុយ (បង្ហាញចំណងជើង)" : "សម្រួលម៉ឺនុយ (បង្ហាញតែរូបតំណាង)"}
             style={{
-              display: "inline-flex",
               alignItems: "center",
               justifyContent: "center",
               background: "#f1f5f9",
@@ -261,10 +262,10 @@ export default function Layout() {
             {collapsed ? <LuChevronsRight size={18} /> : <LuChevronsLeft size={18} />}
           </button>
 
-          <h3 className="page-title" style={{ margin: 0 }}>District Management System</h3>
+          <h3 className="page-title">District Management System</h3>
 
-          <div className="topbar-right" style={{ marginLeft: "auto" }}>
-            <span className="user-role">{roleLabel}</span>
+          <div className="topbar-right">
+            <span className="user-role" title={roleLabel}>{roleLabel}</span>
           </div>
         </header>
 

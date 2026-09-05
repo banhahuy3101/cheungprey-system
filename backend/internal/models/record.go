@@ -6,34 +6,6 @@ import (
 	"github.com/google/uuid"
 )
 
-type Record struct {
-	ID          uuid.UUID  `json:"id"`
-	Title       string     `json:"title"`
-	Description *string    `json:"description,omitempty"`
-	Data        any        `json:"data,omitempty"`
-	CommuneID   *uuid.UUID `json:"commune_id,omitempty"`
-	VillageID   *uuid.UUID `json:"village_id,omitempty"`
-	CreatedBy   uuid.UUID  `json:"created_by"`
-	Status      string     `json:"status"`
-	CreatedAt   time.Time  `json:"created_at"`
-	UpdatedAt   time.Time  `json:"updated_at"`
-}
-
-type CreateRecordRequest struct {
-	Title       string `json:"title" binding:"required"`
-	Description string `json:"description,omitempty"`
-	Data        any    `json:"data,omitempty"`
-	CommuneID   string `json:"commune_id,omitempty"`
-	VillageID   string `json:"village_id,omitempty"`
-	Status      string `json:"status,omitempty"`
-}
-
-type UpdateRecordRequest struct {
-	Title       string `json:"title,omitempty"`
-	Description string `json:"description,omitempty"`
-	Data        any    `json:"data,omitempty"`
-	Status      string `json:"status,omitempty"`
-}
 
 type Province struct {
 	ID        uuid.UUID `json:"id"`

@@ -70,11 +70,8 @@ func main() {
 	// Start nightly cron scheduler (runs at 00:00 Cambodia time)
 	cronScheduler := cron.New(repo)
 	cronScheduler.Start()
-
 	permSvc := service.NewPermissionService(repo)
-
 	authHandler := handlers.NewAuthHandler(repo, cfg)
-	recordHandler := handlers.NewRecordHandler(repo)
 	adminHandler := handlers.NewAdminHandler(repo, cfg)
 	permissionHandler := handlers.NewPermissionHandler(repo)
 	hierarchyHandler := handlers.NewHierarchyHandler(repo)
@@ -165,17 +162,6 @@ func main() {
 				admin.GET("/zone-chiefs/:zoneCode", auth.RequireFeatureAction(models.FeatureUsers, "read"), zoneChiefHandler.GetAssignment)
 				admin.POST("/zone-chiefs", auth.RequireFeatureAction(models.FeatureUsers, "update"), zoneChiefHandler.Assign)
 				admin.DELETE("/zone-chiefs", auth.RequireFeatureAction(models.FeatureUsers, "delete"), zoneChiefHandler.Remove)
-			}
-
-			records := protected.Group("/records")
-			records.Use(moduleEnabled(repo, "records"))
-			records.Use(auth.RequireFeature(models.FeatureRecords))
-			{
-				records.POST("", auth.RequireFeatureAction(models.FeatureRecords, "create"), recordHandler.CreateRecord)
-				records.GET("", auth.RequireFeatureAction(models.FeatureRecords, "read"), recordHandler.GetRecords)
-				records.GET("/:id", auth.RequireFeatureAction(models.FeatureRecords, "read"), recordHandler.GetRecordByID)
-				records.PUT("/:id", auth.RequireFeatureAction(models.FeatureRecords, "update"), recordHandler.UpdateRecord)
-				records.DELETE("/:id", auth.RequireFeatureAction(models.FeatureRecords, "delete"), recordHandler.DeleteRecord)
 			}
 
 			party := protected.Group("/party")

@@ -432,7 +432,6 @@ func (s *Scheduler) logModuleCounts() JobStatus {
 		{"performance_data", "Performance Data"},
 		{"geographic_zones", "Zones"},
 		{"fms_transactions", "FMS Transactions"},
-		{"records", "Records"},
 		{"members", "Members"},
 	}
 

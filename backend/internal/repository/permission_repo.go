@@ -167,7 +167,7 @@ func decodePermissions(raw json.RawMessage, role models.UserRole) models.Permiss
 	// behavior by filling missing CRUD actions from that base key.
 	for _, module := range []models.Feature{
 		models.FeatureMembers, models.FeatureVoters, models.FeatureFiles,
-		models.FeatureRecords, models.FeatureReports, models.FeaturePerformance,
+		models.FeatureReports, models.FeaturePerformance,
 		models.FeatureFinances, models.FeatureUsers,
 	} {
 		if !result[module] {

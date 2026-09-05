@@ -10,7 +10,6 @@ const (
 	FeatureMembers          Feature = "members"
 	FeatureVoters           Feature = "voters"
 	FeatureFiles            Feature = "files"
-	FeatureRecords          Feature = "records"
 	FeatureReports          Feature = "reports"
 	FeaturePerformance      Feature = "performance"
 	FeaturePerformanceAdmin Feature = "performance_admin"
@@ -30,10 +29,6 @@ const (
 	FeatureReportsUpdate Feature = "reports_update"
 	FeatureReportsDelete Feature = "reports_delete"
 
-	FeatureRecordsCreate Feature = "records_create"
-	FeatureRecordsRead   Feature = "records_read"
-	FeatureRecordsUpdate Feature = "records_update"
-	FeatureRecordsDelete Feature = "records_delete"
 
 	FeatureFilesCreate Feature = "files_create"
 	FeatureFilesRead   Feature = "files_read"
@@ -75,11 +70,6 @@ var AllFeatures = []Feature{
 	FeatureFilesRead,
 	FeatureFilesUpdate,
 	FeatureFilesDelete,
-	FeatureRecords,
-	FeatureRecordsCreate,
-	FeatureRecordsRead,
-	FeatureRecordsUpdate,
-	FeatureRecordsDelete,
 	FeatureReports,
 	FeatureReportsCreate,
 	FeatureReportsRead,
@@ -122,11 +112,6 @@ var FeatureLabels = map[Feature]string{
 	FeatureFilesRead:         "មើលឯកសារ (Read)",
 	FeatureFilesUpdate:       "កែប្រែឯកសារ (Update)",
 	FeatureFilesDelete:       "លុបឯកសារ (Delete)",
-	FeatureRecords:           "កំណត់ត្រា",
-	FeatureRecordsCreate:     "បង្កើតកំណត់ត្រា (Create)",
-	FeatureRecordsRead:       "មើលកំណត់ត្រា (Read)",
-	FeatureRecordsUpdate:     "កែប្រែកំណត់ត្រា (Update)",
-	FeatureRecordsDelete:     "លុបកំណត់ត្រា (Delete)",
 	FeatureReports:           "របាយការណ៍",
 	FeatureReportsCreate:     "បង្កើតរបាយការណ៍ (Create)",
 	FeatureReportsRead:       "មើលរបាយការណ៍ (Read)",
@@ -158,7 +143,7 @@ type PermissionSet map[Feature]bool
 // roles whose stored JSON predates granular CRUD keys.
 func CompleteCRUDDefaults(perms PermissionSet) PermissionSet {
 	for _, module := range []Feature{
-		FeatureMembers, FeatureVoters, FeatureFiles, FeatureRecords,
+		FeatureMembers, FeatureVoters, FeatureFiles,
 		FeatureReports, FeaturePerformance, FeatureFinances, FeatureUsers,
 	} {
 		if !perms[module] {
@@ -233,7 +218,7 @@ func MergePermissions(rolePerms map[UserRole]PermissionSet, roles []UserRole) Pe
 	}
 
 	// Auto-infer base module permissions if any granular CRUD action key is true
-	featuresWithCrud := []string{"records", "reports", "members", "voters", "files", "performance", "users"}
+	featuresWithCrud := []string{"reports", "members", "voters", "files", "performance", "users"}
 	for _, mod := range featuresWithCrud {
 		for _, act := range []string{"read", "create", "update", "delete"} {
 			if merged[Feature(fmt.Sprintf("%s_%s", mod, act))] {
@@ -255,8 +240,6 @@ func FeatureModule(f Feature) string {
 		return "voters"
 	case FeatureFiles, FeatureFilesCreate, FeatureFilesRead, FeatureFilesUpdate, FeatureFilesDelete:
 		return "files"
-	case FeatureRecords, FeatureRecordsCreate, FeatureRecordsRead, FeatureRecordsUpdate, FeatureRecordsDelete:
-		return "records"
 	case FeatureReports, FeatureReportsCreate, FeatureReportsRead, FeatureReportsUpdate, FeatureReportsDelete:
 		return "reports"
 	case FeaturePerformance, FeaturePerformanceCreate, FeaturePerformanceRead, FeaturePerformanceUpdate, FeaturePerformanceDelete, FeaturePerformanceAdmin:

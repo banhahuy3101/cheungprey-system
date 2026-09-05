@@ -129,7 +129,7 @@ func RequireAdminHandler(c *gin.Context) bool {
 func RequireStaffHandler(c *gin.Context) bool {
 	// Any operational data feature grants staff-level API access for legacy handlers.
 	for _, f := range []models.Feature{
-		models.FeatureMembers, models.FeatureRecords, models.FeatureReports, models.FeaturePerformance,
+		models.FeatureMembers, models.FeatureReports, models.FeaturePerformance,
 	} {
 		if HasFeature(c, f) {
 			return true

@@ -10,6 +10,7 @@ import './style/profile.css'
 import './style/reports.css'
 import './style/rbac.css'
 import './style/membership-registration.css'
+import './style/responsive.css'
 import App from './App.jsx'
 
 createRoot(document.getElementById('root')).render(

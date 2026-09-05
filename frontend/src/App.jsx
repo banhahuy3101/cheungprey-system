@@ -10,7 +10,6 @@ import MembershipEdit from "./pages/membership/MembershipEdit";
 import Membership from "./pages/membership/Membership";
 import Voters from "./pages/voters/Voters";
 import Files from "./pages/files/Files";
-import Records from "./pages/records/Records";
 import Reports from "./pages/reports/Reports";
 import Performance from "./pages/performance/Performance";
 import Settings from "./pages/settings/Settings";
@@ -76,7 +75,6 @@ function App() {
               <Route path="voters" element={<FeatureRoute feature={FEATURES.voters}><Voters /></FeatureRoute>} />
 
               <Route path="files" element={<FeatureRoute feature={FEATURES.files}><Files /></FeatureRoute>} />
-              <Route path="records" element={<FeatureRoute feature={FEATURES.records}><Records /></FeatureRoute>} />
               <Route path="reports" element={<FeatureRoute feature={FEATURES.reports}><Reports /></FeatureRoute>} />
               <Route path="reports/create" element={<FeatureRoute feature={FEATURES.reports} action="create"><Reports /></FeatureRoute>} />
               <Route path="reports/create-template" element={<FeatureRoute feature={FEATURES.reports} action="create"><ReportCreateFromTemplate /></FeatureRoute>} />
