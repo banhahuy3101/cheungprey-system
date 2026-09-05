@@ -39,6 +39,14 @@ html {
 
 html,
 body,
+#root {
+  overflow-x: hidden;
+  max-width: 100%;
+  width: 100%;
+}
+
+html,
+body,
 button,
 input,
 select,
@@ -545,6 +553,9 @@ select option {
 .layout {
   display: flex;
   min-height: 100vh;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
 }
 
 /* Sidebar */
@@ -563,7 +574,7 @@ select option {
 }
 
 .sidebar.collapsed {
-  width: 68px !important;
+  width: 68px;
 }
 
 .sidebar.collapsed .sidebar-brand {
@@ -613,11 +624,18 @@ select option {
 
 .main-content {
   margin-left: var(--sidebar-width);
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  width: calc(100% - var(--sidebar-width));
+  max-width: 100%;
   transition: margin-left 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .main-content.collapsed {
-  margin-left: 68px !important;
+  margin-left: 68px;
+  width: calc(100% - 68px);
 }
 
 .sidebar-brand {
@@ -2200,6 +2218,7 @@ th[data-cell-border-width="0"] {
 /* ===== Responsive ===== */
 @media (max-width: 768px) {
   .sidebar {
+    width: var(--sidebar-width) !important;
     transform: translateX(-100%);
   }
 
@@ -2215,12 +2234,29 @@ th[data-cell-border-width="0"] {
     display: flex;
   }
 
-  .main-content {
-    margin-left: 0;
+  .main-content,
+  .main-content.collapsed {
+    margin-left: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
   }
 
   .content-area {
-    padding: 1rem;
+    padding: 0.85rem !important;
+    padding-bottom: calc(68px + env(safe-area-inset-bottom, 16px)) !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+    overflow-x: hidden;
+  }
+
+  .table-responsive,
+  .table-wrap {
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
   }
 
   .stats-grid {
