@@ -8,6 +8,7 @@ import {
   getKhmerSolarDate,
   getKhmerLunarHeaderDate,
 } from "../../utils/khmerNumberSpelling";
+import { groupSponsorshipsBySection } from "../../utils/sponsorshipUtils";
 import "../../style/sponsorships.css";
 
 export default function SponsorshipAppendixReport() {
@@ -55,13 +56,7 @@ export default function SponsorshipAppendixReport() {
     window.print();
   };
 
-  // Group records by section_group
-  const grouped = records.reduce((acc, rec) => {
-    const key = rec.section_group || "ការឧបត្ថម្ភទូទៅ";
-    if (!acc[key]) acc[key] = [];
-    acc[key].push(rec);
-    return acc;
-  }, {});
+  const grouped = groupSponsorshipsBySection(records);
 
   const currentDate = new Date();
   const lunarYearStr = getKhmerLunarHeaderDate(currentDate);

@@ -1,4 +1,3 @@
-import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   LuPlus,
@@ -14,179 +13,61 @@ import {
   LuRotateCcw,
   LuLayers,
 } from "react-icons/lu";
-import { sponsorshipAPI } from "../../api/sponsorship";
+import { SponsorshipProvider, useSponsorships } from "../../context/SponsorshipContext";
 import { useAuth } from "../../hooks/useAuth";
 import { canAccess, FEATURES } from "../../utils/permissions";
 import { toKhmerDigits } from "../../utils/khmerNumberSpelling";
-import { useToast } from "../../components/Toast";
+import {
+  COMMON_SECTIONS,
+  COMMON_PERIODS,
+  COMMON_COMMUNES,
+  STATUS_OPTIONS,
+  STATUS_MAP,
+  groupSponsorshipsBySection,
+} from "../../utils/sponsorshipUtils";
 import SponsorshipForm from "./SponsorshipForm";
 import "../../style/sponsorships.css";
 
-const COMMON_SECTIONS = [
-  "ទាំងអស់ (All)",
-  "ការឧបត្ថម្ភរបស់សម្តេចតេជោ ហ៊ុន សែន និងសម្តេចកិត្តិព្រឹទ្ធបណ្ឌិត",
-  "ការឧបត្ថម្ភរបស់សម្តេចមហាបវរធិបតី ហ៊ុន ម៉ាណែត និងលោកជំទាវបណ្ឌិត",
-  "ការចំណាយរបស់ឯកឧត្តមបណ្ឌិត ម៉ា ឈឿន និងលោកជំទាវបណ្ឌិត អ៊ុក ម៉ាលី",
-  "ការឧបត្ថម្ភរបស់ក្រុមការងារចុះជួយមូលដ្ឋាន",
-  "ការឧបត្ថម្ភរបស់សប្បុរសជននានា",
-];
-
-const COMMON_PERIODS = [
-  "ទាំងអស់ (All)",
-  "សរុប ៩ខែ",
-  "ខែតុលា",
-  "ខែវិច្ឆិកា",
-  "ខែធ្នូ",
-  "ប្រចាំត្រីមាសទី១",
-  "ប្រចាំត្រីមាសទី២",
-  "ប្រចាំត្រីមាសទី៣",
-  "ប្រចាំត្រីមាសទី៤",
-  "ប្រចាំឆ្នាំ",
-];
-
-const COMMON_COMMUNES = [
-  "ទាំងអស់ (All)",
-  "ទូទាំងស្រុក (District-wide)",
-  "ឃុំស្ដៅជុំ",
-  "ឃុំសូភាស",
-  "ឃុំព្រៃចារ",
-  "ឃុំខ្នុរដំបង",
-  "ឃុំគោកត្របែក",
-  "ឃុំផ្តៅជុំ",
-  "ឃុំត្រពាំងគរ",
-  "ឃុំសូទិប",
-  "ឃុំតាំងក្រសាំង",
-  "ឃុំសំបូរ",
-];
-
-const STATUS_FILTERS = [
-  { label: "ស្ថានភាពទាំងអស់", value: "" },
-  { label: "សេចក្តីព្រាង (Draft)", value: "draft" },
-  { label: "បានដាក់ស្នើ (Submitted)", value: "submitted" },
-  { label: "បានពិនិត្យ (Reviewed)", value: "reviewed" },
-  { label: "បានអនុម័ត (Approved)", value: "approved" },
-  { label: "បានបង្វែរមកវិញ (Returned)", value: "returned" },
-];
-
-export default function Sponsorships() {
+function SponsorshipsContent() {
   const { user } = useAuth();
-  const { showToast } = useToast();
   const navigate = useNavigate();
 
-  const [records, setRecords] = useState([]);
-  const [summary, setSummary] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const {
+    records,
+    summary,
+    loading,
+    filters,
+    setFilters,
+    openCreateModal,
+    openEditModal,
+    deleteRecord,
+    submitRecord,
+    reviewRecord,
+    approveRecord,
+  } = useSponsorships();
 
-  // Filters
-  const [filters, setFilters] = useState({
-    section_group: "",
-    record_period: "",
-    target_location: "",
-    status: "",
-    search: "",
-  });
-
-  // Modal form state
-  const [showModal, setShowModal] = useState(false);
-  const [editItem, setEditItem] = useState(null);
-
-  // Permissions check
   const canCreate = canAccess(user, FEATURES.sponsorships_create) || canAccess(user, FEATURES.sponsorships, "create");
   const canReview = canAccess(user, FEATURES.sponsorships_review) || canAccess(user, FEATURES.users);
   const canApprove = canAccess(user, FEATURES.sponsorships_approve) || canAccess(user, FEATURES.users);
   const canDelete = canAccess(user, FEATURES.sponsorships_delete) || canAccess(user, FEATURES.users);
 
-  const fetchData = useCallback(async () => {
-    try {
-      setLoading(true);
-      const queryParams = {
-        section_group: filters.section_group && filters.section_group !== "ទាំងអស់ (All)" ? filters.section_group : undefined,
-        record_period: filters.record_period && filters.record_period !== "ទាំងអស់ (All)" ? filters.record_period : undefined,
-        target_location: filters.target_location && filters.target_location !== "ទាំងអស់ (All)" ? filters.target_location : undefined,
-        status: filters.status || undefined,
-        search: filters.search || undefined,
-        limit: 1000,
-      };
-
-      const [listRes, summaryRes] = await Promise.all([
-        sponsorshipAPI.list(queryParams),
-        sponsorshipAPI.getSummary(queryParams),
-      ]);
-
-      setRecords(listRes.data?.data || []);
-      setSummary(summaryRes.data?.data || null);
-    } catch (err) {
-      showToast(err.response?.data?.error || "មានបញ្ហាក្នុងការទាញយកទិន្នន័យ", "error");
-    } finally {
-      setLoading(false);
-    }
-  }, [filters, showToast]);
-
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
-
-  const handleDelete = async (id) => {
-    if (!window.confirm("តើអ្នកពិតជាចង់លុបកំណត់ត្រានេះមែនទេ?")) return;
-    try {
-      await sponsorshipAPI.delete(id);
-      showToast("បានលុបកំណត់ត្រាជោគជ័យ", "success");
-      fetchData();
-    } catch (err) {
-      showToast(err.response?.data?.error || "មិនអាចលុបកំណត់ត្រាបានទេ", "error");
-    }
-  };
-
-  const handleSubmitReview = async (id) => {
-    try {
-      await sponsorshipAPI.submit(id);
-      showToast("បានដាក់ស្នើពិនិត្យជោគជ័យ", "success");
-      fetchData();
-    } catch (err) {
-      showToast(err.response?.data?.error || "មិនអាចដាក់ស្នើបានទេ", "error");
-    }
-  };
-
-  const handleReviewAction = async (id, action) => {
+  const handleReviewAction = (id, action) => {
     const notes = window.prompt(
       action === "return"
         ? "បញ្ចូលមូលហេតុនៃការបង្វែរមកវិញ (Return notes):"
         : "ចំណាំបន្ថែមសម្រាប់ការពិនិត្យ (Review notes - ស្រេចចិត្ត):"
     );
     if (action === "return" && notes === null) return;
-
-    try {
-      await sponsorshipAPI.review(id, { action, notes: notes || "" });
-      showToast(
-        action === "return" ? "បានបង្វែរកំណត់ត្រាទៅកែសម្រួលវិញ" : "បានពិនិត្យ និងយល់ព្រម",
-        "success"
-      );
-      fetchData();
-    } catch (err) {
-      showToast(err.response?.data?.error || "មានបញ្ហាក្នុងការដំណើរការ", "error");
-    }
+    reviewRecord(id, action, notes || "");
   };
 
-  const handleApproveAction = async (id) => {
+  const handleApproveAction = (id) => {
     const notes = window.prompt("ចំណាំការអនុម័ត (Approval notes - ស្រេចចិត្ត):");
     if (notes === null) return;
-
-    try {
-      await sponsorshipAPI.approve(id, { notes: notes || "" });
-      showToast("បានអនុម័ត និងចាក់សោរបាយការណ៍ជោគជ័យ", "success");
-      fetchData();
-    } catch (err) {
-      showToast(err.response?.data?.error || "មិនអាចអនុម័តបានទេ", "error");
-    }
+    approveRecord(id, notes || "");
   };
 
-  // Group records by section_group for display
-  const groupedSections = records.reduce((acc, rec) => {
-    const key = rec.section_group || "ការឧបត្ថម្ភទូទៅ";
-    if (!acc[key]) acc[key] = [];
-    acc[key].push(rec);
-    return acc;
-  }, {});
+  const groupedSections = groupSponsorshipsBySection(records);
 
   const openAppendixReport = () => {
     const query = new URLSearchParams();
@@ -236,10 +117,7 @@ export default function Sponsorships() {
             <button
               type="button"
               className="btn btn-success"
-              onClick={() => {
-                setEditItem(null);
-                setShowModal(true);
-              }}
+              onClick={openCreateModal}
               style={{
                 background: "#10b981",
                 border: "none",
@@ -322,7 +200,7 @@ export default function Sponsorships() {
               onChange={(e) => setFilters({ ...filters, section_group: e.target.value })}
             >
               {COMMON_SECTIONS.map((s) => (
-                <option key={s} value={s === "ទាំងអស់ (All)" ? "" : s}>
+                <option key={s} value={s}>
                   {s}
                 </option>
               ))}
@@ -339,7 +217,7 @@ export default function Sponsorships() {
               onChange={(e) => setFilters({ ...filters, record_period: e.target.value })}
             >
               {COMMON_PERIODS.map((p) => (
-                <option key={p} value={p === "ទាំងអស់ (All)" ? "" : p}>
+                <option key={p} value={p}>
                   {p}
                 </option>
               ))}
@@ -356,7 +234,7 @@ export default function Sponsorships() {
               onChange={(e) => setFilters({ ...filters, target_location: e.target.value })}
             >
               {COMMON_COMMUNES.map((l) => (
-                <option key={l} value={l === "ទាំងអស់ (All)" ? "" : l}>
+                <option key={l} value={l}>
                   {l}
                 </option>
               ))}
@@ -372,7 +250,7 @@ export default function Sponsorships() {
               value={filters.status}
               onChange={(e) => setFilters({ ...filters, status: e.target.value })}
             >
-              {STATUS_FILTERS.map((st) => (
+              {STATUS_OPTIONS.map((st) => (
                 <option key={st.value} value={st.value}>
                   {st.label}
                 </option>
@@ -465,139 +343,136 @@ export default function Sponsorships() {
                     </tr>
                   </thead>
                   <tbody>
-                    {secRecords.map((r, rIdx) => (
-                      <tr key={r.id}>
-                        <td style={{ textAlign: "center", fontWeight: "600" }}>
-                          {toKhmerDigits(r.entry_no || rIdx + 1)}
-                        </td>
-                        <td>
-                          <div style={{ fontWeight: "600", color: "#1e293b" }}>
-                            {r.contributor_name}
-                          </div>
-                          <div style={{ fontSize: "0.78rem", color: "#64748b", marginTop: "0.15rem" }}>
-                            {r.record_period} • <strong style={{ color: "#1e3a8a" }}>{r.target_location}</strong>
-                          </div>
-                          {r.usage_description && (
-                            <div style={{ fontSize: "0.78rem", color: "#475569", marginTop: "0.25rem", fontStyle: "italic" }}>
-                              {r.usage_description}
-                            </div>
-                          )}
-                        </td>
-                        <td>
-                          {r.items && r.items.length > 0 ? (
-                            <div className="material-items-list">
-                              {r.items.map((it, itIdx) => (
-                                <span key={itIdx} className="material-item-chip">
-                                  <span>{it.item_name}</span>
-                                  <span className="qty">
-                                    {toKhmerDigits(it.item_qty)} {it.item_unit}
-                                  </span>
-                                </span>
-                              ))}
-                            </div>
-                          ) : (
-                            <span style={{ color: "#94a3b8", fontSize: "0.8rem", fontStyle: "italic" }}>
-                              (ថវិកាសុទ្ធ)
-                            </span>
-                          )}
-                        </td>
-                        <td className="amount-cell amount-usd">
-                          {r.amount_usd > 0 ? `${toKhmerDigits(r.amount_usd)} $` : "-"}
-                        </td>
-                        <td className="amount-cell amount-khr">
-                          {r.amount_khr > 0 ? `${toKhmerDigits(r.amount_khr)} ៛` : "-"}
-                        </td>
-                        <td style={{ textAlign: "center" }}>
-                          <span className={`status-pill ${r.status || "draft"}`}>
-                            {r.status === "draft" && "សេចក្តីព្រាង"}
-                            {r.status === "submitted" && "បានដាក់ស្នើ"}
-                            {r.status === "reviewed" && "បានពិនិត្យ"}
-                            {r.status === "approved" && "បានអនុម័ត"}
-                            {r.status === "returned" && "បង្វែរមកវិញ"}
-                          </span>
-                        </td>
-                        <td style={{ textAlign: "center" }}>
-                          <div style={{ display: "inline-flex", gap: "0.3rem", alignItems: "center", flexWrap: "wrap", justifyContent: "center" }}>
-                            {/* Submit Button for Draft or Returned */}
-                            {(r.status === "draft" || r.status === "returned") && (
-                              <button
-                                type="button"
-                                className="btn btn-sm btn-primary"
-                                onClick={() => handleSubmitReview(r.id)}
-                                title="ដាក់ស្នើពិនិត្យ"
-                                style={{ padding: "0.25rem 0.5rem", fontSize: "0.75rem" }}
-                              >
-                                <LuSend size={13} />
-                              </button>
-                            )}
+                    {secRecords.map((r, rIdx) => {
+                      const statusInfo = STATUS_MAP[r.status] || STATUS_MAP.draft;
 
-                            {/* Review Button for Submitted */}
-                            {canReview && r.status === "submitted" && (
-                              <>
+                      return (
+                        <tr key={r.id}>
+                          <td style={{ textAlign: "center", fontWeight: "600" }}>
+                            {toKhmerDigits(r.entry_no || rIdx + 1)}
+                          </td>
+                          <td>
+                            <div style={{ fontWeight: "600", color: "#1e293b" }}>
+                              {r.contributor_name}
+                            </div>
+                            <div style={{ fontSize: "0.78rem", color: "#64748b", marginTop: "0.15rem" }}>
+                              {r.record_period} • <strong style={{ color: "#1e3a8a" }}>{r.target_location}</strong>
+                            </div>
+                            {r.usage_description && (
+                              <div style={{ fontSize: "0.78rem", color: "#475569", marginTop: "0.25rem", fontStyle: "italic" }}>
+                                {r.usage_description}
+                              </div>
+                            )}
+                          </td>
+                          <td>
+                            {r.items && r.items.length > 0 ? (
+                              <div className="material-items-list">
+                                {r.items.map((it, itIdx) => (
+                                  <span key={itIdx} className="material-item-chip">
+                                    <span>{it.item_name}</span>
+                                    <span className="qty">
+                                      {toKhmerDigits(it.item_qty)} {it.item_unit}
+                                    </span>
+                                  </span>
+                                ))}
+                              </div>
+                            ) : (
+                              <span style={{ color: "#94a3b8", fontSize: "0.8rem", fontStyle: "italic" }}>
+                                (ថវិកាសុទ្ធ)
+                              </span>
+                            )}
+                          </td>
+                          <td className="amount-cell amount-usd">
+                            {r.amount_usd > 0 ? `${toKhmerDigits(r.amount_usd)} $` : "-"}
+                          </td>
+                          <td className="amount-cell amount-khr">
+                            {r.amount_khr > 0 ? `${toKhmerDigits(r.amount_khr)} ៛` : "-"}
+                          </td>
+                          <td style={{ textAlign: "center" }}>
+                            <span className={statusInfo.className}>
+                              {statusInfo.label}
+                            </span>
+                          </td>
+                          <td style={{ textAlign: "center" }}>
+                            <div style={{ display: "inline-flex", gap: "0.3rem", alignItems: "center", flexWrap: "wrap", justifyContent: "center" }}>
+                              {/* Submit Button for Draft or Returned */}
+                              {(r.status === "draft" || r.status === "returned") && (
+                                <button
+                                  type="button"
+                                  className="btn btn-sm btn-primary"
+                                  onClick={() => submitRecord(r.id)}
+                                  title="ដាក់ស្នើពិនិត្យ"
+                                  style={{ padding: "0.25rem 0.5rem", fontSize: "0.75rem" }}
+                                >
+                                  <LuSend size={13} />
+                                </button>
+                              )}
+
+                              {/* Review Button for Submitted */}
+                              {canReview && r.status === "submitted" && (
+                                <>
+                                  <button
+                                    type="button"
+                                    className="btn btn-sm btn-success"
+                                    onClick={() => handleReviewAction(r.id, "review")}
+                                    title="ពិនិត្យ និងយល់ព្រម"
+                                    style={{ padding: "0.25rem 0.5rem", fontSize: "0.75rem" }}
+                                  >
+                                    <LuCheck size={13} />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="btn btn-sm btn-warning"
+                                    onClick={() => handleReviewAction(r.id, "return")}
+                                    title="បង្វែរទៅកែសម្រួលវិញ"
+                                    style={{ padding: "0.25rem 0.5rem", fontSize: "0.75rem" }}
+                                  >
+                                    <LuRotateCcw size={13} />
+                                  </button>
+                                </>
+                              )}
+
+                              {/* Final Approve Button for Reviewed or Submitted */}
+                              {canApprove && (r.status === "reviewed" || r.status === "submitted") && (
                                 <button
                                   type="button"
                                   className="btn btn-sm btn-success"
-                                  onClick={() => handleReviewAction(r.id, "review")}
-                                  title="ពិនិត្យ និងយល់ព្រម"
-                                  style={{ padding: "0.25rem 0.5rem", fontSize: "0.75rem" }}
+                                  onClick={() => handleApproveAction(r.id)}
+                                  title="អនុម័ត និងចាក់សោ (Approve & Lock)"
+                                  style={{ padding: "0.25rem 0.5rem", fontSize: "0.75rem", background: "#047857" }}
                                 >
-                                  <LuCheck size={13} />
+                                  <LuShieldCheck size={14} />
                                 </button>
+                              )}
+
+                              {/* Edit Button (Enabled if not approved or user is admin) */}
+                              {(r.status !== "approved" || canApprove) && (
                                 <button
                                   type="button"
-                                  className="btn btn-sm btn-warning"
-                                  onClick={() => handleReviewAction(r.id, "return")}
-                                  title="បង្វែរទៅកែសម្រួលវិញ"
-                                  style={{ padding: "0.25rem 0.5rem", fontSize: "0.75rem" }}
+                                  className="btn-icon text-primary"
+                                  onClick={() => openEditModal(r)}
+                                  title="កែប្រែ"
                                 >
-                                  <LuRotateCcw size={13} />
+                                  <LuPencil size={16} />
                                 </button>
-                              </>
-                            )}
+                              )}
 
-                            {/* Final Approve Button for Reviewed or Submitted */}
-                            {canApprove && (r.status === "reviewed" || r.status === "submitted") && (
-                              <button
-                                type="button"
-                                className="btn btn-sm btn-success"
-                                onClick={() => handleApproveAction(r.id)}
-                                title="អនុម័ត និងចាក់សោ (Approve & Lock)"
-                                style={{ padding: "0.25rem 0.5rem", fontSize: "0.75rem", background: "#047857" }}
-                              >
-                                <LuShieldCheck size={14} />
-                              </button>
-                            )}
-
-                            {/* Edit Button (Enabled if not approved or user is admin) */}
-                            {(r.status !== "approved" || canApprove) && (
-                              <button
-                                type="button"
-                                className="btn-icon text-primary"
-                                onClick={() => {
-                                  setEditItem(r);
-                                  setShowModal(true);
-                                }}
-                                title="កែប្រែ"
-                              >
-                                <LuPencil size={16} />
-                              </button>
-                            )}
-
-                            {/* Delete Button */}
-                            {canDelete && (
-                              <button
-                                type="button"
-                                className="btn-icon text-danger"
-                                onClick={() => handleDelete(r.id)}
-                                title="លុប"
-                              >
-                                <LuTrash2 size={16} />
-                              </button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
+                              {/* Delete Button */}
+                              {canDelete && (
+                                <button
+                                  type="button"
+                                  className="btn-icon text-danger"
+                                  onClick={() => deleteRecord(r.id)}
+                                  title="លុប"
+                                >
+                                  <LuTrash2 size={16} />
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -607,20 +482,15 @@ export default function Sponsorships() {
       )}
 
       {/* Modal Form */}
-      {showModal && (
-        <SponsorshipForm
-          initialData={editItem}
-          onClose={() => {
-            setShowModal(false);
-            setEditItem(null);
-          }}
-          onSuccess={() => {
-            setShowModal(false);
-            setEditItem(null);
-            fetchData();
-          }}
-        />
-      )}
+      <SponsorshipForm />
     </div>
+  );
+}
+
+export default function Sponsorships() {
+  return (
+    <SponsorshipProvider>
+      <SponsorshipsContent />
+    </SponsorshipProvider>
   );
 }

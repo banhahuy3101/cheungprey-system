@@ -1,89 +1,85 @@
 import { useState, useEffect } from "react";
 import { LuPlus, LuTrash2, LuDollarSign, LuPackage, LuSave, LuSend, LuX } from "react-icons/lu";
-import { sponsorshipAPI } from "../../api/sponsorship";
+import { useSponsorships } from "../../hooks/useSponsorships";
+import {
+  COMMON_SECTIONS,
+  COMMON_PERIODS,
+  COMMON_COMMUNES,
+  COMMON_UNITS,
+  validateSponsorshipPayload,
+} from "../../utils/sponsorshipUtils";
 import { toKhmerDigits } from "../../utils/khmerNumberSpelling";
-import { useToast } from "../../components/Toast";
 
-const COMMON_SECTIONS = [
-  "ការឧបត្ថម្ភរបស់សម្តេចតេជោ ហ៊ុន សែន និងសម្តេចកិត្តិព្រឹទ្ធបណ្ឌិត",
-  "ការឧបត្ថម្ភរបស់សម្តេចមហាបវរធិបតី ហ៊ុន ម៉ាណែត និងលោកជំទាវបណ្ឌិត",
-  "ការចំណាយរបស់ឯកឧត្តមបណ្ឌិត ម៉ា ឈឿន និងលោកជំទាវបណ្ឌិត អ៊ុក ម៉ាលី",
-  "ការឧបត្ថម្ភរបស់ក្រុមការងារចុះជួយមូលដ្ឋាន",
-  "ការឧបត្ថម្ភរបស់សប្បុរសជននានា",
-];
-
-const COMMON_PERIODS = [
-  "សរុប ៩ខែ",
-  "ខែតុលា",
-  "ខែវិច្ឆិកា",
-  "ខែធ្នូ",
-  "ប្រចាំត្រីមាសទី១",
-  "ប្រចាំត្រីមាសទី២",
-  "ប្រចាំត្រីមាសទី៣",
-  "ប្រចាំត្រីមាសទី៤",
-  "ប្រចាំឆ្នាំ",
-];
-
-const COMMON_COMMUNES = [
-  "ទូទាំងស្រុក (District-wide)",
-  "ឃុំស្ដៅជុំ",
-  "ឃុំសូភាស",
-  "ឃុំព្រៃចារ",
-  "ឃុំខ្នុរដំបង",
-  "ឃុំគោកត្របែក",
-  "ឃុំផ្តៅជុំ",
-  "ឃុំត្រពាំងគរ",
-  "ឃុំសូទិប",
-  "ឃុំតាំងក្រសាំង",
-  "ឃុំសំបូរ",
-];
-
-const COMMON_UNITS = [
-  "គ.ក (kg)",
-  "កេស (carton)",
-  "យូរ (pack)",
-  "ឈុត (set)",
-  "ដើម (pole/unit)",
-  "សម្រាប់ (set/coffin)",
-  "ឡាន (truck)",
-  "កញ្ចប់ (package)",
-  "ដប (bottle)",
-  "គូ (pair)",
-  "សន្លឹក (sheet)",
-];
-
-export default function SponsorshipForm({ initialData = null, onClose, onSuccess }) {
-  const { showToast } = useToast();
-  const isEdit = !!initialData?.id;
+export default function SponsorshipForm() {
+  const { selectedRecord, modalOpen, closeModal, createRecord, updateRecord } = useSponsorships();
+  const isEdit = !!selectedRecord?.id;
 
   const [form, setForm] = useState({
-    entry_no: initialData?.entry_no || "",
-    section_group: initialData?.section_group || COMMON_SECTIONS[0],
+    entry_no: "",
+    section_group: COMMON_SECTIONS[0],
     custom_section: "",
-    contributor_name: initialData?.contributor_name || "",
-    record_period: initialData?.record_period || COMMON_PERIODS[0],
-    target_location: initialData?.target_location || COMMON_COMMUNES[0],
-    amount_usd: initialData?.amount_usd !== undefined ? initialData.amount_usd : "",
-    amount_khr: initialData?.amount_khr !== undefined ? initialData.amount_khr : "",
-    usage_description: initialData?.usage_description || "",
+    contributor_name: "",
+    record_period: COMMON_PERIODS[0],
+    target_location: COMMON_COMMUNES[0],
+    amount_usd: "",
+    amount_khr: "",
+    usage_description: "",
   });
 
-  const [items, setItems] = useState(() => {
-    if (initialData?.items && initialData.items.length > 0) {
-      return initialData.items.map((it) => ({
-        item_name: it.item_name || "",
-        item_qty: it.item_qty || 1,
-        item_unit: it.item_unit || "គ.ក",
-        cash_allocation_usd: it.cash_allocation_usd || 0,
-        cash_allocation_khr: it.cash_allocation_khr || 0,
-        item_notes: it.item_notes || "",
-      }));
-    }
-    return [];
-  });
-
+  const [items, setItems] = useState([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (selectedRecord) {
+      setForm({
+        entry_no: selectedRecord.entry_no || "",
+        section_group: COMMON_SECTIONS.includes(selectedRecord.section_group)
+          ? selectedRecord.section_group
+          : "custom",
+        custom_section: !COMMON_SECTIONS.includes(selectedRecord.section_group)
+          ? selectedRecord.section_group
+          : "",
+        contributor_name: selectedRecord.contributor_name || "",
+        record_period: selectedRecord.record_period || COMMON_PERIODS[0],
+        target_location: selectedRecord.target_location || COMMON_COMMUNES[0],
+        amount_usd: selectedRecord.amount_usd !== undefined ? selectedRecord.amount_usd : "",
+        amount_khr: selectedRecord.amount_khr !== undefined ? selectedRecord.amount_khr : "",
+        usage_description: selectedRecord.usage_description || "",
+      });
+
+      if (selectedRecord.items && selectedRecord.items.length > 0) {
+        setItems(
+          selectedRecord.items.map((it) => ({
+            item_name: it.item_name || "",
+            item_qty: it.item_qty || 1,
+            item_unit: it.item_unit || "គ.ក",
+            cash_allocation_usd: it.cash_allocation_usd || 0,
+            cash_allocation_khr: it.cash_allocation_khr || 0,
+            item_notes: it.item_notes || "",
+          }))
+        );
+      } else {
+        setItems([]);
+      }
+    } else {
+      setForm({
+        entry_no: "",
+        section_group: COMMON_SECTIONS[0],
+        custom_section: "",
+        contributor_name: "",
+        record_period: COMMON_PERIODS[0],
+        target_location: COMMON_COMMUNES[0],
+        amount_usd: "",
+        amount_khr: "",
+        usage_description: "",
+      });
+      setItems([]);
+    }
+    setError("");
+  }, [selectedRecord]);
+
+  if (!modalOpen) return null;
 
   const handleAddItem = () => {
     setItems((prev) => [
@@ -114,87 +110,28 @@ export default function SponsorshipForm({ initialData = null, onClose, onSuccess
   const handleSubmit = async (submitImmediately = false) => {
     setError("");
 
-    // Section group determination
-    const finalSection =
-      form.section_group === "custom"
-        ? form.custom_section.trim()
-        : form.section_group.trim();
-
-    if (!finalSection) {
-      setError("សូមជ្រើសរើស ឬបញ្ចូលក្រុមឧបត្ថម្ភ (Header Section is required)");
+    const validation = validateSponsorshipPayload(form, items);
+    if (!validation.valid) {
+      setError(validation.error);
       return;
     }
-    if (!form.contributor_name.trim()) {
-      setError("សូមបញ្ចូលគោត្តនាម និងនាមអ្នកឧបត្ថម្ភ (Contributor Name is required)");
-      return;
-    }
-    if (!form.usage_description.trim()) {
-      setError("សូមបញ្ចូលព័ត៌មានទីកន្លែងទទួល និងការប្រើប្រាស់ (Usage Details is required)");
-      return;
-    }
-
-    const usdVal = parseFloat(form.amount_usd) || 0;
-    const khrVal = parseInt(form.amount_khr, 10) || 0;
-
-    // Validate item list
-    const validItems = items.filter(
-      (it) => it.item_name.trim() !== "" && parseFloat(it.item_qty) > 0
-    );
-
-    // Rule 1: Must have non-zero cash OR at least one valid material item
-    if (usdVal <= 0 && khrVal <= 0 && validItems.length === 0) {
-      setError(
-        "តម្រូវឱ្យមានតម្លៃសាច់ប្រាក់ (USD ឬ KHR) ឬសម្ភារយ៉ាងតិចមួយមុខដែលមានបរិមាណធំជាង ០"
-      );
-      return;
-    }
-
-    const payload = {
-      entry_no: form.entry_no ? parseInt(form.entry_no, 10) : undefined,
-      section_group: finalSection,
-      contributor_name: form.contributor_name.trim(),
-      record_period: form.record_period.trim(),
-      target_location: form.target_location.trim(),
-      amount_usd: usdVal,
-      amount_khr: khrVal,
-      usage_description: form.usage_description.trim(),
-      items: validItems.map((it) => ({
-        item_name: it.item_name.trim(),
-        item_qty: parseFloat(it.item_qty) || 1,
-        item_unit: it.item_unit.trim(),
-        cash_allocation_usd: parseFloat(it.cash_allocation_usd) || 0,
-        cash_allocation_khr: parseInt(it.cash_allocation_khr, 10) || 0,
-        item_notes: (it.item_notes || "").trim(),
-      })),
-      submit_immediately: submitImmediately,
-    };
 
     setSaving(true);
     try {
       if (isEdit) {
-        await sponsorshipAPI.update(initialData.id, payload);
-        showToast("កែប្រែទិន្នន័យបានជោគជ័យ", "success");
+        await updateRecord(selectedRecord.id, validation.data);
       } else {
-        await sponsorshipAPI.create(payload);
-        showToast(
-          submitImmediately
-            ? "បង្កើត និងដាក់ស្នើបានជោគជ័យ"
-            : "រក្សាទុកជាសេចក្តីព្រាងបានជោគជ័យ",
-          "success"
-        );
+        await createRecord(validation.data, submitImmediately);
       }
-      if (onSuccess) onSuccess();
     } catch (err) {
-      const msg = err.response?.data?.error || "មានបញ្ហាក្នុងការរក្សាទុកទិន្នន័យ";
-      setError(msg);
-      showToast(msg, "error");
+      setError(err.response?.data?.error || "មានបញ្ហាក្នុងការរក្សាទុកទិន្នន័យ");
     } finally {
       setSaving(false);
     }
   };
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
+    <div className="modal-backdrop" onClick={closeModal}>
       <div
         className="modal-content"
         style={{ maxWidth: "850px", maxHeight: "90vh", overflowY: "auto" }}
@@ -209,7 +146,7 @@ export default function SponsorshipForm({ initialData = null, onClose, onSuccess
               District Sponsorship & Donation Management System
             </span>
           </div>
-          <button type="button" className="btn-icon" onClick={onClose} aria-label="បិទ">
+          <button type="button" className="btn-icon" onClick={closeModal} aria-label="បិទ">
             <LuX size={20} />
           </button>
         </div>
@@ -233,8 +170,8 @@ export default function SponsorshipForm({ initialData = null, onClose, onSuccess
         <div className="modal-body" style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
           {/* Section A: Header & Contributor Configuration */}
           <div style={{ background: "#f8fafc", padding: "1rem", borderRadius: "10px", border: "1px solid #e2e8f0" }}>
-            <h4 style={{ margin: "0 0 0.75rem", fontSize: "0.95rem", color: "#334155", display: "flex", alignItems: "center", gap: "0.4rem" }}>
-              <span>ផ្នែកទី ១៖ ព័ត៌មានអ្នកឧបត្ថម្ភ និងកាលបរិច្ឆេទ</span>
+            <h4 style={{ margin: "0 0 0.75rem", fontSize: "0.95rem", color: "#334155" }}>
+              ផ្នែកទី ១៖ ព័ត៌មានអ្នកឧបត្ថម្ភ និងកាលបរិច្ឆេទ
             </h4>
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.85rem" }}>
@@ -438,7 +375,7 @@ export default function SponsorshipForm({ initialData = null, onClose, onSuccess
                           />
                           <datalist id={`units-list-${idx}`}>
                             {COMMON_UNITS.map((u) => (
-                              <option key={u} value={u.split(" ")[0]} />
+                              <option key={u} value={u} />
                             ))}
                           </datalist>
                         </td>
@@ -485,7 +422,7 @@ export default function SponsorshipForm({ initialData = null, onClose, onSuccess
         </div>
 
         <div className="modal-footer" style={{ display: "flex", justifyContent: "flex-end", gap: "0.75rem", marginTop: "1rem" }}>
-          <button type="button" className="btn btn-secondary" onClick={onClose} disabled={saving}>
+          <button type="button" className="btn btn-secondary" onClick={closeModal} disabled={saving}>
             បោះបង់
           </button>
           {!isEdit && (
