@@ -704,10 +704,90 @@
   }
 }
 
-/* Content area */
-.content-area {
-  padding: 1.5rem;
-  flex: 1;
+/* Mobile Bottom Navigation Bar */
+.mobile-bottom-nav {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .mobile-bottom-nav {
+    display: flex;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: calc(58px + env(safe-area-inset-bottom, 0px));
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    background: rgba(255, 255, 255, 0.94);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-top: 1px solid var(--border);
+    box-shadow: 0 -3px 12px rgba(0, 0, 0, 0.05);
+    z-index: 90;
+    align-items: center;
+    justify-content: space-around;
+  }
+
+  .mobile-bottom-nav-item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    height: 100%;
+    color: #64748b;
+    text-decoration: none;
+    font-size: 0.68rem;
+    font-weight: 500;
+    background: none;
+    border: none;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    padding: 3px 2px;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .mobile-nav-icon-wrapper {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    transition: all 0.15s ease;
+  }
+
+  .mobile-nav-icon-wrapper .nav-icon,
+  .mobile-nav-icon-wrapper svg {
+    font-size: 1.25rem;
+    width: 19px;
+    height: 19px;
+  }
+
+  .mobile-nav-label {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 62px;
+    font-size: 0.68rem;
+    line-height: 1;
+  }
+
+  .mobile-bottom-nav-item.active {
+    color: var(--primary, #1e40af);
+    font-weight: 700;
+  }
+
+  .mobile-bottom-nav-item.active .mobile-nav-icon-wrapper {
+    background: #eff6ff;
+    color: var(--primary, #1e40af);
+  }
+
+  /* Content area padding for mobile bottom bar */
+  .content-area {
+    padding-bottom: calc(68px + env(safe-area-inset-bottom, 16px)) !important;
+  }
 }
 
 /* Sidebar overlay for mobile */

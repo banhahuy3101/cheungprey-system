@@ -17,6 +17,7 @@ import {
   LuChevronDown,
   LuChevronsLeft,
   LuChevronsRight,
+  LuLayoutGrid,
 } from "react-icons/lu";
 import { useAuth } from "../hooks/useAuth";
 import { useModules } from "../hooks/useModules";
@@ -275,6 +276,46 @@ export default function Layout() {
           </ErrorBoundary>
         </div>
       </main>
+
+      {/* Mobile Bottom Navigation Bar */}
+      {filteredNav.length > 0 && (
+        <nav className="mobile-bottom-nav" aria-label="Mobile Navigation">
+          {(filteredNav.length > 4 ? filteredNav.slice(0, 4) : filteredNav).map((item) => {
+            const hasChildren = item.children && item.children.length > 0;
+            const isItemActive = location.pathname === item.path || (item.path !== "/" && location.pathname.startsWith(item.path));
+            return (
+              <NavLink
+                key={item.id || item.path}
+                to={item.path || "/"}
+                end={!hasChildren && item.path === "/"}
+                className={({ isActive }) =>
+                  `mobile-bottom-nav-item ${isActive || isItemActive ? "active" : ""}`
+                }
+                onClick={() => setSidebarOpen(false)}
+              >
+                <div className="mobile-nav-icon-wrapper">
+                  <DynamicIcon name={item.icon} />
+                </div>
+                <span className="mobile-nav-label">{item.title}</span>
+              </NavLink>
+            );
+          })}
+
+          {filteredNav.length > 4 && (
+            <button
+              type="button"
+              className={`mobile-bottom-nav-item ${sidebarOpen ? "active" : ""}`}
+              onClick={() => setSidebarOpen((prev) => !prev)}
+              aria-label="ម៉ឺនុយបន្ថែម"
+            >
+              <div className="mobile-nav-icon-wrapper">
+                <LuLayoutGrid size={20} />
+              </div>
+              <span className="mobile-nav-label">ម៉ឺនុយ</span>
+            </button>
+          )}
+        </nav>
+      )}
     </div>
   );
 }
