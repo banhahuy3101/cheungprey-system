@@ -229,7 +229,7 @@ export default function Files() {
   ];
 
   return (
-    <div className="page" style={{ maxWidth: "1200px", margin: "0 auto" }}>
+    <div className="page">
       <PageHeader
         title="បណ្ណសារឯកសារ (Document Archive)"
         subtitle="គ្រប់គ្រង និងរក្សាទុកឯកសារផ្លូវការប្រព័ន្ធ"

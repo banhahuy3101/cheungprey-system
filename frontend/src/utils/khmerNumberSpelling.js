@@ -1,19 +1,20 @@
+import { lunarDate, solarDate, numeric } from '@kdamdev/khmerformat';
+
 /**
  * Khmer Number & Currency Spell-Out Utility
- * Converts numbers into Khmer written words (e.g. 566,063 USD -> ប្រាំរយហុកសិបប្រាំមួយពាន់ហុកសិបបី ដុល្លារ)
+ * Converts numbers and dates using @kdamdev/khmerformat
  */
 
-const KHMER_DIGITS = ['០', '១', '២', '៣', '៤', '៥', '៦', '៧', '៨', '៩'];
+export { lunarDate, solarDate, numeric };
 
-const ONES = ['', 'មួយ', 'ពីរ', 'បី', 'បួន', 'ប្រាំ', 'ប្រាំមួយ', 'ប្រាំពីរ', 'ប្រាំបី', 'ប្រាំបួន'];
-const TENS = ['', 'ដប់', 'ម្ភៃ', 'សាមសិប', 'សែសិប', 'ហាសិប', 'ហុកសិប', 'ចិតសិប', 'ប៉ែតសិប', 'កៅសិប'];
-
-export function toKhmerDigits(num) {
+export function toKhmerDigits(num, useGrouping = true) {
   if (num === null || num === undefined || isNaN(Number(num))) return '០';
-  const parts = Number(num).toLocaleString('en-US', { maximumFractionDigits: 2 }).split('.');
-  const intKhmer = parts[0].replace(/[0-9]/g, (d) => KHMER_DIGITS[d]);
+  const n = Number(num);
+  const parts = n.toLocaleString('en-US', { maximumFractionDigits: 2 }).split('.');
+  const intStr = parts[0].replace(/,/g, '');
+  const intKhmer = numeric(intStr).toKhmer(useGrouping);
   if (parts.length > 1) {
-    const decKhmer = parts[1].replace(/[0-9]/g, (d) => KHMER_DIGITS[d]);
+    const decKhmer = numeric(parts[1]).toKhmer(false);
     return `${intKhmer}.${decKhmer}`;
   }
   return intKhmer;
@@ -27,28 +28,6 @@ export function formatKhmerCurrency(amount, currency = 'USD') {
   return `${digits} រៀល`;
 }
 
-function spellThreeDigits(n) {
-  let result = '';
-  const hundreds = Math.floor(n / 100);
-  const remainder = n % 100;
-  const tens = Math.floor(remainder / 10);
-  const ones = remainder % 10;
-
-  if (hundreds > 0) {
-    result += ONES[hundreds] + 'រយ';
-  }
-
-  if (tens > 0) {
-    result += TENS[tens];
-  }
-
-  if (ones > 0) {
-    result += ONES[ones];
-  }
-
-  return result;
-}
-
 export function numberToKhmerWords(num, currency = '') {
   if (num === null || num === undefined || isNaN(Number(num))) return 'សូន្យ';
   const n = Math.abs(Number(num));
@@ -59,30 +38,12 @@ export function numberToKhmerWords(num, currency = '') {
   const intPart = Math.floor(n);
   const decPart = Math.round((n - intPart) * 100);
 
-  let result = '';
-
-  const billions = Math.floor(intPart / 1_000_000_000);
-  const millions = Math.floor((intPart % 1_000_000_000) / 1_000_000);
-  const thousands = Math.floor((intPart % 1_000_000) / 1_000);
-  const hundreds = intPart % 1_000;
-
-  if (billions > 0) {
-    result += spellThreeDigits(billions) + 'ពាន់លាន';
-  }
-  if (millions > 0) {
-    result += spellThreeDigits(millions) + 'លាន';
-  }
-  if (thousands > 0) {
-    result += spellThreeDigits(thousands) + 'ពាន់';
-  }
-  if (hundreds > 0) {
-    result += spellThreeDigits(hundreds);
-  }
+  let result = numeric(String(intPart)).toKhmerText();
 
   if (currency === 'USD') {
     result += ' ដុល្លារ';
     if (decPart > 0) {
-      result += ' និង ' + spellThreeDigits(decPart) + ' សេន';
+      result += ' និង ' + numeric(String(decPart)).toKhmerText() + ' សេន';
     }
   } else if (currency === 'KHR') {
     result += ' រៀល';
@@ -91,21 +52,32 @@ export function numberToKhmerWords(num, currency = '') {
   return result.trim();
 }
 
-const KHMER_MONTHS = [
-  'មករា', 'កុម្ភៈ', 'មីនា', 'មេសា', 'ឧសភា', 'មិថុនា',
-  'កក្កដា', 'សីហា', 'កញ្ញា', 'តុលា', 'វិច្ឆិកា', 'ធ្នូ'
-];
-
 export function getKhmerSolarDate(dateInput) {
-  const d = dateInput ? new Date(dateInput) : new Date();
-  const day = toKhmerDigits(d.getDate());
-  const month = KHMER_MONTHS[d.getMonth()];
-  const year = toKhmerDigits(d.getFullYear());
-  return `ថ្ងៃទី ${day} ខែ ${month} ឆ្នាំ ${year}`;
+  try {
+    const d = dateInput ? new Date(dateInput) : new Date();
+    const solar = solarDate(d);
+    return `ថ្ងៃទី ${solar.getDay()} ខែ ${solar.getMonth()} ឆ្នាំ ${solar.getYear()}`;
+  } catch {
+    return 'ថ្ងៃទី..... ខែ......... ឆ្នាំ ២០...';
+  }
 }
 
 export function getKhmerLunarHeaderDate(dateInput) {
-  const d = dateInput ? new Date(dateInput) : new Date();
-  const beYear = toKhmerDigits(d.getFullYear() + 543);
-  return `ព.ស. ${beYear}`;
+  try {
+    const d = dateInput ? new Date(dateInput) : new Date();
+    const lunar = lunarDate(d);
+    return `ព.ស. ${lunar.getBeYear()}`;
+  } catch {
+    return 'ព.ស.';
+  }
+}
+
+export function getKhmerLunarFullDate(dateInput) {
+  try {
+    const d = dateInput ? new Date(dateInput) : new Date();
+    const lunar = lunarDate(d);
+    return lunar.toString(); // ឧទាហរណ៍ ៖ ថ្ងៃសៅរ៍ ៨ រោច ខែស្រាពណ៍ ឆ្នាំមមី អដ្ឋស័ក ព.ស.២៥៧០
+  } catch {
+    return '';
+  }
 }

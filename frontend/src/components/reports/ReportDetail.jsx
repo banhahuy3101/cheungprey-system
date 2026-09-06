@@ -193,7 +193,7 @@ export default function ReportDetail({ reportId }) {
 
   if (loading) {
     return (
-      <div style={{ maxWidth: "1350px", margin: "0 auto", padding: "0 0.5rem 2rem 0.5rem" }}>
+      <div className="page report-detail-page">
         {/* Topbar skeleton */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "1rem 1.5rem", marginBottom: "1.5rem", background: "rgba(255,255,255,0.85)", borderRadius: "12px", border: "1px solid var(--border)" }}>
           <Skeleton w={180} h={34} r={8} />
@@ -219,7 +219,7 @@ export default function ReportDetail({ reportId }) {
   }
 
   return (
-    <div className="page report-detail-page" style={{ maxWidth: "1350px", margin: "0 auto", padding: "0 1rem 2rem 1rem" }}>
+    <div className="page report-detail-page">
       {/* ---- TOP BAR NAVIGATION & ACTIONS ---- */}
       <div
         className="report-topbar"

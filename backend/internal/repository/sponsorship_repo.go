@@ -29,65 +29,51 @@ func (r *Repository) ListSponsorships(params models.SponsorshipFilterParams) ([]
 	if params.RecordPeriod != "" {
 		q = q.Eq("record_period", params.RecordPeriod)
 	}
-	if params.TargetLocation != "" {
-		q = q.Eq("target_location", params.TargetLocation)
-	}
 	if params.Status != "" {
 		q = q.Eq("status", params.Status)
 	}
 
 	_, err := q.ExecuteTo(&records)
-	if err != nil {
-		// Fallback to in-memory store if remote table not found
-		localSponsorshipLock.RLock()
-		defer localSponsorshipLock.RUnlock()
+	localSponsorshipLock.RLock()
+	localMap := make(map[uuid.UUID]models.SponsorshipRecord)
+	for id, rec := range localSponsorshipRecords {
+		localMap[id] = rec
+	}
+	localSponsorshipLock.RUnlock()
 
-		var matched []models.SponsorshipWithItems
-		for id, rec := range localSponsorshipRecords {
+	if err != nil {
+		records = make([]models.SponsorshipRecord, 0, len(localMap))
+		for _, rec := range localMap {
 			if params.SectionGroup != "" && rec.SectionGroup != params.SectionGroup {
 				continue
 			}
 			if params.RecordPeriod != "" && rec.RecordPeriod != params.RecordPeriod {
 				continue
 			}
-			if params.TargetLocation != "" && rec.TargetLocation != params.TargetLocation {
-				continue
-			}
 			if params.Status != "" && rec.Status != params.Status {
 				continue
 			}
-			if params.Search != "" {
-				term := strings.ToLower(strings.TrimSpace(params.Search))
-				if !strings.Contains(strings.ToLower(rec.ContributorName), term) &&
-					!strings.Contains(strings.ToLower(rec.SectionGroup), term) &&
-					!strings.Contains(strings.ToLower(rec.UsageDescription), term) &&
-					!strings.Contains(strings.ToLower(rec.TargetLocation), term) {
+			records = append(records, rec)
+		}
+	} else {
+		dbMap := make(map[uuid.UUID]bool)
+		for _, r := range records {
+			dbMap[r.ID] = true
+		}
+		for id, rec := range localMap {
+			if !dbMap[id] {
+				if params.SectionGroup != "" && rec.SectionGroup != params.SectionGroup {
 					continue
 				}
+				if params.RecordPeriod != "" && rec.RecordPeriod != params.RecordPeriod {
+					continue
+				}
+				if params.Status != "" && rec.Status != params.Status {
+					continue
+				}
+				records = append(records, rec)
 			}
-
-			items := localSponsorshipItems[id]
-			if items == nil {
-				items = []models.SponsorshipItem{}
-			}
-			matched = append(matched, models.SponsorshipWithItems{
-				SponsorshipRecord: rec,
-				Items:             items,
-			})
 		}
-
-		sort.Slice(matched, func(i, j int) bool {
-			if matched[i].SectionGroup != matched[j].SectionGroup {
-				return matched[i].SectionGroup < matched[j].SectionGroup
-			}
-			if matched[i].EntryNo != matched[j].EntryNo {
-				return matched[i].EntryNo < matched[j].EntryNo
-			}
-			return matched[i].CreatedAt.After(matched[j].CreatedAt)
-		})
-
-		total := len(matched)
-		return matched, total, nil
 	}
 
 	// Filter by search term if provided
@@ -97,8 +83,7 @@ func (r *Repository) ListSponsorships(params models.SponsorshipFilterParams) ([]
 		for _, rec := range records {
 			if strings.Contains(strings.ToLower(rec.ContributorName), term) ||
 				strings.Contains(strings.ToLower(rec.SectionGroup), term) ||
-				strings.Contains(strings.ToLower(rec.UsageDescription), term) ||
-				strings.Contains(strings.ToLower(rec.TargetLocation), term) {
+				strings.Contains(strings.ToLower(rec.UsageDescription), term) {
 				filtered = append(filtered, rec)
 			}
 		}
@@ -161,15 +146,28 @@ func (r *Repository) ListSponsorships(params models.SponsorshipFilterParams) ([]
 		itemsByRecordID[item.RecordID] = append(itemsByRecordID[item.RecordID], item)
 	}
 
+	localSponsorshipLock.RLock()
+	for recID, locItems := range localSponsorshipItems {
+		if len(itemsByRecordID[recID]) == 0 && len(locItems) > 0 {
+			itemsByRecordID[recID] = locItems
+		}
+	}
+	localSponsorshipLock.RUnlock()
+
 	results := make([]models.SponsorshipWithItems, len(pagedRecords))
 	for i, rec := range pagedRecords {
+		rec.SyncAliases()
 		items := itemsByRecordID[rec.ID]
 		if items == nil {
 			items = []models.SponsorshipItem{}
 		}
+		for j := range items {
+			items[j].SyncAliases()
+		}
 		results[i] = models.SponsorshipWithItems{
 			SponsorshipRecord: rec,
 			Items:             items,
+			InKindItems:       items,
 		}
 	}
 
@@ -178,6 +176,10 @@ func (r *Repository) ListSponsorships(params models.SponsorshipFilterParams) ([]
 
 // GetSponsorshipByID retrieves a single sponsorship record with its items
 func (r *Repository) GetSponsorshipByID(id uuid.UUID) (*models.SponsorshipWithItems, error) {
+	if id == uuid.Nil {
+		return nil, fmt.Errorf("invalid record_id: cannot select sponsorship without a valid record_id")
+	}
+
 	var records []models.SponsorshipRecord
 	_, err := r.AdminClient.From("sponsorship_records").
 		Select("*", "exact", false).
@@ -194,9 +196,14 @@ func (r *Repository) GetSponsorshipByID(id uuid.UUID) (*models.SponsorshipWithIt
 		if items == nil {
 			items = []models.SponsorshipItem{}
 		}
+		rec.SyncAliases()
+		for i := range items {
+			items[i].SyncAliases()
+		}
 		return &models.SponsorshipWithItems{
 			SponsorshipRecord: rec,
 			Items:             items,
+			InKindItems:       items,
 		}, nil
 	}
 
@@ -211,9 +218,15 @@ func (r *Repository) GetSponsorshipByID(id uuid.UUID) (*models.SponsorshipWithIt
 		items = []models.SponsorshipItem{}
 	}
 
+	rec.SyncAliases()
+	for i := range items {
+		items[i].SyncAliases()
+	}
+
 	return &models.SponsorshipWithItems{
 		SponsorshipRecord: rec,
 		Items:             items,
+		InKindItems:       items,
 	}, nil
 }
 
@@ -242,14 +255,35 @@ func (r *Repository) CreateSponsorship(rec *models.SponsorshipRecord, items []mo
 	if len(items) > 0 {
 		createdItems = make([]models.SponsorshipItem, len(items))
 		for i, item := range items {
+			usd := item.AmountUSD
+			if usd == 0 && item.ExpenseAmountUSD != 0 {
+				usd = item.ExpenseAmountUSD
+			} else if usd == 0 && item.CashAllocationUSD != 0 {
+				usd = item.CashAllocationUSD
+			}
+			khr := item.AmountKHR
+			if khr == 0 && item.ExpenseAmountKHR != 0 {
+				khr = item.ExpenseAmountKHR
+			} else if khr == 0 && item.CashAllocationKHR != 0 {
+				khr = item.CashAllocationKHR
+			}
+			isExpenseLabel := strings.TrimSpace(item.IsExpenseLabel)
+
 			createdItems[i] = models.SponsorshipItem{
 				ID:                uuid.New(),
 				RecordID:          rec.ID,
 				ItemName:          strings.TrimSpace(item.ItemName),
 				ItemQty:           item.ItemQty,
 				ItemUnit:          strings.TrimSpace(item.ItemUnit),
-				CashAllocationUSD: item.CashAllocationUSD,
-				CashAllocationKHR: item.CashAllocationKHR,
+				AmountUSD:         usd,
+				AmountKHR:         khr,
+				ExpenseAmountUSD:  usd,
+				ExpenseAmountKHR:  khr,
+				CashAllocationUSD: usd,
+				CashAllocationKHR: khr,
+				IsExpenseLabel:    isExpenseLabel,
+				UsageDescription:  strings.TrimSpace(item.UsageDescription),
+				Remarks:           strings.TrimSpace(item.Remarks),
 				ItemNotes:         strings.TrimSpace(item.ItemNotes),
 				CreatedAt:         time.Now(),
 			}
@@ -264,39 +298,135 @@ func (r *Repository) CreateSponsorship(rec *models.SponsorshipRecord, items []mo
 	localSponsorshipItems[rec.ID] = createdItems
 	localSponsorshipLock.Unlock()
 
-	// Attempt Supabase insert as best-effort
+	usd := rec.ExpenseAmountUSD
+	if usd == 0 && rec.AmountUSD != 0 {
+		usd = rec.AmountUSD
+	}
+	khr := rec.ExpenseAmountKHR
+	if khr == 0 && rec.AmountKHR != 0 {
+		khr = rec.AmountKHR
+	}
+	expenseLabel := rec.ExpenseLabel
+	if expenseLabel == "" {
+		expenseLabel = rec.IsExpenseLabel
+	}
+
+	// Clean payload for Supabase sponsorship_records
+	dbPayload := map[string]any{
+		"id":                   rec.ID.String(),
+		"fiscal_year":          rec.FiscalYear,
+		"record_period":        rec.RecordPeriod,
+		"contributor_name":     rec.ContributorName,
+		"representatives":      rec.Representatives,
+		"entry_classification": rec.EntryClassification,
+		"category":             rec.Category,
+		"section_group":        rec.SectionGroup,
+		"is_expense_total":     rec.IsExpenseTotal,
+		"is_expense_label":     expenseLabel,
+		"expense_label":        expenseLabel,
+		"expense_amount_usd":   usd,
+		"expense_amount_khr":   khr,
+		"amount_usd":           usd,
+		"amount_khr":           khr,
+		"usage_description":    rec.UsageDescription,
+		"remarks":              rec.Remarks,
+		"status":               rec.Status,
+		"created_at":           rec.CreatedAt.Format(time.RFC3339),
+		"updated_at":           rec.UpdatedAt.Format(time.RFC3339),
+	}
+	if rec.EntryNo > 0 {
+		dbPayload["entry_no"] = rec.EntryNo
+	}
+	if rec.CreatedBy != nil {
+		dbPayload["created_by"] = rec.CreatedBy.String()
+	}
+
 	_, _, _ = r.AdminClient.From("sponsorship_records").
-		Insert(rec, false, "", "", "").
+		Insert(dbPayload, false, "", "", "").
 		Execute()
+
 	if len(createdItems) > 0 {
+		dbItems := make([]map[string]any, len(createdItems))
+		for i, item := range createdItems {
+			dbItems[i] = map[string]any{
+				"id":                item.ID.String(),
+				"record_id":         rec.ID.String(),
+				"item_name":         item.ItemName,
+				"item_qty":          item.ItemQty,
+				"item_unit":         item.ItemUnit,
+				"amount_usd":        item.ExpenseAmountUSD,
+				"amount_khr":        item.ExpenseAmountKHR,
+				"is_expense_label":  item.IsExpenseLabel,
+				"usage_description": item.UsageDescription,
+				"remarks":           item.Remarks,
+				"item_notes":        item.ItemNotes,
+				"created_at":        item.CreatedAt.Format(time.RFC3339),
+			}
+		}
 		_, _, _ = r.AdminClient.From("sponsorship_items").
-			Insert(createdItems, false, "", "", "").
+			Insert(dbItems, false, "", "", "").
 			Execute()
+	}
+
+	rec.SyncAliases()
+	for i := range createdItems {
+		createdItems[i].SyncAliases()
 	}
 
 	return &models.SponsorshipWithItems{
 		SponsorshipRecord: *rec,
 		Items:             createdItems,
+		InKindItems:       createdItems,
 	}, nil
 }
 
 // UpdateSponsorship updates an existing sponsorship record and its line items
 func (r *Repository) UpdateSponsorship(id uuid.UUID, rec *models.SponsorshipRecord, items []models.SponsorshipItemInput) (*models.SponsorshipWithItems, error) {
+	if id == uuid.Nil {
+		return nil, fmt.Errorf("invalid record_id: cannot update sponsorship without a valid record_id")
+	}
 	rec.ID = id
 	rec.UpdatedAt = time.Now()
+	if rec.CreatedAt.IsZero() {
+		rec.CreatedAt = time.Now()
+	}
+	if rec.Status == "" {
+		rec.Status = "draft"
+	}
 
 	var newItems []models.SponsorshipItem
 	if len(items) > 0 {
 		newItems = make([]models.SponsorshipItem, len(items))
 		for i, item := range items {
+			usd := item.AmountUSD
+			if usd == 0 && item.ExpenseAmountUSD != 0 {
+				usd = item.ExpenseAmountUSD
+			} else if usd == 0 && item.CashAllocationUSD != 0 {
+				usd = item.CashAllocationUSD
+			}
+			khr := item.AmountKHR
+			if khr == 0 && item.ExpenseAmountKHR != 0 {
+				khr = item.ExpenseAmountKHR
+			} else if khr == 0 && item.CashAllocationKHR != 0 {
+				khr = item.CashAllocationKHR
+			}
+			isExpenseLabel := strings.TrimSpace(item.IsExpenseLabel)
+
 			newItems[i] = models.SponsorshipItem{
 				ID:                uuid.New(),
 				RecordID:          id,
 				ItemName:          strings.TrimSpace(item.ItemName),
 				ItemQty:           item.ItemQty,
 				ItemUnit:          strings.TrimSpace(item.ItemUnit),
-				CashAllocationUSD: item.CashAllocationUSD,
-				CashAllocationKHR: item.CashAllocationKHR,
+				AmountUSD:         usd,
+				AmountKHR:         khr,
+				ExpenseAmountUSD:  usd,
+				ExpenseAmountKHR:  khr,
+				CashAllocationUSD: usd,
+				CashAllocationKHR: khr,
+				IsExpenseLabel:    isExpenseLabel,
+				UsageDescription:  strings.TrimSpace(item.UsageDescription),
+				Remarks:           strings.TrimSpace(item.Remarks),
 				ItemNotes:         strings.TrimSpace(item.ItemNotes),
 				CreatedAt:         time.Now(),
 			}
@@ -321,32 +451,103 @@ func (r *Repository) UpdateSponsorship(id uuid.UUID, rec *models.SponsorshipReco
 	localSponsorshipItems[id] = newItems
 	localSponsorshipLock.Unlock()
 
+	usd := rec.ExpenseAmountUSD
+	if usd == 0 && rec.AmountUSD != 0 {
+		usd = rec.AmountUSD
+	}
+	khr := rec.ExpenseAmountKHR
+	if khr == 0 && rec.AmountKHR != 0 {
+		khr = rec.AmountKHR
+	}
+	expenseLabel := rec.ExpenseLabel
+	if expenseLabel == "" {
+		expenseLabel = rec.IsExpenseLabel
+	}
+
 	updateData := map[string]any{
 		"entry_classification": rec.EntryClassification,
+		"category":             rec.Category,
 		"section_group":        rec.SectionGroup,
 		"contributor_name":     rec.ContributorName,
+		"representatives":      rec.Representatives,
 		"record_period":        rec.RecordPeriod,
-		"target_location":      rec.TargetLocation,
-		"amount_usd":           rec.AmountUSD,
-		"amount_khr":           rec.AmountKHR,
+		"is_expense_total":     rec.IsExpenseTotal,
+		"is_expense_label":     expenseLabel,
+		"expense_label":        expenseLabel,
+		"expense_amount_usd":   usd,
+		"expense_amount_khr":   khr,
+		"amount_usd":           usd,
+		"amount_khr":           khr,
 		"usage_description":    rec.UsageDescription,
 		"remarks":              rec.Remarks,
+		"status":               rec.Status,
 		"updated_at":           time.Now().Format(time.RFC3339),
 	}
 	if rec.EntryNo > 0 {
 		updateData["entry_no"] = rec.EntryNo
 	}
+	if rec.FiscalYear > 0 {
+		updateData["fiscal_year"] = rec.FiscalYear
+	}
 
-	_, _, _ = r.AdminClient.From("sponsorship_records").
-		Update(updateData, "", "").
+	// Check if record exists in Supabase, else insert it
+	var existingRecs []models.SponsorshipRecord
+	_, _ = r.AdminClient.From("sponsorship_records").
+		Select("id", "exact", false).
 		Eq("id", id.String()).
+		ExecuteTo(&existingRecs)
+
+	if len(existingRecs) > 0 {
+		_, _, _ = r.AdminClient.From("sponsorship_records").
+			Update(updateData, "", "").
+			Eq("id", id.String()).
+			Execute()
+	} else {
+		updateData["id"] = id.String()
+		updateData["created_at"] = rec.CreatedAt.Format(time.RFC3339)
+		_, _, _ = r.AdminClient.From("sponsorship_records").
+			Insert(updateData, false, "", "", "").
+			Execute()
+	}
+
+	// Update items in Supabase
+	_, _, _ = r.AdminClient.From("sponsorship_items").
+		Delete("", "").
+		Eq("record_id", id.String()).
 		Execute()
+
+	if len(newItems) > 0 {
+		dbItems := make([]map[string]any, len(newItems))
+		for i, item := range newItems {
+			dbItems[i] = map[string]any{
+				"id":                item.ID.String(),
+				"record_id":         id.String(),
+				"item_name":         item.ItemName,
+				"item_qty":          item.ItemQty,
+				"item_unit":         item.ItemUnit,
+				"amount_usd":        item.ExpenseAmountUSD,
+				"amount_khr":        item.ExpenseAmountKHR,
+				"is_expense_label":  item.IsExpenseLabel,
+				"usage_description": item.UsageDescription,
+				"remarks":           item.Remarks,
+				"item_notes":        item.ItemNotes,
+				"created_at":        item.CreatedAt.Format(time.RFC3339),
+			}
+		}
+		_, _, _ = r.AdminClient.From("sponsorship_items").
+			Insert(dbItems, false, "", "", "").
+			Execute()
+	}
 
 	return r.GetSponsorshipByID(id)
 }
 
 // DeleteSponsorship deletes a record and cascades items
 func (r *Repository) DeleteSponsorship(id uuid.UUID) error {
+	if id == uuid.Nil {
+		return fmt.Errorf("invalid record_id: cannot delete sponsorship without a valid record_id")
+	}
+
 	localSponsorshipLock.Lock()
 	delete(localSponsorshipRecords, id)
 	delete(localSponsorshipItems, id)
@@ -443,12 +644,11 @@ func (r *Repository) ApproveSponsorship(id uuid.UUID, approverID uuid.UUID, note
 }
 
 // GetSponsorshipSummary calculates master totals, group subtotals, and inventory roll-ups
-func (r *Repository) GetSponsorshipSummary(period string, section string, location string) (*models.SponsorshipSummary, error) {
+func (r *Repository) GetSponsorshipSummary(period string, section string) (*models.SponsorshipSummary, error) {
 	params := models.SponsorshipFilterParams{
-		RecordPeriod:   period,
-		SectionGroup:   section,
-		TargetLocation: location,
-		Limit:          5000,
+		RecordPeriod: period,
+		SectionGroup: section,
+		Limit:        5000,
 	}
 
 	recordsWithItems, _, err := r.ListSponsorships(params)

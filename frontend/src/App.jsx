@@ -31,6 +31,8 @@ import SettingsMenuItemForm from "./pages/settings/SettingsMenuItemForm";
 import Forbidden from "./pages/Forbidden";
 import ReportCreateFromTemplate from "./pages/reports/ReportCreateFromTemplate";
 import Sponsorships from "./pages/sponsorships/Sponsorships";
+import SponsorItemPage from "./pages/sponsorships/SponsorItemPage";
+import SponsorshipFormPage from "./pages/sponsorships/SponsorshipFormPage";
 import SponsorshipAppendixReport from "./pages/sponsorships/SponsorshipAppendixReport";
 import Admin from "./pages/admin/Admin";
 import UserCreate from "./pages/admin/UserCreate";
@@ -88,7 +90,12 @@ function App() {
               <Route path="performance/:id" element={<FeatureRoute feature={FEATURES.performance}><Performance /></FeatureRoute>} />
 
               <Route path="sponsorships" element={<FeatureRoute feature={FEATURES.sponsorships}><Sponsorships /></FeatureRoute>} />
+              <Route path="sponsorships/items/:periodId/create" element={<FeatureRoute feature={FEATURES.sponsorships} action="create"><SponsorshipFormPage /></FeatureRoute>} />
+              <Route path="sponsorships/items/:periodId/edit/:id" element={<FeatureRoute feature={FEATURES.sponsorships} action="update"><SponsorshipFormPage /></FeatureRoute>} />
+              <Route path="sponsorships/items/:id" element={<FeatureRoute feature={FEATURES.sponsorships}><SponsorItemPage /></FeatureRoute>} />
+              <Route path="sponsorships/sponsor-item/:id" element={<FeatureRoute feature={FEATURES.sponsorships}><SponsorItemPage /></FeatureRoute>} />
               <Route path="sponsorships/appendix" element={<FeatureRoute feature={FEATURES.sponsorships}><SponsorshipAppendixReport /></FeatureRoute>} />
+              <Route path="sponsorships/:id" element={<FeatureRoute feature={FEATURES.sponsorships}><SponsorItemPage /></FeatureRoute>} />
 
               <Route path="settings" element={<FeatureRoute feature={FEATURES.settings}><Settings /></FeatureRoute>} />
               <Route path="settings/users" element={<ProtectedRoute adminOnly feature={FEATURES.users} action="read"><Admin /></ProtectedRoute>} />

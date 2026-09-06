@@ -123,10 +123,12 @@
     opacity: 0.5;
     background-color: #e2e8f0;
   }
+
   50% {
     opacity: 1;
     background-color: #cbd5e1;
   }
+
   100% {
     opacity: 0.5;
     background-color: #e2e8f0;
@@ -190,7 +192,10 @@
 }
 
 .app-form-required {
-  color: #dc2626;
+  color: #dc2626 !important;
+  font-weight: 700;
+  margin-left: 0.25rem;
+  font-size: 0.95em;
 }
 
 .app-form-control-row {
@@ -292,11 +297,11 @@
   padding-right: 2rem;
 }
 
-.app-form-input-compact ~ .app-form-icon.is-leading {
+.app-form-input-compact~.app-form-icon.is-leading {
   left: 0.65rem;
 }
 
-.app-form-input-compact ~ .app-form-icon.is-trailing {
+.app-form-input-compact~.app-form-icon.is-trailing {
   right: 0.65rem;
 }
 
@@ -316,6 +321,32 @@
   padding: 0.5rem 0.65rem;
   border-radius: 8px;
   font-size: 0.84rem;
+}
+
+.app-form-dropdown .custom-select-trigger.is-editable,
+.custom-select-trigger.is-editable {
+  padding: 0 0.25rem 0 0.65rem !important;
+}
+
+.app-form-dropdown-compact .custom-select-trigger.is-editable {
+  min-height: 2.35rem;
+  padding: 0 0.25rem 0 0.65rem !important;
+}
+
+.custom-select-editable-input {
+  border: 0 !important;
+  outline: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.custom-select-editable-input:focus,
+.custom-select-editable-input:focus-visible {
+  border: 0 !important;
+  outline: none !important;
+  box-shadow: none !important;
 }
 
 .sys-table-edit-cell {
@@ -601,7 +632,7 @@
   border-bottom: 1px solid var(--border);
   display: flex;
   align-items: center;
-  padding: 0 1.5rem;
+  padding: 0 2rem;
   gap: 0.75rem;
   position: sticky;
   top: 0;
@@ -669,7 +700,26 @@
   display: inline-flex !important;
 }
 
+/* Content Area - Main content container on Desktop */
+.content-area {
+  padding: 1.75rem 2rem 4rem 2rem;
+  flex: 1;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  background: var(--bg, #f1f5f9);
+  min-height: calc(100vh - var(--topbar-height, 60px));
+}
+
+/* Universal Page Base Wrapper */
+.page {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
 @media (max-width: 768px) {
+
   .desktop-only,
   .sidebar-collapse-btn {
     display: none !important;
@@ -850,9 +900,11 @@
     margin-bottom: 1rem !important;
     padding-bottom: 0.75rem !important;
   }
+
   .page-header-global .section-title {
     font-size: 1.15rem !important;
   }
+
   .page-header-actions {
     width: 100%;
     justify-content: flex-start;

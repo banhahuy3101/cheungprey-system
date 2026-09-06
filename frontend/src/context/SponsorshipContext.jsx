@@ -15,13 +15,12 @@ export function useSponsorships() {
 const DEFAULT_FILTERS = {
   section_group: "",
   record_period: "",
-  target_location: "",
   status: "",
   search: "",
 };
 
 export function SponsorshipProvider({ children }) {
-  const { showToast } = useToast();
+  const toast = useToast();
 
   const [records, setRecords] = useState([]);
   const [summary, setSummary] = useState(null);
@@ -38,26 +37,32 @@ export function SponsorshipProvider({ children }) {
       const queryParams = {
         section_group: filters.section_group && filters.section_group !== "ទាំងអស់ (All)" ? filters.section_group : undefined,
         record_period: filters.record_period && filters.record_period !== "ទាំងអស់ (All)" ? filters.record_period : undefined,
-        target_location: filters.target_location && filters.target_location !== "ទាំងអស់ (All)" ? filters.target_location : undefined,
         status: filters.status || undefined,
         search: filters.search || undefined,
         limit: 1000,
       };
 
-      const [listRes, summaryRes] = await Promise.all([
-        sponsorshipAPI.list(queryParams),
-        sponsorshipAPI.getSummary(queryParams),
-      ]);
+      const listPromise = sponsorshipAPI.list(queryParams).catch((err) => {
+        console.warn("Sponsorships list fetch warning:", err);
+        return { data: { data: [] } };
+      });
+      const summaryPromise = sponsorshipAPI.getSummary(queryParams).catch((err) => {
+        console.warn("Sponsorships summary fetch warning:", err);
+        return { data: { data: null } };
+      });
+
+      const [listRes, summaryRes] = await Promise.all([listPromise, summaryPromise]);
 
       setRecords(listRes.data?.data || []);
       setSummary(summaryRes.data?.data || null);
     } catch (err) {
-      const msg = err.response?.data?.error || "មានបញ្ហាក្នុងការទាញយកទិន្នន័យឧបត្ថម្ភ";
-      showToast(msg, "error");
+      console.error("fetchSponsorships error:", err);
+      setRecords([]);
+      setSummary(null);
     } finally {
       setLoading(false);
     }
-  }, [filters, showToast]);
+  }, [filters]);
 
   useEffect(() => {
     fetchSponsorships();
@@ -88,85 +93,110 @@ export function SponsorshipProvider({ children }) {
         ...payload,
         submit_immediately: submitImmediately,
       });
-      showToast(
-        submitImmediately ? "បង្កើត និងដាក់ស្នើបានជោគជ័យ" : "រក្សាទុកជាសេចក្តីព្រាងបានជោគជ័យ",
-        "success"
+      toast?.success?.(
+        submitImmediately ? "បង្កើត និងដាក់ស្នើបានជោគជ័យ" : "រក្សាទុកជាសេចក្តីព្រាងបានជោគជ័យ"
       );
+      const created = res.data?.data;
+      if (created) {
+        setRecords((prev) => [created, ...prev.filter((r) => String(r.id) !== String(created.id))]);
+      }
       closeModal();
       fetchSponsorships();
-      return res.data?.data;
+      return created;
     } catch (err) {
       const msg = err.response?.data?.error || "មានបញ្ហាក្នុងការបង្កើតកំណត់ត្រា";
-      showToast(msg, "error");
+      toast?.error?.(msg);
       throw err;
     }
-  }, [closeModal, fetchSponsorships, showToast]);
+  }, [closeModal, toast, fetchSponsorships]);
 
   const updateRecord = useCallback(async (id, payload) => {
     try {
       const res = await sponsorshipAPI.update(id, payload);
-      showToast("កែប្រែទិន្នន័យបានជោគជ័យ", "success");
+      toast?.success?.("កែប្រែទិន្នន័យបានជោគជ័យ");
+      const updated = res.data?.data;
+      if (updated) {
+        setRecords((prev) =>
+          prev.map((r) => (String(r.id || r.ID) === String(id) ? { ...r, ...updated } : r))
+        );
+      }
       closeModal();
       fetchSponsorships();
-      return res.data?.data;
+      return updated;
     } catch (err) {
       const msg = err.response?.data?.error || "មានបញ្ហាក្នុងការកែប្រែទិន្នន័យ";
-      showToast(msg, "error");
+      toast?.error?.(msg);
       throw err;
     }
-  }, [closeModal, fetchSponsorships, showToast]);
+  }, [closeModal, toast, fetchSponsorships]);
 
   const deleteRecord = useCallback(async (id) => {
     if (!window.confirm("តើអ្នកពិតជាចង់លុបកំណត់ត្រានេះមែនទេ?")) return;
     try {
       await sponsorshipAPI.delete(id);
-      showToast("បានលុបកំណត់ត្រាជោគជ័យ", "success");
-      fetchSponsorships();
+      toast?.success?.("បានលុបកំណត់ត្រាជោគជ័យ");
+      setRecords((prev) => prev.filter((r) => String(r.id || r.ID) !== String(id)));
     } catch (err) {
       const msg = err.response?.data?.error || "មិនអាចលុបកំណត់ត្រាបានទេ";
-      showToast(msg, "error");
+      toast?.error?.(msg);
       throw err;
     }
-  }, [fetchSponsorships, showToast]);
+  }, [toast]);
 
   const submitRecord = useCallback(async (id) => {
     try {
-      await sponsorshipAPI.submit(id);
-      showToast("បានដាក់ស្នើពិនិត្យជោគជ័យ", "success");
-      fetchSponsorships();
+      const res = await sponsorshipAPI.submit(id);
+      toast?.success?.("បានដាក់ស្នើពិនិត្យជោគជ័យ");
+      const updated = res.data?.data;
+      setRecords((prev) =>
+        prev.map((r) =>
+          String(r.id || r.ID) === String(id) ? (updated ? { ...r, ...updated } : { ...r, status: "submitted" }) : r
+        )
+      );
     } catch (err) {
       const msg = err.response?.data?.error || "មិនអាចដាក់ស្នើបានទេ";
-      showToast(msg, "error");
+      toast?.error?.(msg);
       throw err;
     }
-  }, [fetchSponsorships, showToast]);
+  }, [toast]);
 
   const reviewRecord = useCallback(async (id, action, notes = "") => {
     try {
-      await sponsorshipAPI.review(id, { action, notes });
-      showToast(
-        action === "return" ? "បានបង្វែរកំណត់ត្រាទៅកែសម្រួលវិញ" : "បានពិនិត្យ និងយល់ព្រម",
-        "success"
+      const res = await sponsorshipAPI.review(id, { action, notes });
+      toast?.success?.(
+        action === "return" ? "បានបង្វែរកំណត់ត្រាទៅកែសម្រួលវិញ" : "បានពិនិត្យ និងយល់ព្រម"
       );
-      fetchSponsorships();
+      const updated = res.data?.data;
+      setRecords((prev) =>
+        prev.map((r) =>
+          String(r.id || r.ID) === String(id)
+            ? (updated ? { ...r, ...updated } : { ...r, status: action === "return" ? "returned" : "reviewed" })
+            : r
+        )
+      );
     } catch (err) {
       const msg = err.response?.data?.error || "មានបញ្ហាក្នុងការពិនិត្យ";
-      showToast(msg, "error");
+      toast?.error?.(msg);
       throw err;
     }
-  }, [fetchSponsorships, showToast]);
+  }, [toast]);
 
   const approveRecord = useCallback(async (id, notes = "") => {
     try {
-      await sponsorshipAPI.approve(id, { notes });
-      showToast("បានអនុម័ត និងចាក់សោរបាយការណ៍ជោគជ័យ", "success");
-      fetchSponsorships();
+      const res = await sponsorshipAPI.approve(id, { notes });
+      toast?.success?.("បានអនុម័ត និងចាក់សោរបាយការណ៍ជោគជ័យ");
+      const updated = res.data?.data;
+      setRecords((prev) =>
+        prev.map((r) =>
+          String(r.id || r.ID) === String(id) ? (updated ? { ...r, ...updated } : { ...r, status: "approved" }) : r
+        )
+      );
     } catch (err) {
       const msg = err.response?.data?.error || "មិនអាចអនុម័តបានទេ";
-      showToast(msg, "error");
+      toast?.error?.(msg);
       throw err;
     }
-  }, [fetchSponsorships, showToast]);
+  }, [toast]);
 
   const value = useMemo(
     () => ({

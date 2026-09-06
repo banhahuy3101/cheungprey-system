@@ -189,7 +189,7 @@ export default function ReportForm({ mode = "create", reportId }) {
   const canActOnPending = (status === "pending_review") && isAssignedApprover;
 
   if (loading) return (
-    <div className="page report-form-page" style={{ maxWidth: "1350px", margin: "0 auto", padding: "0 0.5rem 2rem 0.5rem" }}>
+    <div className="page report-form-page">
       {/* Toolbar skeleton */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "1rem 1.5rem", marginBottom: "1.75rem", background: "rgba(255,255,255,0.85)", borderRadius: "16px", border: "1px solid var(--border)" }}>
         <Skeleton w={180} h={34} r={8} />
@@ -228,7 +228,7 @@ export default function ReportForm({ mode = "create", reportId }) {
      CREATE / EDIT
      ============================================ */
   if (isCreate || isEdit) return (
-    <div className="page report-form-page" style={{ maxWidth: "1350px", margin: "0 auto", padding: "0 1rem 2rem 1rem" }}>
+    <div className="page report-form-page">
       <form onSubmit={doSave} noValidate>
         {/* sticky toolbar */}
         <div
@@ -553,7 +553,7 @@ export default function ReportForm({ mode = "create", reportId }) {
      VIEW
      ============================================ */
   return (
-    <div className="page report-detail-page" style={{ maxWidth: "1350px", margin: "0 auto", padding: "0 0.5rem 2rem 0.5rem" }}>
+    <div className="page report-detail-page">
       {/* ---- TOP BAR NAVIGATION & ACTIONS ---- */}
       <div
         className="report-topbar"

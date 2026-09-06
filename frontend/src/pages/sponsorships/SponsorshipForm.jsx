@@ -1,48 +1,46 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   LuPlus,
   LuTrash2,
   LuDollarSign,
   LuPackage,
   LuSave,
-  LuSend,
   LuX,
-  LuTag,
   LuShieldAlert,
-  LuCheck,
+  LuUser,
+  LuCalendar,
+  LuMapPin,
   LuFileText,
-  LuList,
 } from "react-icons/lu";
 import { useSponsorships } from "../../hooks/useSponsorships";
 import {
-  ENTRY_CLASSIFICATIONS,
-  COMMON_SECTIONS,
-  COMMON_PERIODS,
-  COMMON_COMMUNES,
   COMMON_UNITS,
-  QUICK_TAGS,
+  COMMON_MATERIALS,
   validateSponsorshipPayload,
   normalizeKhmerDigits,
-  parseNumericInput,
-  checkDiscrepancy,
 } from "../../utils/sponsorshipUtils";
-import { toKhmerDigits, numberToKhmerWords } from "../../utils/khmerNumberSpelling";
+import { toKhmerDigits } from "../../utils/khmerNumberSpelling";
+import FormSelect from "../../components/FormSelect";
+import FormInput from "../../components/FormInput";
+import FormDropdown from "../../components/FormDropdown";
 
-export default function SponsorshipForm() {
-  const { selectedRecord, modalOpen, closeModal, createRecord, updateRecord } = useSponsorships();
-  const isEdit = !!selectedRecord?.id;
+const PURPOSE_OPTIONS = [
+  { value: "ឧបត្ថម្ភដល់ប្រជាពលរដ្ឋទីទ័លក្រ", label: "ឧបត្ថម្ភដល់ប្រជាពលរដ្ឋទីទ័លក្រ" },
+  { value: "ប្រើប្រាស់ក្នុងការងាររដ្ឋបាលស្រុក", label: "ប្រើប្រាស់ក្នុងការងាររដ្ឋបាលស្រុក" },
+  { value: "កម្មវិធីមនុស្សធម៌ និងសប្បុរសធម៌", label: "កម្មវិធីមនុស្សធម៌ និងសប្បុរសធម៌" },
+  { value: "ឧបត្ថម្ភតាមមូលដ្ឋានឃុំ/ភូមិ", label: "ឧបត្ថម្ភតាមមូលដ្ឋានឃុំ/ភូមិ" },
+];
+
+export default function SponsorshipForm({ currentPeriod, availablePeriods = [] }) {
+  const { selectedRecord, modalOpen, closeModal, createRecord, updateRecord, records } = useSponsorships();
+  const isEdit = Boolean(selectedRecord?.id || selectedRecord?.ID);
 
   const [form, setForm] = useState({
+    record_period: currentPeriod?.name || "",
+    fiscal_year: currentPeriod?.year || String(new Date().getFullYear()),
     entry_no: "",
-    fiscal_year: String(new Date().getFullYear()),
-    entry_classification: "donation",
-    category: "donation",
-    section_group: COMMON_SECTIONS[0],
-    custom_section: "",
     contributor_name: "",
     representatives: "",
-    record_period: COMMON_PERIODS[0],
-    target_location: COMMON_COMMUNES[0],
     amount_usd: "",
     amount_khr: "",
     usage_description: "",
@@ -50,14 +48,84 @@ export default function SponsorshipForm() {
   });
 
   const [items, setItems] = useState([]);
-  const [rawTextMode, setRawTextMode] = useState(false);
-  const [rawTextValue, setRawTextValue] = useState("");
-  const [manualAuditTotalUSD, setManualAuditTotalUSD] = useState("");
-  const [manualAuditTotalKHR, setManualAuditTotalKHR] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  const usageTextareaRef = useRef(null);
+  // Compute map of already taken row numbers for this period to prevent duplication
+  const takenRowNos = useMemo(() => {
+    const activePeriod = form.record_period;
+    const map = new Map();
+    if (!activePeriod || !records) return map;
+
+    records.forEach((r) => {
+      if (r.record_period === activePeriod && (r.entry_no || r.record_id)) {
+        const no = Number(r.entry_no || r.record_id);
+        const name = r.contributor_name || r.donor_name || "គ្មានឈ្មោះ";
+        map.set(no, name);
+      }
+    });
+    return map;
+  }, [form.record_period, records]);
+
+  // Suggested next row number
+  const suggestedNextNo = useMemo(() => {
+    const activePeriod = form.record_period;
+    if (!activePeriod || !records) return 1;
+
+    let maxNo = 0;
+    records.forEach((r) => {
+      if (r.record_period === activePeriod) {
+        const no = Number(r.entry_no || r.record_id || 0);
+        if (no > maxNo) maxNo = no;
+      }
+    });
+    return maxNo + 1;
+  }, [form.record_period, records]);
+
+  // Generate row number options (1..50+ or higher if needed)
+  const rowOptions = useMemo(() => {
+    let max = 50;
+    takenRowNos.forEach((_, k) => {
+      if (k >= max) max = k + 10;
+    });
+    if (form.entry_no && Number(form.entry_no) >= max) {
+      max = Number(form.entry_no) + 5;
+    }
+    return Array.from({ length: max }, (_, i) => i + 1);
+  }, [takenRowNos, form.entry_no]);
+
+  // Merge preset common materials with all unique material names existing in DB
+  const materialOptions = useMemo(() => {
+    const set = new Set(COMMON_MATERIALS);
+    (records || []).forEach((r) => {
+      const recItems = r.items || r.in_kind_items || [];
+      recItems.forEach((it) => {
+        if (it.item_name && it.item_name.trim()) {
+          set.add(it.item_name.trim());
+        }
+      });
+    });
+    return Array.from(set).map((m) => ({ value: m, label: m }));
+  }, [records]);
+
+  // Extract all unique contributor / donor names for autocomplete
+  const contributorOptions = useMemo(() => {
+    const set = new Set();
+    (records || []).forEach((r) => {
+      const name = r.contributor_name || r.donor_name;
+      if (name && name.trim()) set.add(name.trim());
+    });
+    return Array.from(set).map((c) => ({ value: c, label: c }));
+  }, [records]);
+
+  // Extract all unique representatives / liaison conveyors for autocomplete
+  const representativeOptions = useMemo(() => {
+    const set = new Set();
+    (records || []).forEach((r) => {
+      if (r.representatives && r.representatives.trim()) set.add(r.representatives.trim());
+    });
+    return Array.from(set).map((c) => ({ value: c, label: c }));
+  }, [records]);
 
   // Close on Escape
   useEffect(() => {
@@ -69,20 +137,20 @@ export default function SponsorshipForm() {
   }, [modalOpen, closeModal]);
 
   useEffect(() => {
+    const formatFieldValue = (val) => {
+      if (val === undefined || val === null || Number(val) === 0 || val === "") return "";
+      return String(val);
+    };
+
     if (selectedRecord) {
       setForm({
+        record_period: selectedRecord.record_period || currentPeriod?.name || "",
         entry_no: selectedRecord.entry_no ? String(selectedRecord.entry_no) : selectedRecord.record_id ? String(selectedRecord.record_id) : "",
-        fiscal_year: selectedRecord.fiscal_year ? String(selectedRecord.fiscal_year) : String(new Date().getFullYear()),
-        entry_classification: selectedRecord.entry_classification || selectedRecord.category || "donation",
-        category: selectedRecord.category || selectedRecord.entry_classification || "donation",
-        section_group: selectedRecord.section_group || COMMON_SECTIONS[0],
-        custom_section: "",
+        fiscal_year: selectedRecord.fiscal_year ? String(selectedRecord.fiscal_year) : currentPeriod?.year || String(new Date().getFullYear()),
         contributor_name: selectedRecord.contributor_name || selectedRecord.donor_name || "",
         representatives: selectedRecord.representatives || "",
-        record_period: selectedRecord.record_period || COMMON_PERIODS[0],
-        target_location: selectedRecord.target_location || COMMON_COMMUNES[0],
-        amount_usd: selectedRecord.amount_usd !== undefined && selectedRecord.amount_usd !== null ? String(selectedRecord.amount_usd) : selectedRecord.currency_usd !== undefined ? String(selectedRecord.currency_usd) : "",
-        amount_khr: selectedRecord.amount_khr !== undefined && selectedRecord.amount_khr !== null ? String(selectedRecord.amount_khr) : selectedRecord.currency_khr !== undefined ? String(selectedRecord.currency_khr) : "",
+        amount_usd: formatFieldValue(selectedRecord.amount_usd ?? selectedRecord.currency_usd),
+        amount_khr: formatFieldValue(selectedRecord.amount_khr ?? selectedRecord.currency_khr),
         usage_description: selectedRecord.usage_description || selectedRecord.allocation_purpose || "",
         remarks: selectedRecord.remarks || "",
       });
@@ -92,11 +160,12 @@ export default function SponsorshipForm() {
         setItems(
           recordItems.map((it) => ({
             item_name: it.item_name || "",
-            item_qty: it.item_qty !== undefined ? String(it.item_qty) : "1",
-            item_unit: it.item_unit || "គ.ក",
-            cash_allocation_usd: it.cash_allocation_usd || 0,
-            cash_allocation_khr: it.cash_allocation_khr || 0,
-            item_notes: it.item_notes || "",
+            item_qty: it.item_qty !== undefined && it.item_qty !== null && Number(it.item_qty) !== 0 ? String(it.item_qty) : "",
+            item_unit: it.item_unit || "",
+            cash_allocation_usd: formatFieldValue(it.cash_allocation_usd),
+            cash_allocation_khr: formatFieldValue(it.cash_allocation_khr),
+            usage_description: it.usage_description || it.item_notes || selectedRecord.usage_description || "",
+            remarks: it.remarks || selectedRecord.remarks || "",
           }))
         );
       } else {
@@ -104,16 +173,11 @@ export default function SponsorshipForm() {
       }
     } else {
       setForm({
-        entry_no: "",
-        fiscal_year: String(new Date().getFullYear()),
-        entry_classification: "donation",
-        category: "donation",
-        section_group: COMMON_SECTIONS[0],
-        custom_section: "",
+        record_period: currentPeriod?.name || "",
+        entry_no: String(suggestedNextNo),
+        fiscal_year: currentPeriod?.year || String(new Date().getFullYear()),
         contributor_name: "",
         representatives: "",
-        record_period: COMMON_PERIODS[0],
-        target_location: COMMON_COMMUNES[0],
         amount_usd: "",
         amount_khr: "",
         usage_description: "",
@@ -121,33 +185,22 @@ export default function SponsorshipForm() {
       });
       setItems([]);
     }
-    setRawTextMode(false);
-    setRawTextValue("");
-    setManualAuditTotalUSD("");
-    setManualAuditTotalKHR("");
     setError("");
-  }, [selectedRecord]);
+  }, [selectedRecord, modalOpen, currentPeriod, suggestedNextNo]);
 
   if (!modalOpen) return null;
-
-  // Real-time numeric parsing
-  const parsedUSD = parseNumericInput(form.amount_usd, false);
-  const parsedKHR = parseNumericInput(form.amount_khr, true);
-
-  // Variance / Discrepancy checks against manual paper subtotal
-  const usdDiscrepancy = checkDiscrepancy(parsedUSD, manualAuditTotalUSD);
-  const khrDiscrepancy = checkDiscrepancy(parsedKHR, manualAuditTotalKHR);
 
   const handleAddItem = () => {
     setItems((prev) => [
       ...prev,
       {
         item_name: "",
-        item_qty: "1",
-        item_unit: "គ.ក",
-        cash_allocation_usd: 0,
-        cash_allocation_khr: 0,
-        item_notes: "",
+        item_qty: "",
+        item_unit: "",
+        cash_allocation_usd: "",
+        cash_allocation_khr: "",
+        usage_description: "",
+        remarks: "",
       },
     ]);
   };
@@ -158,7 +211,7 @@ export default function SponsorshipForm() {
 
   const handleItemChange = (index, field, value) => {
     let normalized = value;
-    if (field === "item_qty") {
+    if (field === "item_qty" || field === "cash_allocation_usd" || field === "cash_allocation_khr") {
       normalized = normalizeKhmerDigits(value);
     }
     setItems((prev) => {
@@ -168,99 +221,21 @@ export default function SponsorshipForm() {
     });
   };
 
-  // Keyboard shortcut: Tab on the last row's notes input automatically appends a new row
-  const handleItemKeyDown = (e, index) => {
-    if (e.key === "Tab" && !e.shiftKey && index === items.length - 1) {
-      e.preventDefault();
-      handleAddItem();
-    }
-  };
-
-  // Quick tag insertion helper for Usage Description
-  const insertQuickTag = (tagText) => {
-    const current = form.usage_description;
-    let nextText = current;
-    if (!current) {
-      nextText = tagText;
-    } else if (tagText.startsWith("•")) {
-      nextText = current + "\n" + tagText;
-    } else {
-      nextText = current + " " + tagText;
-    }
-    setForm((prev) => ({ ...prev, usage_description: nextText }));
-    if (usageTextareaRef.current) {
-      usageTextareaRef.current.focus();
-    }
-  };
-
-  // Switch between structured Repeater and Raw Text Mode
-  const toggleRawTextMode = () => {
-    if (!rawTextMode) {
-      const rawLines = items
-        .filter((it) => it.item_name)
-        .map((it) => `${it.item_name} ${it.item_qty} ${it.item_unit}`)
-        .join(", ");
-      setRawTextValue(rawLines);
-      setRawTextMode(true);
-    } else {
-      if (rawTextValue.trim()) {
-        const parts = rawTextValue.split(/[,;\n]+/).map((s) => s.trim()).filter(Boolean);
-        const parsedItems = parts.map((part) => {
-          const tokens = part.split(/\s+/);
-          if (tokens.length >= 3) {
-            const name = tokens.slice(0, tokens.length - 2).join(" ");
-            const qty = parseNumericInput(tokens[tokens.length - 2]);
-            const unit = tokens[tokens.length - 1];
-            return {
-              item_name: name,
-              item_qty: String(qty || 1),
-              item_unit: unit || "គ.ក",
-              cash_allocation_usd: 0,
-              cash_allocation_khr: 0,
-              item_notes: "",
-            };
-          } else if (tokens.length === 2) {
-            return {
-              item_name: tokens[0],
-              item_qty: String(parseNumericInput(tokens[1]) || 1),
-              item_unit: "គ.ក",
-              cash_allocation_usd: 0,
-              cash_allocation_khr: 0,
-              item_notes: "",
-            };
-          }
-          return {
-            item_name: part,
-            item_qty: "1",
-            item_unit: "មុខ",
-            cash_allocation_usd: 0,
-            cash_allocation_khr: 0,
-            item_notes: "",
-          };
-        });
-        setItems(parsedItems);
-      }
-      setRawTextMode(false);
-    }
-  };
-
-  const handleSubmit = async (submitImmediately = false) => {
+  const handleSubmit = async () => {
     setError("");
 
-    let finalItems = items;
-    if (rawTextMode && rawTextValue.trim()) {
-      const parts = rawTextValue.split(/[,;\n]+/).map((s) => s.trim()).filter(Boolean);
-      finalItems = parts.map((part) => ({
-        item_name: part,
-        item_qty: "1",
-        item_unit: "មុខ",
-        cash_allocation_usd: 0,
-        cash_allocation_khr: 0,
-        item_notes: "",
-      }));
+    const isKeepingCurrentNo =
+      isEdit &&
+      selectedRecord &&
+      Number(form.entry_no) === Number(selectedRecord.entry_no || selectedRecord.record_id);
+
+    if (form.entry_no && !isKeepingCurrentNo && takenRowNos.has(Number(form.entry_no))) {
+      const donor = takenRowNos.get(Number(form.entry_no));
+      setError(`ល.រ ${toKhmerDigits(form.entry_no)} ត្រូវបានជ្រើសរើសរួចហើយ (${donor}) សូមជ្រើសរើសលេខរៀងផ្សេង`);
+      return;
     }
 
-    const validation = validateSponsorshipPayload(form, finalItems);
+    const validation = validateSponsorshipPayload(form, items);
     if (!validation.valid) {
       setError(validation.error);
       return;
@@ -269,12 +244,15 @@ export default function SponsorshipForm() {
     setSaving(true);
     try {
       if (isEdit) {
-        await updateRecord(selectedRecord.id, validation.data);
+        const recordId = selectedRecord?.id || selectedRecord?.ID;
+        await updateRecord(recordId, validation.data);
       } else {
-        await createRecord(validation.data, submitImmediately);
+        await createRecord(validation.data, false);
       }
+      closeModal();
     } catch (err) {
-      setError(err.response?.data?.error || "មានបញ្ហាក្នុងការរក្សាទុកទិន្នន័យ");
+      console.error("Save sponsorship error:", err);
+      setError(err?.response?.data?.error || err?.message || "មានបញ្ហាក្នុងការរក្សាទុកទិន្នន័យ");
     } finally {
       setSaving(false);
     }
@@ -282,15 +260,15 @@ export default function SponsorshipForm() {
 
   return (
     <div className="sponsorship-modal-backdrop" onClick={closeModal}>
-      <div className="sponsorship-modal-content" onClick={(e) => e.stopPropagation()}>
-        {/* Header */}
+      <div className="sponsorship-modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "860px" }}>
+        {/* Simple Modal Header */}
         <div className="sponsorship-modal-header">
           <div>
-            <h3 style={{ margin: 0, fontSize: "1.2rem", fontWeight: "700", color: "#1e3a8a" }}>
-              {isEdit ? "កែប្រែទិន្នន័យឧបត្ថម្ភ" : "បញ្ចូលកំណត់ត្រាឧបត្ថម្ភថ្មី (តារាងឧបសម្ព័ន្ធ)"}
+            <h3 style={{ margin: 0, fontSize: "1.15rem", fontWeight: "700", color: "#1e3a8a" }}>
+              {isEdit ? "កែប្រែទិន្នន័យឧបត្ថម្ភ" : "បញ្ចូលអ្នកឧបត្ថម្ភ និងសម្ភារ/ថវិកា"}
             </h3>
             <span style={{ fontSize: "0.8rem", color: "#64748b" }}>
-              District Sponsorship & Donation Management System
+              {form.record_period ? `ក្រោមតារាងមេ ៖ ${form.record_period}` : "ទម្រង់បញ្ចូលទិន្នន័យអ្នកឧបត្ថម្ភ"}
             </span>
           </div>
           <button
@@ -315,8 +293,8 @@ export default function SponsorshipForm() {
           </button>
         </div>
 
-        {/* Body */}
-        <div className="sponsorship-modal-body">
+        {/* Modal Body */}
+        <div className="sponsorship-modal-body" style={{ gap: "1rem" }}>
           {error && (
             <div
               style={{
@@ -336,530 +314,298 @@ export default function SponsorshipForm() {
             </div>
           )}
 
-          {/* Section 1: Header & Contributor Configuration */}
+          {/* Main Sponsorship Selection */}
+          {availablePeriods.length > 0 && (
+            <div style={{ background: "#f8fafc", padding: "0.75rem", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
+              <FormSelect
+                label="តារាងឧបត្ថម្ភមេ (Main Sponsorship Period)"
+                icon={<LuCalendar size={15} color="#1e3a8a" />}
+                value={form.record_period}
+                onChange={(e) => {
+                  const newPeriod = e.target.value;
+                  const selectedP = availablePeriods.find((p) => p.name === newPeriod);
+                  setForm((prev) => ({
+                    ...prev,
+                    record_period: newPeriod,
+                    fiscal_year: selectedP?.year || prev.fiscal_year,
+                  }));
+                }}
+                options={availablePeriods.map((p) => ({
+                  value: p.name,
+                  label: `${p.name} (${p.year})`,
+                }))}
+              />
+            </div>
+          )}
+
+          {/* Section 1: Sponsor Info (Master) */}
           <div className="sponsorship-form-section tinted">
             <h4 className="sponsorship-form-section-title">
-              ផ្នែកទី ១ ៖ ព័ត៌មានអ្នកឧបត្ថម្ភ និងការចាត់ថ្នាក់ប្រតិបត្តិការ
+              <LuUser size={17} />
+              <span>ព័ត៌មានអ្នកឧបត្ថម្ភ (Sponsor)</span>
             </h4>
 
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "0.85rem" }}>
-              {/* Row Sequence */}
-              <div className="form-group">
-                <label className="form-label" style={{ fontWeight: "600" }}>
-                  ល.រ (Row ID / Sequence)
-                </label>
-                <input
-                  type="text"
-                  className="form-control"
-                  placeholder="ស្វ័យប្រវត្តិ (Auto) ឬបញ្ចូលលេខ (1, 2, 3...)"
-                  value={form.entry_no}
-                  onChange={(e) => setForm({ ...form, entry_no: normalizeKhmerDigits(e.target.value) })}
-                />
-              </div>
-
-              {/* Fiscal Year */}
-              <div className="form-group">
-                <label className="form-label" style={{ fontWeight: "600" }}>
-                  ឆ្នាំប្រតិបត្តិការ (Fiscal Year) <span style={{ color: "red" }}>*</span>
-                </label>
-                <input
-                  type="text"
-                  className="form-control"
-                  placeholder="ឧ. 2025"
-                  value={form.fiscal_year}
-                  onChange={(e) => setForm({ ...form, fiscal_year: normalizeKhmerDigits(e.target.value) })}
-                />
-              </div>
-
-              {/* Entry Classification / Category */}
-              <div className="form-group" style={{ gridColumn: "1 / -1" }}>
-                <label className="form-label" style={{ fontWeight: "600" }}>
-                  ប្រភេទប្រតិបត្តិការ / វិស័យ (Operational Category) <span style={{ color: "red" }}>*</span>
-                </label>
-                <input
-                  type="text"
-                  list="classifications-datalist"
-                  className="form-control"
-                  placeholder="ជ្រើសរើស ឬវាយបញ្ចូលប្រភេទប្រតិបត្តិការ/វិស័យ..."
-                  value={form.entry_classification}
-                  onChange={(e) => setForm({ ...form, entry_classification: e.target.value, category: e.target.value })}
-                  style={{ fontWeight: "600" }}
-                />
-                <datalist id="classifications-datalist">
-                  {ENTRY_CLASSIFICATIONS.map((cl) => (
-                    <option key={cl.value} value={cl.value}>
-                      {cl.label}
-                    </option>
-                  ))}
-                  {BRD_CATEGORIES.map((cat, idx) => (
-                    <option key={idx} value={cat} />
-                  ))}
-                </datalist>
-              </div>
-
-              {/* Leadership Header Section */}
-              <div className="form-group" style={{ gridColumn: "1 / -1" }}>
-                <label className="form-label" style={{ fontWeight: "600" }}>
-                  ក្រុមឧបត្ថម្ភ / ប្រភពថវិកា (Header Section / Stream) <span style={{ color: "red" }}>*</span>
-                </label>
-                <input
-                  type="text"
-                  list="sections-datalist"
-                  className="form-control"
-                  placeholder="វាយបញ្ចូល ឬជ្រើសរើសក្រុមឧបត្ថម្ភ..."
-                  value={form.section_group}
-                  onChange={(e) => setForm({ ...form, section_group: e.target.value })}
-                  style={{ fontWeight: "600" }}
-                />
-                <datalist id="sections-datalist">
-                  {COMMON_SECTIONS.map((sec) => (
-                    <option key={sec} value={sec} />
-                  ))}
-                </datalist>
-              </div>
-
-              {/* Contributor / Donor Name */}
-              <div className="form-group">
-                <label className="form-label" style={{ fontWeight: "600" }}>
-                  អ្នកឧបត្ថម្ភ (Primary Donor / Patron) <span style={{ color: "red" }}>*</span>
-                </label>
-                <input
-                  type="text"
-                  className="form-control"
-                  placeholder="ឧ. សម្តេចតេជោ ហ៊ុន សែន"
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.85rem" }}>
+              {/* Contributor / Full Name */}
+              <div style={{ gridColumn: "1 / -1" }}>
+                <FormInput
+                  label="គោត្តនាម និង នាម (Honorific & Full Name)"
+                  required
+                  leadIcon={<LuUser size={16} />}
+                  placeholder="ឧ. ឯកឧត្តមបណ្ឌិត ម៉ា ឈឿន ឬ លោកជំទាវ..."
                   value={form.contributor_name}
                   onChange={(e) => setForm({ ...form, contributor_name: e.target.value })}
+                  style={{ fontWeight: "600" }}
                 />
               </div>
 
-              {/* Representatives / Liaisons */}
-              <div className="form-group">
-                <label className="form-label" style={{ fontWeight: "600" }}>
-                  តាមរយៈ / តំណាង (Representatives / Liaisons)
-                </label>
-                <input
-                  type="text"
-                  className="form-control"
-                  placeholder="ឧ. តាមរយៈ ឯកឧត្តមបណ្ឌិត ម៉ា ឈឿន"
+              {/* Representative / Via */}
+              <div style={{ gridColumn: "1 / -1" }}>
+                <FormInput
+                  label="តាមរយៈ (Representative / Via - ស្រេចចិត្ត)"
+                  placeholder="ឧ. តាមរយៈ ឯកឧត្តម..."
                   value={form.representatives}
                   onChange={(e) => setForm({ ...form, representatives: e.target.value })}
                 />
               </div>
 
-              {/* Period */}
-              <div className="form-group">
-                <label className="form-label" style={{ fontWeight: "600" }}>
-                  កាលបរិច្ឆេទ / រយៈពេល (Period) <span style={{ color: "red" }}>*</span>
-                </label>
-                <input
-                  type="text"
-                  list="periods-datalist"
-                  className="form-control"
-                  placeholder="វាយបញ្ចូលកាលបរិច្ឆេទ ឬខែ (ឧ. ខែតុលា ឆ្នាំ២០២៥)..."
-                  value={form.record_period}
-                  onChange={(e) => setForm({ ...form, record_period: e.target.value })}
-                />
-                <datalist id="periods-datalist">
-                  {COMMON_PERIODS.map((p) => (
-                    <option key={p} value={p} />
-                  ))}
-                </datalist>
-              </div>
+              {/* Row Sequence Dropdown */}
+              <FormSelect
+                label="ល.រ (Row No.)"
+                required
+                value={form.entry_no}
+                placeholder="-- ជ្រើសរើស ល.រ --"
+                onChange={(e) => setForm({ ...form, entry_no: e.target.value })}
+                options={rowOptions.map((num) => {
+                  const isTaken = takenRowNos.has(num);
+                  const donor = takenRowNos.get(num);
+                  return {
+                    value: num,
+                    label: `ល.រ ${toKhmerDigits(num)}${isTaken ? ` (បានជ្រើសរើសរួច៖ ${donor})` : ""}`,
+                    disabled: isTaken,
+                  };
+                })}
+              />
 
-              {/* Target Location */}
-              <div className="form-group">
-                <label className="form-label" style={{ fontWeight: "600" }}>
-                  ទីតាំងគោលដៅ ស្រុក/ឃុំ/ភូមិ (Target Location) <span style={{ color: "red" }}>*</span>
-                </label>
-                <input
-                  type="text"
-                  list="locations-datalist"
-                  className="form-control"
-                  placeholder="វាយបញ្ចូលទីតាំង ឬឃុំ (ឧ. ឃុំស្ដៅជុំ, ទូទាំងស្រុក)..."
-                  value={form.target_location}
-                  onChange={(e) => setForm({ ...form, target_location: e.target.value })}
-                />
-                <datalist id="locations-datalist">
-                  {COMMON_COMMUNES.map((loc) => (
-                    <option key={loc} value={loc} />
-                  ))}
-                </datalist>
-              </div>
+              {/* Fiscal Year */}
+              <FormSelect
+                label="ឆ្នាំប្រតិបត្តិការ (Fiscal Year)"
+                value={form.fiscal_year}
+                onChange={(e) => setForm({ ...form, fiscal_year: e.target.value })}
+                options={Array.from({ length: 2050 - 2015 + 1 }, (_, i) => String(2015 + i)).map((y) => ({
+                  value: y,
+                  label: `${y} (ឆ្នាំ ${toKhmerDigits(y)})`,
+                }))}
+              />
             </div>
           </div>
 
-          {/* Section 2: Dual Currency Cash Inputs */}
-          <div className="sponsorship-form-section">
-            <h4 className="sponsorship-form-section-title" style={{ color: "#059669" }}>
-              <LuDollarSign color="#059669" size={18} />
-              <span>ផ្នែកទី ២ ៖ ថវិកាសាច់ប្រាក់ (Dual-Currency Cash Amounts)</span>
-            </h4>
-
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "1rem" }}>
-              {/* USD Amount */}
-              <div className="form-group">
-                <label className="form-label" style={{ fontWeight: "600", color: "#059669" }}>
-                  ថវិកា - ដុល្លារ ($ USD)
-                </label>
-                <div style={{ position: "relative" }}>
-                  <input
-                    type="text"
-                    className="form-control"
-                    placeholder="0.00"
-                    value={form.amount_usd}
-                    onChange={(e) => setForm({ ...form, amount_usd: normalizeKhmerDigits(e.target.value) })}
-                    style={{ fontWeight: "700", fontSize: "1.1rem", color: "#059669", paddingRight: "30px" }}
-                  />
-                  <span style={{ position: "absolute", right: "12px", top: "50%", transform: "translateY(-50%)", color: "#059669", fontWeight: "bold" }}>
-                    $
-                  </span>
-                </div>
-                {parsedUSD > 0 && (
-                  <div style={{ fontSize: "0.78rem", color: "#059669", marginTop: "0.35rem", lineHeight: 1.4 }}>
-                    <div>= {toKhmerDigits(parsedUSD)} ដុល្លារ</div>
-                    <div style={{ fontStyle: "italic", color: "#475569" }}>
-                      ({numberToKhmerWords(parsedUSD, "USD")})
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* KHR Amount */}
-              <div className="form-group">
-                <label className="form-label" style={{ fontWeight: "600", color: "#2563eb" }}>
-                  ថវិកា - រៀល (៛ KHR)
-                </label>
-                <div style={{ position: "relative" }}>
-                  <input
-                    type="text"
-                    className="form-control"
-                    placeholder="0"
-                    value={form.amount_khr}
-                    onChange={(e) => setForm({ ...form, amount_khr: normalizeKhmerDigits(e.target.value) })}
-                    style={{ fontWeight: "700", fontSize: "1.1rem", color: "#2563eb", paddingRight: "30px" }}
-                  />
-                  <span style={{ position: "absolute", right: "12px", top: "50%", transform: "translateY(-50%)", color: "#2563eb", fontWeight: "bold" }}>
-                    ៛
-                  </span>
-                </div>
-                {parsedKHR > 0 && (
-                  <div style={{ fontSize: "0.78rem", color: "#2563eb", marginTop: "0.35rem", lineHeight: 1.4 }}>
-                    <div>= {toKhmerDigits(parsedKHR)} រៀល</div>
-                    <div style={{ fontStyle: "italic", color: "#475569" }}>
-                      ({numberToKhmerWords(parsedKHR, "KHR")})
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Section 3: Granular Physical Goods / Material Ledger */}
-          <div className="sponsorship-form-section">
+          {/* Section 2: Physical Goods / Materials & Line Item Allocations */}
+          <div className="sponsorship-form-section" style={{ background: "#ffffff", border: "1px solid #fed7aa" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.85rem", flexWrap: "wrap", gap: "0.5rem" }}>
-              <h4 className="sponsorship-form-section-title" style={{ margin: 0, color: "#d97706" }}>
-                <LuPackage color="#d97706" size={18} />
-                <span>ផ្នែកទី ៣ ៖ សម្ភារ ឯកតា (Granular Physical Goods Ledger)</span>
-              </h4>
-
-              <div style={{ display: "flex", gap: "0.5rem" }}>
-                <button
-                  type="button"
-                  className="btn btn-sm btn-secondary"
-                  onClick={toggleRawTextMode}
-                  style={{ fontSize: "0.75rem", display: "flex", alignItems: "center", gap: "0.3rem" }}
-                  title="ប្តូររវាងតារាងលម្អិត និងអត្ថបទរួម"
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                <div
+                  style={{
+                    width: "32px",
+                    height: "32px",
+                    borderRadius: "8px",
+                    background: "#ffedd5",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: "#c2410c",
+                  }}
                 >
-                  {rawTextMode ? <LuList size={14} /> : <LuFileText size={14} />}
-                  <span>{rawTextMode ? "ទម្រង់តារាង (Repeater)" : "ទម្រង់អត្ថបទរួម (Raw Text)"}</span>
-                </button>
-
-                {!rawTextMode && (
-                  <button
-                    type="button"
-                    className="btn btn-sm"
-                    onClick={handleAddItem}
-                    style={{
-                      background: "#fef3c7",
-                      color: "#92400e",
-                      border: "1px solid #fde68a",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "0.3rem",
-                      fontWeight: "600",
-                    }}
-                  >
-                    <LuPlus size={15} />
-                    <span>+ បន្ថែមសម្ភារ (Add Row)</span>
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {rawTextMode ? (
-              <div>
-                <textarea
-                  className="form-control"
-                  rows={3}
-                  placeholder="ឧ. អង្ករ ៥០ គ.ក, ទឹកត្រី ០១ យួរ, មី ១២ កេស..."
-                  value={rawTextValue}
-                  onChange={(e) => setRawTextValue(e.target.value)}
-                  style={{ fontSize: "0.9rem" }}
-                />
-                <span style={{ fontSize: "0.75rem", color: "#64748b", marginTop: "0.25rem", display: "block" }}>
-                  * បំបែកមុខទំនិញនីមួយៗដោយសញ្ញាក្បៀស (,) ឬចុះបន្ទាត់។
-                </span>
-              </div>
-            ) : items.length === 0 ? (
-              <p style={{ margin: 0, fontSize: "0.85rem", color: "#94a3b8", fontStyle: "italic", padding: "0.5rem 0" }}>
-                មិនទាន់មានមុខសម្ភារត្រូវបានបន្ថែមនៅឡើយទេ (ចុច &quot;+ បន្ថែមសម្ភារ&quot; ប្រសិនបើមាន)
-              </p>
-            ) : (
-              <div style={{ overflowX: "auto" }}>
-                <table className="form-items-table">
-                  <thead>
-                    <tr>
-                      <th style={{ width: "35%" }}>ឈ្មោះសម្ភារ (Item Name)</th>
-                      <th style={{ width: "20%" }}>បរិមាណ (Qty)</th>
-                      <th style={{ width: "22%" }}>ឯកតា (Unit)</th>
-                      <th style={{ width: "18%" }}>ចំណាំ (Notes)</th>
-                      <th style={{ width: "5%", textAlign: "center" }}></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {items.map((it, idx) => (
-                      <tr key={idx}>
-                        <td>
-                          <input
-                            type="text"
-                            className="form-control form-control-sm"
-                            placeholder="ឧ. អង្ករ, មី, ទឹកត្រី, ក្តារមឈូស..."
-                            value={it.item_name}
-                            onChange={(e) => handleItemChange(idx, "item_name", e.target.value)}
-                          />
-                        </td>
-                        <td>
-                          <input
-                            type="text"
-                            className="form-control form-control-sm"
-                            placeholder="1"
-                            value={it.item_qty}
-                            onChange={(e) => handleItemChange(idx, "item_qty", e.target.value)}
-                          />
-                        </td>
-                        <td>
-                          <input
-                            type="text"
-                            list={`units-list-${idx}`}
-                            className="form-control form-control-sm"
-                            placeholder="គ.ក, កេស, យួរ..."
-                            value={it.item_unit}
-                            onChange={(e) => handleItemChange(idx, "item_unit", e.target.value)}
-                          />
-                          <datalist id={`units-list-${idx}`}>
-                            {COMMON_UNITS.map((u) => (
-                              <option key={u} value={u} />
-                            ))}
-                          </datalist>
-                        </td>
-                        <td>
-                          <input
-                            type="text"
-                            className="form-control form-control-sm"
-                            placeholder="ចំណាំ... (Tab បន្ថែមជួរថ្មី)"
-                            value={it.item_notes}
-                            onChange={(e) => handleItemChange(idx, "item_notes", e.target.value)}
-                            onKeyDown={(e) => handleItemKeyDown(e, idx)}
-                          />
-                        </td>
-                        <td style={{ textAlign: "center" }}>
-                          <button
-                            type="button"
-                            className="btn-icon text-danger"
-                            onClick={() => handleRemoveItem(idx)}
-                            title="លុបជួរដេក"
-                          >
-                            <LuTrash2 size={16} />
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-
-          {/* Section 4: Purpose & Destination with Quick Tags */}
-          <div className="sponsorship-form-section">
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem", flexWrap: "wrap", gap: "0.4rem" }}>
-              <label className="form-label" style={{ fontWeight: "700", margin: 0, color: "#1e3a8a" }}>
-                ទីកន្លែងទទួល និង ប្រើប្រាស់ (Purpose & Destination) <span style={{ color: "red" }}>*</span>
-              </label>
-              <div style={{ display: "flex", gap: "0.3rem", flexWrap: "wrap", alignItems: "center" }}>
-                <span style={{ fontSize: "0.75rem", color: "#64748b", display: "flex", alignItems: "center", gap: "0.2rem" }}>
-                  <LuTag size={12} /> បន្ថែមស្លាក ៖
-                </span>
-                {QUICK_TAGS.map((tag, idx) => (
-                  <button
-                    key={idx}
-                    type="button"
-                    className="btn btn-sm btn-light"
-                    onClick={() => insertQuickTag(tag.text)}
-                    style={{ fontSize: "0.72rem", padding: "0.15rem 0.45rem", background: "#f1f5f9", border: "1px solid #cbd5e1" }}
-                  >
-                    {tag.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <textarea
-              ref={usageTextareaRef}
-              className="form-control"
-              rows={3}
-              placeholder="ឧ. - ឧបត្ថម្ភដល់ប្រជាពលរដ្ឋទីទ័លក្រចំនួន ៥០គ្រួសារ នៅឃុំស្ដៅជុំ&#10;- ឧបត្ថម្ភបុណ្យសព និងចាស់ជរា..."
-              value={form.usage_description}
-              onChange={(e) => setForm({ ...form, usage_description: e.target.value })}
-            />
-          </div>
-
-          {/* Section 5: Remarks */}
-          <div className="form-group">
-            <label className="form-label" style={{ fontWeight: "600", color: "#475569" }}>
-              ផ្សេងៗ (Remarks & Unbudgeted Contingencies)
-            </label>
-            <input
-              type="text"
-              className="form-control"
-              placeholder="ចំណាំបន្ថែម ឬឯកសារយោង (Optional footnotes)..."
-              value={form.remarks}
-              onChange={(e) => setForm({ ...form, remarks: e.target.value })}
-            />
-          </div>
-
-          {/* Section 6: Real-time Footer Balance Card & Variance Audit */}
-          <div
-            style={{
-              background: "#f8fafc",
-              border: "1px solid #cbd5e1",
-              borderRadius: "12px",
-              padding: "1rem",
-            }}
-          >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.75rem" }}>
-              <div>
-                <span style={{ fontSize: "0.8rem", fontWeight: "700", color: "#475569", textTransform: "uppercase" }}>
-                  តុល្យភាពសរុបនៃកំណត់ត្រានេះ (Batch Real-Time Balance) ៖
-                </span>
-                <div style={{ display: "flex", gap: "1.25rem", marginTop: "0.25rem", alignItems: "center", flexWrap: "wrap" }}>
-                  <span style={{ fontSize: "1.05rem", fontWeight: "700", color: "#059669" }}>
-                    USD: {toKhmerDigits(parsedUSD)} $
-                  </span>
-                  <span style={{ fontSize: "1.05rem", fontWeight: "700", color: "#2563eb" }}>
-                    KHR: {toKhmerDigits(parsedKHR)} ៛
-                  </span>
-                  <span style={{ fontSize: "0.95rem", fontWeight: "600", color: "#d97706" }}>
-                    សម្ភារ: {toKhmerDigits(items.length)} មុខ
+                  <LuPackage size={18} />
+                </div>
+                <div>
+                  <h4 style={{ margin: 0, fontSize: "0.95rem", fontWeight: "700", color: "#9a3412" }}>
+                    សម្ភារ / ឯកតា (Materials & Goods)
+                  </h4>
+                  <span style={{ fontSize: "0.75rem", color: "#ea580c" }}>
+                    {items.length > 0 ? `មាន ${toKhmerDigits(items.length)} មុខសម្ភារ` : "ស្រេចចិត្ត (Optional)"}
                   </span>
                 </div>
               </div>
 
-              {/* Audit reconciliation fields */}
-              <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
-                <span style={{ fontSize: "0.75rem", color: "#64748b" }}>
-                  ផ្ទៀងផ្ទាត់តារាងក្រដាស (Audit Check):
-                </span>
-                <input
-                  type="text"
-                  className="form-control form-control-sm"
-                  placeholder="សរុបក្រដាស ($)"
-                  value={manualAuditTotalUSD}
-                  onChange={(e) => setManualAuditTotalUSD(normalizeKhmerDigits(e.target.value))}
-                  style={{ width: "110px", fontSize: "0.78rem" }}
-                  title="បញ្ចូលតួលេខសរុបដែលបានកត់លើក្រដាសដើម្បីផ្ទៀងផ្ទាត់"
-                />
-                <input
-                  type="text"
-                  className="form-control form-control-sm"
-                  placeholder="សរុបក្រដាស (៛)"
-                  value={manualAuditTotalKHR}
-                  onChange={(e) => setManualAuditTotalKHR(normalizeKhmerDigits(e.target.value))}
-                  style={{ width: "110px", fontSize: "0.78rem" }}
-                  title="បញ្ចូលតួលេខសរុបដែលបានកត់លើក្រដាសដើម្បីផ្ទៀងផ្ទាត់"
-                />
-              </div>
+              <button
+                type="button"
+                className="btn btn-sm"
+                onClick={handleAddItem}
+                style={{
+                  background: "#ea580c",
+                  color: "#ffffff",
+                  border: "none",
+                  borderRadius: "8px",
+                  padding: "0.35rem 0.75rem",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.35rem",
+                  fontWeight: "600",
+                  fontSize: "0.85rem",
+                  boxShadow: "0 1px 2px rgba(234, 88, 12, 0.2)",
+                  cursor: "pointer",
+                }}
+              >
+                <LuPlus size={16} />
+                <span>+ បន្ថែមសម្ភារ</span>
+              </button>
             </div>
 
-            {/* Discrepancy Alert */}
-            {(usdDiscrepancy?.hasDiscrepancy || khrDiscrepancy?.hasDiscrepancy) && (
-              <div
-                style={{
-                  marginTop: "0.75rem",
-                  padding: "0.5rem 0.75rem",
-                  background: "#fffbeb",
-                  border: "1px solid #fde68a",
-                  color: "#92400e",
-                  borderRadius: "6px",
-                  fontSize: "0.82rem",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "0.4rem",
-                }}
-              >
-                <LuShieldAlert size={16} color="#d97706" />
-                <span>
-                  <strong>ការដាស់តឿនគណិតវិទ្យា (Variance Flag) ៖</strong> រកឃើញភាពមិនស៊ីគ្នាផ្នែកគណិតវិទ្យារវាងផលបូកជាក់ស្តែង និងតួលេខសរុបលើតារាងក្រដាស!
-                </span>
+            {items.length === 0 ? (
+              <div className="sponsorship-empty-goods" onClick={handleAddItem} style={{ cursor: "pointer" }}>
+                <LuPackage size={30} color="#ea580c" style={{ opacity: 0.8 }} />
+                <div style={{ fontWeight: "600", fontSize: "0.9rem", color: "#9a3412" }}>
+                  មិនទាន់មានមុខសម្ភារនៅឡើយទេ
+                </div>
+                <div style={{ fontSize: "0.8rem", color: "#c2410c" }}>
+                  ចុចទីនេះ ឬចុចប៊ូតុង <strong>&quot;+ បន្ថែមសម្ភារ&quot;</strong> ប្រសិនបើមានការឧបត្ថម្ភជាសម្ភារ
+                </div>
               </div>
-            )}
-            {manualAuditTotalUSD && !usdDiscrepancy?.hasDiscrepancy && (
-              <div
-                style={{
-                  marginTop: "0.5rem",
-                  fontSize: "0.78rem",
-                  color: "#059669",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "0.3rem",
-                }}
-              >
-                <LuCheck size={14} />
-                <span>តួលេខសាច់ប្រាក់ USD ត្រូវគ្នាឥតខ្ចោះជាមួយតារាងក្រដាស (Verified)</span>
+            ) : (
+              <div className="sponsorship-goods-container">
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "24px minmax(110px, 1fr) 60px 75px 80px 80px minmax(130px, 1.2fr) minmax(100px, 1fr) 28px",
+                    gap: "0.4rem",
+                    padding: "0 0.5rem",
+                    fontSize: "0.76rem",
+                    fontWeight: "700",
+                    color: "#9a3412",
+                  }}
+                >
+                  <span style={{ textAlign: "center" }}>ល.រ</span>
+                  <span>ឈ្មោះសម្ភារ (Item Name)</span>
+                  <span style={{ textAlign: "center" }}>បរិមាណ</span>
+                  <span>ឯកតា</span>
+                  <span style={{ textAlign: "right" }}>ថវិកា ($)</span>
+                  <span style={{ textAlign: "right" }}>ថវិកា (៛)</span>
+                  <span>ទីកន្លែងទទួល និង ប្រើប្រាស់</span>
+                  <span>ផ្សេងៗ (Remarks)</span>
+                  <span></span>
+                </div>
+
+                {items.map((it, idx) => (
+                  <div key={idx} className="sponsorship-good-row">
+                    <div className="sponsorship-good-index">
+                      {toKhmerDigits(idx + 1)}
+                    </div>
+
+                    <div>
+                      <FormDropdown
+                        compact
+                        editable
+                        placeholder="ឧ. អង្ករ, មី, ទឹកត្រី..."
+                        value={it.item_name}
+                        onChange={(e) => handleItemChange(idx, "item_name", e.target.value)}
+                        options={materialOptions}
+                        style={{ fontWeight: "600" }}
+                      />
+                    </div>
+
+                    <div>
+                      <FormInput
+                        compact
+                        placeholder="1"
+                        value={it.item_qty}
+                        onChange={(e) => handleItemChange(idx, "item_qty", e.target.value)}
+                        style={{ textAlign: "center", fontWeight: "700" }}
+                      />
+                    </div>
+
+                    <div>
+                      <FormDropdown
+                        compact
+                        editable
+                        placeholder="គ.ក, កេស..."
+                        value={it.item_unit}
+                        onChange={(e) => handleItemChange(idx, "item_unit", e.target.value)}
+                        options={COMMON_UNITS.map((u) => ({ value: u, label: u }))}
+                      />
+                    </div>
+
+                    <div>
+                      <FormInput
+                        compact
+                        placeholder="0 $"
+                        value={it.cash_allocation_usd}
+                        onChange={(e) => handleItemChange(idx, "cash_allocation_usd", e.target.value)}
+                        style={{ textAlign: "right", fontWeight: "700", color: "#059669" }}
+                      />
+                    </div>
+
+                    <div>
+                      <FormInput
+                        compact
+                        placeholder="0 ៛"
+                        value={it.cash_allocation_khr}
+                        onChange={(e) => handleItemChange(idx, "cash_allocation_khr", e.target.value)}
+                        style={{ textAlign: "right", fontWeight: "700", color: "#2563eb" }}
+                      />
+                    </div>
+
+                    <div>
+                      <FormDropdown
+                        compact
+                        editable
+                        placeholder="ទីកន្លែងទទួល / គោលបំណង..."
+                        value={it.usage_description}
+                        onChange={(e) => handleItemChange(idx, "usage_description", e.target.value)}
+                        options={PURPOSE_OPTIONS}
+                      />
+                    </div>
+
+                    <div>
+                      <FormInput
+                        compact
+                        placeholder="ផ្សេងៗ..."
+                        value={it.remarks}
+                        onChange={(e) => handleItemChange(idx, "remarks", e.target.value)}
+                      />
+                    </div>
+
+                    <div style={{ textAlign: "center" }}>
+                      <button
+                        type="button"
+                        className="btn-icon text-danger"
+                        onClick={() => handleRemoveItem(idx)}
+                        title="លុបមុខសម្ភារនេះ"
+                        style={{
+                          width: "28px",
+                          height: "28px",
+                          borderRadius: "6px",
+                          background: "#fee2e2",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                      >
+                        <LuTrash2 size={14} color="#dc2626" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </div>
         </div>
 
-        {/* Footer */}
+        {/* Modal Footer */}
         <div className="sponsorship-modal-footer">
           <button type="button" className="btn btn-secondary" onClick={closeModal} disabled={saving}>
             បោះបង់
           </button>
-          <div style={{ display: "flex", gap: "0.6rem" }}>
-            {!isEdit && (
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={() => handleSubmit(true)}
-                disabled={saving}
-                style={{ background: "#2563eb", display: "flex", alignItems: "center", gap: "0.4rem" }}
-              >
-                <LuSend size={16} />
-                <span>{saving ? "កំពុងរក្សាទុក..." : "រក្សាទុក និងដាក់ស្នើពិនិត្យ"}</span>
-              </button>
-            )}
-            <button
-              type="button"
-              className="btn btn-success"
-              onClick={() => handleSubmit(false)}
-              disabled={saving}
-              style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontWeight: "600" }}
-            >
-              <LuSave size={16} />
-              <span>{saving ? "កំពុងរក្សាទុក..." : isEdit ? "រក្សាទុកការកែប្រែ" : "រក្សាទុកជាសេចក្តីព្រាង"}</span>
-            </button>
-          </div>
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={handleSubmit}
+            disabled={saving}
+            style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontWeight: "600" }}
+          >
+            <LuSave size={16} />
+            <span>{saving ? "កំពុងរក្សាទុក..." : isEdit ? "រក្សាទុកការកែប្រែ" : "រក្សាទុក"}</span>
+          </button>
         </div>
       </div>
     </div>

@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback } from "react";
+import { createContext, useContext, useState, useCallback, useMemo } from "react";
 import { LuCheck, LuX, LuInfo } from "react-icons/lu";
 
 const ToastContext = createContext(null);
@@ -41,8 +41,23 @@ export function ToastProvider({ children }) {
     info: { bg: "#eff6ff", border: "#3b82f6", icon: "#3b82f6", text: "#1e40af" },
   };
 
+  const showToast = useCallback((msg, type = "success") => {
+    if (type === "error") {
+      error(msg);
+    } else if (type === "info") {
+      info(msg);
+    } else {
+      success(msg);
+    }
+  }, [success, error, info]);
+
+  const contextValue = useMemo(
+    () => ({ success, error, info, showToast, addToast }),
+    [success, error, info, showToast, addToast]
+  );
+
   return (
-    <ToastContext.Provider value={{ success, error, info }}>
+    <ToastContext.Provider value={contextValue}>
       {children}
       <div style={{
         position: "fixed", top: "1rem", right: "1rem", zIndex: 9999,

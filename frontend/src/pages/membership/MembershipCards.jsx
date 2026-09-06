@@ -111,7 +111,7 @@ export default function MembershipCards({ memberId, onBack }) {
   }
 
   return (
-    <div className="page" style={{ maxWidth: "1200px", margin: "0 auto" }}>
+    <div className="page">
       {/* Header */}
       <div className="page-header" style={{ marginBottom: "1.5rem" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>

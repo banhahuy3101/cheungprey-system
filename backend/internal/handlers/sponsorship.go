@@ -75,16 +75,32 @@ func (h *SponsorshipHandler) Create(c *gin.Context) {
 
 	// Support BRD alias mappings
 	usd := req.AmountUSD
+	if usd == 0 && req.ExpenseAmountUSD != 0 {
+		usd = req.ExpenseAmountUSD
+	}
 	if usd == 0 && req.CurrencyUSD != 0 {
 		usd = req.CurrencyUSD
 	}
+
 	khr := req.AmountKHR
+	if khr == 0 && req.ExpenseAmountKHR != 0 {
+		khr = req.ExpenseAmountKHR
+	}
 	if khr == 0 && req.CurrencyKHR != 0 {
 		khr = req.CurrencyKHR
 	}
+
+	expenseLabel := strings.TrimSpace(req.ExpenseLabel)
+	if expenseLabel == "" {
+		expenseLabel = strings.TrimSpace(req.IsExpenseLabel)
+	}
+
 	donor := strings.TrimSpace(req.ContributorName)
 	if donor == "" {
 		donor = strings.TrimSpace(req.DonorName)
+	}
+	if donor == "" {
+		donor = "អ្នកឧបត្ថម្ភទូទៅ"
 	}
 	usage := strings.TrimSpace(req.UsageDescription)
 	if usage == "" {
@@ -107,22 +123,7 @@ func (h *SponsorshipHandler) Create(c *gin.Context) {
 		fiscalYear = time.Now().Year()
 	}
 
-	// Validate Rule 1 (Entry Completeness): Must have non-zero cash OR at least one material item with qty > 0
-	hasCash := usd > 0 || khr > 0
-	hasMaterial := false
-	for _, item := range items {
-		if strings.TrimSpace(item.ItemName) != "" && item.ItemQty > 0 {
-			hasMaterial = true
-			break
-		}
-	}
-	if !hasCash && !hasMaterial {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "តម្រូវឱ្យមានតម្លៃសាច់ប្រាក់ (USD ឬ KHR) ឬសម្ភារយ៉ាងតិចមួយមុខដែលមានបរិមាណធំជាង ០ (Must include cash value or at least one material item)",
-		})
-		return
-	}
-
+	// Master sponsor profile creation: item fields and cash amounts can be added immediately or left blank initially (FR-1.2)
 	userID, _ := auth.GetUserID(c)
 
 	status := "draft"
@@ -153,7 +154,11 @@ func (h *SponsorshipHandler) Create(c *gin.Context) {
 		DonorName:           donor,
 		Representatives:     strings.TrimSpace(req.Representatives),
 		RecordPeriod:        strings.TrimSpace(req.RecordPeriod),
-		TargetLocation:      strings.TrimSpace(req.TargetLocation),
+		IsExpenseTotal:      req.IsExpenseTotal,
+		ExpenseLabel:        expenseLabel,
+		IsExpenseLabel:      expenseLabel,
+		ExpenseAmountUSD:    usd,
+		ExpenseAmountKHR:    khr,
 		AmountUSD:           usd,
 		CurrencyUSD:         usd,
 		AmountKHR:           khr,
@@ -190,17 +195,26 @@ func (h *SponsorshipHandler) Update(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	if existing == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Sponsorship record not found"})
-		return
-	}
 
-	// If record is already approved, prevent updates unless user is admin
-	perms, _ := auth.GetPermissions(c)
-	isAdmin := perms != nil && (perms[models.FeatureUsers] || perms[models.FeatureTechnical])
-	if existing.Status == "approved" && !isAdmin {
-		c.JSON(http.StatusForbidden, gin.H{"error": "កំណត់ត្រាត្រូវបានអនុម័តរួចហើយ មិនអាចកែប្រែបានទេ (Approved record cannot be modified)"})
-		return
+	var status string = "draft"
+	var existingEntryNo int = 0
+	var existingFiscalYear int = time.Now().Year()
+	var existingSectionGroup string = "ការឧបត្ថម្ភទូទៅ"
+	var existingCategory string = "donation"
+
+	if existing != nil {
+		// If record is already approved, prevent updates unless user is admin
+		perms, _ := auth.GetPermissions(c)
+		isAdmin := perms != nil && (perms[models.FeatureUsers] || perms[models.FeatureTechnical])
+		if existing.Status == "approved" && !isAdmin {
+			c.JSON(http.StatusForbidden, gin.H{"error": "កំណត់ត្រាត្រូវបានអនុម័តរួចហើយ មិនអាចកែប្រែបានទេ (Approved record cannot be modified)"})
+			return
+		}
+		status = existing.Status
+		existingEntryNo = existing.EntryNo
+		existingFiscalYear = existing.FiscalYear
+		existingSectionGroup = existing.SectionGroup
+		existingCategory = existing.EntryClassification
 	}
 
 	var req models.UpdateSponsorshipRequest
@@ -211,13 +225,26 @@ func (h *SponsorshipHandler) Update(c *gin.Context) {
 
 	// Support BRD alias mappings
 	usd := req.AmountUSD
+	if usd == 0 && req.ExpenseAmountUSD != 0 {
+		usd = req.ExpenseAmountUSD
+	}
 	if usd == 0 && req.CurrencyUSD != 0 {
 		usd = req.CurrencyUSD
 	}
+
 	khr := req.AmountKHR
+	if khr == 0 && req.ExpenseAmountKHR != 0 {
+		khr = req.ExpenseAmountKHR
+	}
 	if khr == 0 && req.CurrencyKHR != 0 {
 		khr = req.CurrencyKHR
 	}
+
+	expenseLabel := strings.TrimSpace(req.ExpenseLabel)
+	if expenseLabel == "" {
+		expenseLabel = strings.TrimSpace(req.IsExpenseLabel)
+	}
+
 	donor := strings.TrimSpace(req.ContributorName)
 	if donor == "" {
 		donor = strings.TrimSpace(req.DonorName)
@@ -231,7 +258,7 @@ func (h *SponsorshipHandler) Update(c *gin.Context) {
 		category = strings.TrimSpace(req.EntryClassification)
 	}
 	if category == "" {
-		category = existing.EntryClassification
+		category = existingCategory
 		if category == "" {
 			category = "donation"
 		}
@@ -243,29 +270,13 @@ func (h *SponsorshipHandler) Update(c *gin.Context) {
 
 	fiscalYear := req.FiscalYear
 	if fiscalYear <= 0 {
-		fiscalYear = existing.FiscalYear
+		fiscalYear = existingFiscalYear
 		if fiscalYear <= 0 {
 			fiscalYear = time.Now().Year()
 		}
 	}
 
-	// Validate Rule 1
-	hasCash := usd > 0 || khr > 0
-	hasMaterial := false
-	for _, item := range items {
-		if strings.TrimSpace(item.ItemName) != "" && item.ItemQty > 0 {
-			hasMaterial = true
-			break
-		}
-	}
-	if !hasCash && !hasMaterial {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "តម្រូវឱ្យមានតម្លៃសាច់ប្រាក់ (USD ឬ KHR) ឬសម្ភារយ៉ាងតិចមួយមុខដែលមានបរិមាណធំជាង ០",
-		})
-		return
-	}
-
-	entryNo := existing.EntryNo
+	entryNo := existingEntryNo
 	if req.EntryNo != nil && *req.EntryNo > 0 {
 		entryNo = *req.EntryNo
 	} else if req.RecordID != nil && *req.RecordID > 0 {
@@ -274,7 +285,7 @@ func (h *SponsorshipHandler) Update(c *gin.Context) {
 
 	sectionGroup := strings.TrimSpace(req.SectionGroup)
 	if sectionGroup == "" {
-		sectionGroup = existing.SectionGroup
+		sectionGroup = existingSectionGroup
 		if sectionGroup == "" {
 			sectionGroup = "ការឧបត្ថម្ភទូទៅ"
 		}
@@ -291,7 +302,11 @@ func (h *SponsorshipHandler) Update(c *gin.Context) {
 		DonorName:           donor,
 		Representatives:     strings.TrimSpace(req.Representatives),
 		RecordPeriod:        strings.TrimSpace(req.RecordPeriod),
-		TargetLocation:      strings.TrimSpace(req.TargetLocation),
+		IsExpenseTotal:      req.IsExpenseTotal,
+		ExpenseLabel:        expenseLabel,
+		IsExpenseLabel:      expenseLabel,
+		ExpenseAmountUSD:    usd,
+		ExpenseAmountKHR:    khr,
 		AmountUSD:           usd,
 		CurrencyUSD:         usd,
 		AmountKHR:           khr,
@@ -299,6 +314,7 @@ func (h *SponsorshipHandler) Update(c *gin.Context) {
 		UsageDescription:    usage,
 		AllocationPurpose:   usage,
 		Remarks:             strings.TrimSpace(req.Remarks),
+		Status:              status,
 	}
 
 	updated, err := h.repo.UpdateSponsorship(id, &record, items)
@@ -402,9 +418,8 @@ func (h *SponsorshipHandler) Approve(c *gin.Context) {
 func (h *SponsorshipHandler) GetSummary(c *gin.Context) {
 	period := c.Query("record_period")
 	section := c.Query("section_group")
-	location := c.Query("target_location")
 
-	summary, err := h.repo.GetSponsorshipSummary(period, section, location)
+	summary, err := h.repo.GetSponsorshipSummary(period, section)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

@@ -45,6 +45,10 @@ export default function Select({
   placeholder = "-- ជ្រើសរើស --",
   leadIcon,
   tailIcon,
+  editable = false,
+  showChevron = true,
+  style,
+  ...props
 }) {
   const options = useMemo(() => {
     if (optionsProp) {
@@ -66,10 +70,20 @@ export default function Select({
 
   const stringValue = String(value ?? "");
   const selectedOption = options.find((o) => o.value === stringValue);
-  const displayLabel = selectedOption?.label ?? placeholder;
-  const isPlaceholder = !selectedOption;
+  const displayLabel = selectedOption?.label ?? (editable ? stringValue : placeholder);
+  const isPlaceholder = !selectedOption && !editable;
 
-  const enabledOptions = options.filter((o) => !o.disabled);
+  const displayOptions = useMemo(() => {
+    if (!editable || !stringValue.trim()) return options;
+    const query = stringValue.trim().toLowerCase();
+    return options.filter(
+      (o) =>
+        o.label.toLowerCase().includes(query) ||
+        o.value.toLowerCase().includes(query),
+    );
+  }, [options, editable, stringValue]);
+
+  const enabledOptions = displayOptions.filter((o) => !o.disabled);
 
   const fireChange = useCallback(
     (newValue) => {
@@ -119,7 +133,7 @@ export default function Select({
     if (!open) return;
 
     updateMenuPosition();
-    const selectedIndex = options.findIndex(
+    const selectedIndex = displayOptions.findIndex(
       (o) => o.value === stringValue && !o.disabled,
     );
     setHighlightIndex(selectedIndex >= 0 ? selectedIndex : 0);
@@ -132,7 +146,7 @@ export default function Select({
       window.removeEventListener("scroll", onScrollOrResize, true);
       window.removeEventListener("resize", onScrollOrResize);
     };
-  }, [open, options, stringValue, updateMenuPosition]);
+  }, [open, displayOptions, stringValue, updateMenuPosition]);
 
   useEffect(() => {
     if (!open) return;
@@ -154,7 +168,7 @@ export default function Select({
   const moveHighlight = (direction) => {
     if (!enabledOptions.length) return;
 
-    const currentOpt = options[highlightIndex];
+    const currentOpt = displayOptions[highlightIndex];
     let idx = currentOpt
       ? enabledOptions.findIndex((o) => o.value === currentOpt.value)
       : -1;
@@ -163,7 +177,7 @@ export default function Select({
 
     idx = (idx + direction + enabledOptions.length) % enabledOptions.length;
     const next = enabledOptions[idx];
-    const nextIndex = options.findIndex((o) => o.value === next.value);
+    const nextIndex = displayOptions.findIndex((o) => o.value === next.value);
     setHighlightIndex(nextIndex);
 
     menuRef.current
@@ -176,12 +190,9 @@ export default function Select({
 
     switch (e.key) {
       case "Enter":
-      case " ":
-        e.preventDefault();
-        if (open) {
-          selectOption(options[highlightIndex]);
-        } else {
-          setOpen(true);
+        if (open && displayOptions[highlightIndex]) {
+          e.preventDefault();
+          selectOption(displayOptions[highlightIndex]);
         }
         break;
       case "Escape":
@@ -198,67 +209,54 @@ export default function Select({
         if (!open) setOpen(true);
         else moveHighlight(-1);
         break;
-      case "Home":
-        e.preventDefault();
-        if (open && enabledOptions.length) {
-          const idx = options.findIndex(
-            (o) => o.value === enabledOptions[0].value,
-          );
-          setHighlightIndex(idx);
-        }
-        break;
-      case "End":
-        e.preventDefault();
-        if (open && enabledOptions.length) {
-          const last = enabledOptions[enabledOptions.length - 1];
-          setHighlightIndex(options.findIndex((o) => o.value === last.value));
-        }
-        break;
       default:
         break;
     }
   };
 
   const menu =
-    open && menuStyle
+    open && menuStyle && displayOptions.length > 0
       ? createPortal(
-          <ul
-            ref={menuRef}
-            className="custom-select-menu"
-            role="listbox"
-            id={id ? `${id}-listbox` : undefined}
-            style={menuStyle}
-          >
-            {options.map((opt, index) => {
-              const isSelected = opt.value === stringValue;
-              const isHighlighted = index === highlightIndex;
-              return (
-                <li
-                  key={`${opt.value}-${index}`}
-                  role="option"
-                  aria-selected={isSelected}
-                  data-index={index}
-                  className={[
-                    "custom-select-option",
-                    isSelected && "is-selected",
-                    isHighlighted && "is-highlighted",
-                    opt.disabled && "is-disabled",
-                  ]
-                    .filter(Boolean)
-                    .join(" ")}
-                  onMouseEnter={() => !opt.disabled && setHighlightIndex(index)}
-                  onClick={() => selectOption(opt)}
-                >
-                  <span className="custom-select-option-label">{opt.label}</span>
-                  {isSelected && (
-                    <LuCheck className="custom-select-option-check" aria-hidden />
-                  )}
-                </li>
-              );
-            })}
-          </ul>,
-          document.body,
-        )
+        <ul
+          ref={menuRef}
+          className="custom-select-menu"
+          role="listbox"
+          id={id ? `${id}-listbox` : undefined}
+          style={menuStyle}
+        >
+          {displayOptions.map((opt, index) => {
+            const isSelected = opt.value === stringValue;
+            const isHighlighted = index === highlightIndex;
+            return (
+              <li
+                key={`${opt.value}-${index}`}
+                role="option"
+                aria-selected={isSelected}
+                data-index={index}
+                className={[
+                  "custom-select-option",
+                  isSelected && "is-selected",
+                  isHighlighted && "is-highlighted",
+                  opt.disabled && "is-disabled",
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
+                onMouseEnter={() => !opt.disabled && setHighlightIndex(index)}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  selectOption(opt);
+                }}
+              >
+                <span className="custom-select-option-label">{opt.label}</span>
+                {isSelected && (
+                  <LuCheck className="custom-select-option-check" aria-hidden />
+                )}
+              </li>
+            );
+          })}
+        </ul>,
+        document.body,
+      )
       : null;
 
   return (
@@ -273,32 +271,101 @@ export default function Select({
         .filter(Boolean)
         .join(" ")}
     >
-      <button
-        ref={triggerRef}
-        type="button"
-        id={id}
-        className="custom-select-trigger"
-        disabled={disabled}
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        aria-controls={id ? `${id}-listbox` : undefined}
-        onClick={() => !disabled && setOpen((v) => !v)}
-        onKeyDown={onKeyDown}
-      >
-        {leadIcon && <span className="custom-select-icon is-leading">{leadIcon}</span>}
-        <span
-          className={[
-            "custom-select-value",
-            isPlaceholder && "is-placeholder",
-          ]
-            .filter(Boolean)
-            .join(" ")}
+      {editable ? (
+        <div
+          ref={triggerRef}
+          className="custom-select-trigger is-editable"
+          style={{
+            padding: 0,
+            display: "flex",
+            alignItems: "center",
+            cursor: "text",
+          }}
         >
-          {displayLabel}
-        </span>
-        {tailIcon && <span className="custom-select-icon is-trailing">{tailIcon}</span>}
-        <LuChevronDown className="custom-select-chevron" aria-hidden />
-      </button>
+          {leadIcon && <span className="custom-select-icon is-leading" style={{ paddingLeft: "0.5rem" }}>{leadIcon}</span>}
+          <input
+            type="text"
+            id={id}
+            name={name}
+            disabled={disabled}
+            value={stringValue}
+            placeholder={placeholder}
+            className="custom-select-editable-input"
+            style={{
+              flex: 1,
+              padding: "0.38rem 0.65rem",
+              fontSize: "inherit",
+              fontFamily: "inherit",
+              color: "inherit",
+              minWidth: 0,
+              width: "100%",
+              ...style,
+              border: "none",
+              outline: "none",
+              boxShadow: "none",
+              background: "transparent",
+            }}
+            onChange={(e) => {
+              fireChange(e.target.value);
+              if (!open) setOpen(true);
+            }}
+            onFocus={() => !disabled && setOpen(true)}
+            onKeyDown={onKeyDown}
+            {...props}
+          />
+          {tailIcon && <span className="custom-select-icon is-trailing">{tailIcon}</span>}
+          {showChevron && (
+            <button
+              type="button"
+              tabIndex={-1}
+              disabled={disabled}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (!disabled) setOpen((v) => !v);
+              }}
+              style={{
+                background: "none",
+                border: "none",
+                padding: "0 0.5rem",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                color: "#64748b",
+              }}
+            >
+              <LuChevronDown className="custom-select-chevron" aria-hidden />
+            </button>
+          )}
+        </div>
+      ) : (
+        <button
+          ref={triggerRef}
+          type="button"
+          id={id}
+          className="custom-select-trigger"
+          disabled={disabled}
+          aria-haspopup="listbox"
+          aria-expanded={open}
+          aria-controls={id ? `${id}-listbox` : undefined}
+          onClick={() => !disabled && setOpen((v) => !v)}
+          onKeyDown={onKeyDown}
+        >
+          {leadIcon && <span className="custom-select-icon is-leading">{leadIcon}</span>}
+          <span
+            className={[
+              "custom-select-value",
+              isPlaceholder && "is-placeholder",
+            ]
+              .filter(Boolean)
+              .join(" ")}
+          >
+            {displayLabel}
+          </span>
+          {tailIcon && <span className="custom-select-icon is-trailing">{tailIcon}</span>}
+          <LuChevronDown className="custom-select-chevron" aria-hidden />
+        </button>
+      )}
       {menu}
     </div>
   );

@@ -110,12 +110,12 @@ export default function Dashboard() {
 
   if (loading) {
     return (
-      <div style={{ padding: "1.5rem 2rem", maxWidth: 1100, margin: "0 auto" }}>
+      <div className="page dashboard-page">
         <div style={{ marginBottom: "2rem" }}>
           <div style={{ width: 200, height: 24, borderRadius: 6, background: "#e2e8f0", animation: "pulse 1.5s infinite" }} />
           <div style={{ width: 140, height: 16, borderRadius: 4, background: "#f1f5f9", marginTop: "0.5rem", animation: "pulse 1.5s infinite" }} />
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "0.85rem", marginBottom: "1.5rem" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "1rem", marginBottom: "1.75rem" }}>
           {[1, 2, 3, 4].map((i) => (
             <div key={i} style={{ height: 100, borderRadius: 14, background: "#f8fafc", animation: "pulse 1.5s infinite" }} />
           ))}
@@ -125,7 +125,7 @@ export default function Dashboard() {
   }
 
   return (
-    <div style={{ padding: "1.5rem 2rem", maxWidth: 1100, margin: "0 auto" }}>
+    <div className="page dashboard-page">
       {/* Welcome */}
       <div style={{ marginBottom: "2rem" }}>
         <h1 style={{ margin: 0, fontSize: "1.5rem", fontWeight: 700, color: "#0f172a" }}>
@@ -147,7 +147,7 @@ export default function Dashboard() {
       </div>
 
       {/* Stat Cards */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "0.85rem", marginBottom: "1.5rem" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "1rem", marginBottom: "1.75rem" }}>
         {statCards.map((s) => (
           <div
             key={s.label}
@@ -180,7 +180,7 @@ export default function Dashboard() {
       </div>
 
       {/* Main Grid: Recent Members + Quick Action Sidebar */}
-      <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "0.85rem" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 2fr) minmax(0, 1fr)", gap: "1rem" }}>
         {/* Recent Members */}
         <div style={{ background: "#fff", borderRadius: 16, border: "1px solid #f1f5f9", overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,0.03)" }}>
           <div style={{ padding: "0.9rem 1.15rem", borderBottom: "1px solid #f1f5f9", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
