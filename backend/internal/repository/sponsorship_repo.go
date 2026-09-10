@@ -711,6 +711,7 @@ func (r *Repository) ListSponsorships(params models.SponsorshipFilterParams) ([]
 		recordIDs[i] = r.ID.String()
 	}
 
+	recordHadAnyItems := make(map[uuid.UUID]bool)
 	itemsByRecord := make(map[uuid.UUID][]models.SponsorshipItem)
 	if len(recordIDs) > 0 {
 		var allItems []models.SponsorshipItem
@@ -719,6 +720,10 @@ func (r *Repository) ListSponsorships(params models.SponsorshipFilterParams) ([]
 			ExecuteTo(&allItems)
 
 		for _, item := range allItems {
+			recordHadAnyItems[item.RecordID] = true
+			if params.ZoneCode != "" && !strings.HasPrefix(item.ZoneCode, params.ZoneCode) {
+				continue
+			}
 			itemsByRecord[item.RecordID] = append(itemsByRecord[item.RecordID], item)
 		}
 	}
@@ -726,8 +731,17 @@ func (r *Repository) ListSponsorships(params models.SponsorshipFilterParams) ([]
 	// Merge local in-memory items
 	localSponsorshipLock.RLock()
 	for id, items := range localSponsorshipItems {
+		if len(items) > 0 {
+			recordHadAnyItems[id] = true
+		}
 		if len(itemsByRecord[id]) == 0 && len(items) > 0 {
-			itemsByRecord[id] = items
+			var matching []models.SponsorshipItem
+			for _, item := range items {
+				if params.ZoneCode == "" || strings.HasPrefix(item.ZoneCode, params.ZoneCode) {
+					matching = append(matching, item)
+				}
+			}
+			itemsByRecord[id] = matching
 		}
 	}
 	localSponsorshipLock.RUnlock()
@@ -743,6 +757,32 @@ func (r *Repository) ListSponsorships(params models.SponsorshipFilterParams) ([]
 			items[j].SyncAliases()
 		}
 
+		if params.ZoneCode != "" {
+			var sumUSD float64
+			var sumKHR int64
+			for _, it := range items {
+				sumUSD += it.ExpenseAmountUSD
+				sumKHR += it.ExpenseAmountKHR
+			}
+			if len(items) > 0 {
+				rec.AmountUSD = sumUSD
+				rec.ExpenseAmountUSD = sumUSD
+				rec.CurrencyUSD = sumUSD
+				rec.AmountKHR = sumKHR
+				rec.ExpenseAmountKHR = sumKHR
+				rec.CurrencyKHR = sumKHR
+				rec.SyncAliases()
+			} else if recordHadAnyItems[rec.ID] {
+				rec.AmountUSD = 0
+				rec.ExpenseAmountUSD = 0
+				rec.CurrencyUSD = 0
+				rec.AmountKHR = 0
+				rec.ExpenseAmountKHR = 0
+				rec.CurrencyKHR = 0
+				rec.SyncAliases()
+			}
+		}
+
 		results[i] = models.SponsorshipWithItems{
 			SponsorshipRecord: rec,
 			Items:             items,
@@ -754,9 +794,14 @@ func (r *Repository) ListSponsorships(params models.SponsorshipFilterParams) ([]
 }
 
 // GetSponsorshipByID retrieves a single sponsorship record with its items
-func (r *Repository) GetSponsorshipByID(id uuid.UUID) (*models.SponsorshipWithItems, error) {
+func (r *Repository) GetSponsorshipByID(id uuid.UUID, zoneCode ...string) (*models.SponsorshipWithItems, error) {
 	if id == uuid.Nil {
 		return nil, fmt.Errorf("invalid record_id: cannot select sponsorship without a valid record_id")
+	}
+
+	targetZone := ""
+	if len(zoneCode) > 0 {
+		targetZone = strings.TrimSpace(zoneCode[0])
 	}
 
 	var records []models.SponsorshipRecord
@@ -775,7 +820,34 @@ func (r *Repository) GetSponsorshipByID(id uuid.UUID) (*models.SponsorshipWithIt
 		if items == nil {
 			items = []models.SponsorshipItem{}
 		}
+
+		if targetZone != "" {
+			hadItems := len(items) > 0
+			var scoped []models.SponsorshipItem
+			var sumUSD float64
+			var sumKHR int64
+			for _, it := range items {
+				if strings.HasPrefix(it.ZoneCode, targetZone) {
+					scoped = append(scoped, it)
+					sumUSD += it.ExpenseAmountUSD
+					sumKHR += it.ExpenseAmountKHR
+				}
+			}
+			items = scoped
+			if hadItems {
+				rec.AmountUSD = sumUSD
+				rec.ExpenseAmountUSD = sumUSD
+				rec.CurrencyUSD = sumUSD
+				rec.AmountKHR = sumKHR
+				rec.ExpenseAmountKHR = sumKHR
+				rec.CurrencyKHR = sumKHR
+			}
+		}
+
 		rec.SyncAliases()
+		for i := range items {
+			items[i].SyncAliases()
+		}
 		return &models.SponsorshipWithItems{
 			SponsorshipRecord: rec,
 			Items:             items,
@@ -790,8 +862,36 @@ func (r *Repository) GetSponsorshipByID(id uuid.UUID) (*models.SponsorshipWithIt
 		Select("*", "exact", false).
 		Eq("record_id", id.String()).
 		ExecuteTo(&items)
-	if err != nil {
-		items = []models.SponsorshipItem{}
+	if err != nil || len(items) == 0 {
+		localSponsorshipLock.RLock()
+		localItems := localSponsorshipItems[id]
+		localSponsorshipLock.RUnlock()
+		if len(localItems) > 0 {
+			items = localItems
+		}
+	}
+
+	if targetZone != "" {
+		hadItems := len(items) > 0
+		var scoped []models.SponsorshipItem
+		var sumUSD float64
+		var sumKHR int64
+		for _, it := range items {
+			if strings.HasPrefix(it.ZoneCode, targetZone) {
+				scoped = append(scoped, it)
+				sumUSD += it.ExpenseAmountUSD
+				sumKHR += it.ExpenseAmountKHR
+			}
+		}
+		items = scoped
+		if hadItems {
+			rec.AmountUSD = sumUSD
+			rec.ExpenseAmountUSD = sumUSD
+			rec.CurrencyUSD = sumUSD
+			rec.AmountKHR = sumKHR
+			rec.ExpenseAmountKHR = sumKHR
+			rec.CurrencyKHR = sumKHR
+		}
 	}
 
 	rec.SyncAliases()
@@ -847,6 +947,8 @@ func (r *Repository) CreateSponsorship(rec *models.SponsorshipRecord, items []mo
 			createdItems[i] = models.SponsorshipItem{
 				ID:                uuid.New(),
 				RecordID:          rec.ID,
+				ZoneCode:          strings.TrimSpace(item.ZoneCode),
+				CreatedBy:         item.CreatedBy,
 				ItemName:          strings.TrimSpace(item.ItemName),
 				ItemQty:           item.ItemQty,
 				ItemUnit:          strings.TrimSpace(item.ItemUnit),
@@ -927,7 +1029,7 @@ func (r *Repository) CreateSponsorship(rec *models.SponsorshipRecord, items []mo
 	if len(createdItems) > 0 {
 		dbItems := make([]map[string]any, len(createdItems))
 		for i, item := range createdItems {
-			dbItems[i] = map[string]any{
+			dbItem := map[string]any{
 				"id":                item.ID.String(),
 				"record_id":         rec.ID.String(),
 				"item_name":         item.ItemName,
@@ -940,6 +1042,13 @@ func (r *Repository) CreateSponsorship(rec *models.SponsorshipRecord, items []mo
 				"item_notes":        item.ItemNotes,
 				"created_at":        item.CreatedAt.Format(time.RFC3339),
 			}
+			if item.ZoneCode != "" {
+				dbItem["zone_code"] = item.ZoneCode
+			}
+			if item.CreatedBy != nil && *item.CreatedBy != uuid.Nil {
+				dbItem["created_by"] = item.CreatedBy.String()
+			}
+			dbItems[i] = dbItem
 		}
 		if _, _, err := r.AdminClient.From("sponsorship_items").
 			Insert(dbItems, false, "", "", "").
@@ -961,7 +1070,7 @@ func (r *Repository) CreateSponsorship(rec *models.SponsorshipRecord, items []mo
 }
 
 // UpdateSponsorship updates an existing sponsorship record and its line items
-func (r *Repository) UpdateSponsorship(id uuid.UUID, rec *models.SponsorshipRecord, items []models.SponsorshipItemInput) (*models.SponsorshipWithItems, error) {
+func (r *Repository) UpdateSponsorship(id uuid.UUID, rec *models.SponsorshipRecord, items []models.SponsorshipItemInput, userZone ...string) (*models.SponsorshipWithItems, error) {
 	if id == uuid.Nil {
 		return nil, fmt.Errorf("invalid record_id: cannot update sponsorship without a valid record_id")
 	}
@@ -972,6 +1081,11 @@ func (r *Repository) UpdateSponsorship(id uuid.UUID, rec *models.SponsorshipReco
 	}
 	if rec.Status == "" {
 		rec.Status = "draft"
+	}
+
+	targetZone := ""
+	if len(userZone) > 0 {
+		targetZone = strings.TrimSpace(userZone[0])
 	}
 
 	var newItems []models.SponsorshipItem
@@ -991,9 +1105,16 @@ func (r *Repository) UpdateSponsorship(id uuid.UUID, rec *models.SponsorshipReco
 				khr = item.CashAllocationKHR
 			}
 
+			itemZone := strings.TrimSpace(item.ZoneCode)
+			if itemZone == "" && targetZone != "" {
+				itemZone = targetZone
+			}
+
 			newItems[i] = models.SponsorshipItem{
 				ID:                uuid.New(),
 				RecordID:          id,
+				ZoneCode:          itemZone,
+				CreatedBy:         item.CreatedBy,
 				ItemName:          strings.TrimSpace(item.ItemName),
 				ItemQty:           item.ItemQty,
 				ItemUnit:          strings.TrimSpace(item.ItemUnit),
@@ -1029,7 +1150,18 @@ func (r *Repository) UpdateSponsorship(id uuid.UUID, rec *models.SponsorshipReco
 		}
 	}
 	localSponsorshipRecords[id] = *rec
-	localSponsorshipItems[id] = newItems
+
+	if targetZone != "" {
+		var preservedItems []models.SponsorshipItem
+		for _, existingItem := range localSponsorshipItems[id] {
+			if !strings.HasPrefix(existingItem.ZoneCode, targetZone) {
+				preservedItems = append(preservedItems, existingItem)
+			}
+		}
+		localSponsorshipItems[id] = append(preservedItems, newItems...)
+	} else {
+		localSponsorshipItems[id] = newItems
+	}
 	localSponsorshipLock.Unlock()
 
 	usd := rec.ExpenseAmountUSD
@@ -1095,15 +1227,23 @@ func (r *Repository) UpdateSponsorship(id uuid.UUID, rec *models.SponsorshipReco
 	}
 
 	// Update items in Supabase
-	_, _, _ = r.AdminClient.From("sponsorship_items").
-		Delete("", "").
-		Eq("record_id", id.String()).
-		Execute()
+	if targetZone != "" {
+		_, _, _ = r.AdminClient.From("sponsorship_items").
+			Delete("", "").
+			Eq("record_id", id.String()).
+			Like("zone_code", targetZone+"%").
+			Execute()
+	} else {
+		_, _, _ = r.AdminClient.From("sponsorship_items").
+			Delete("", "").
+			Eq("record_id", id.String()).
+			Execute()
+	}
 
 	if len(newItems) > 0 {
 		dbItems := make([]map[string]any, len(newItems))
 		for i, item := range newItems {
-			dbItems[i] = map[string]any{
+			dbItem := map[string]any{
 				"id":                item.ID.String(),
 				"record_id":         id.String(),
 				"item_name":         item.ItemName,
@@ -1116,13 +1256,20 @@ func (r *Repository) UpdateSponsorship(id uuid.UUID, rec *models.SponsorshipReco
 				"item_notes":        item.ItemNotes,
 				"created_at":        item.CreatedAt.Format(time.RFC3339),
 			}
+			if item.ZoneCode != "" {
+				dbItem["zone_code"] = item.ZoneCode
+			}
+			if item.CreatedBy != nil && *item.CreatedBy != uuid.Nil {
+				dbItem["created_by"] = item.CreatedBy.String()
+			}
+			dbItems[i] = dbItem
 		}
 		_, _, _ = r.AdminClient.From("sponsorship_items").
 			Insert(dbItems, false, "", "", "").
 			Execute()
 	}
 
-	return r.GetSponsorshipByID(id)
+	return r.GetSponsorshipByID(id, targetZone)
 }
 
 // DeleteSponsorship deletes a record and cascades items
@@ -1227,10 +1374,15 @@ func (r *Repository) ApproveSponsorship(id uuid.UUID, approverID uuid.UUID, note
 }
 
 // GetSponsorshipSummary calculates master totals, group subtotals, and inventory roll-ups
-func (r *Repository) GetSponsorshipSummary(period string, section string) (*models.SponsorshipSummary, error) {
+func (r *Repository) GetSponsorshipSummary(period string, section string, zoneCode ...string) (*models.SponsorshipSummary, error) {
+	targetZone := ""
+	if len(zoneCode) > 0 {
+		targetZone = strings.TrimSpace(zoneCode[0])
+	}
 	params := models.SponsorshipFilterParams{
 		RecordPeriod: period,
 		SectionGroup: section,
+		ZoneCode:     targetZone,
 		Limit:        5000,
 	}
 

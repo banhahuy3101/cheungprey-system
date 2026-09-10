@@ -10,3 +10,5 @@ backend/app
 backend/api
 .DS_Store
 backend/scripts/
+backend/main
+backend/migrations/*backup*.json

@@ -153,12 +153,65 @@ func (h *SponsorshipHandler) DeletePeriod(c *gin.Context) {
 // LEVEL 2: SPONSORSHIP RECORDS HANDLERS
 // -----------------------------------------------------------------------------
 
+func getUserZoneAndRole(c *gin.Context) (string, models.UserRole, []models.UserRole) {
+	var userZone string
+	var role models.UserRole
+	var roles []models.UserRole
+
+	if profile, err := auth.GetProfile(c); err == nil && profile != nil {
+		if profile.ZoneCode != nil {
+			userZone = strings.TrimSpace(*profile.ZoneCode)
+		}
+		role = profile.Role
+		roles = profile.Roles
+	}
+	if role == "" {
+		if r, err := auth.GetUserRole(c); err == nil {
+			role = r
+		}
+	}
+	if len(roles) == 0 {
+		if rs, err := auth.GetUserRoles(c); err == nil {
+			roles = rs
+		}
+	}
+	return userZone, role, roles
+}
+
+func isDistrictLeaderOrAdmin(role models.UserRole, roles []models.UserRole) bool {
+	check := func(r models.UserRole) bool {
+		switch string(r) {
+		case "super_admin", "admin", "finance_officer", "province_chief",
+			"district_chief", "deputy_district_chief", "district_admin", "district_working_group":
+			return true
+		}
+		return false
+	}
+	if check(role) {
+		return true
+	}
+	for _, r := range roles {
+		if check(r) {
+			return true
+		}
+	}
+	return false
+}
+
 // List handles GET /api/sponsorships
 func (h *SponsorshipHandler) List(c *gin.Context) {
 	var params models.SponsorshipFilterParams
 	if err := c.ShouldBindQuery(&params); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid query parameters"})
 		return
+	}
+
+	userZone, role, roles := getUserZoneAndRole(c)
+	isDistrict := isDistrictLeaderOrAdmin(role, roles)
+
+	// Non-district users are automatically restricted to their own zone in background
+	if !isDistrict {
+		params.ZoneCode = userZone
 	}
 
 	records, total, err := h.repo.ListSponsorships(params)
@@ -184,7 +237,15 @@ func (h *SponsorshipHandler) GetByID(c *gin.Context) {
 		return
 	}
 
-	record, err := h.repo.GetSponsorshipByID(id)
+	userZone, role, roles := getUserZoneAndRole(c)
+	isDistrict := isDistrictLeaderOrAdmin(role, roles)
+
+	effectiveZone := ""
+	if !isDistrict {
+		effectiveZone = userZone
+	}
+
+	record, err := h.repo.GetSponsorshipByID(id, effectiveZone)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -249,9 +310,26 @@ func (h *SponsorshipHandler) Create(c *gin.Context) {
 		userID = &uid
 	}
 
+	userZone, role, roles := getUserZoneAndRole(c)
+	isDistrict := isDistrictLeaderOrAdmin(role, roles)
+
 	items := req.Items
 	if len(items) == 0 && len(req.InKindItems) > 0 {
 		items = req.InKindItems
+	}
+
+	// Auto-fill ZoneCode and CreatedBy in background for all items
+	for i := range items {
+		if !isDistrict || items[i].ZoneCode == "" {
+			if userZone != "" {
+				items[i].ZoneCode = userZone
+			} else {
+				items[i].ZoneCode = "0303"
+			}
+		}
+		if userID != nil {
+			items[i].CreatedBy = userID
+		}
 	}
 
 	entryNo := 0
@@ -356,9 +434,36 @@ func (h *SponsorshipHandler) Update(c *gin.Context) {
 		usage = strings.TrimSpace(req.AllocationPurpose)
 	}
 
+	var userID *uuid.UUID
+	if uid, err := auth.GetUserID(c); err == nil && uid != uuid.Nil {
+		userID = &uid
+	}
+
+	userZone, role, roles := getUserZoneAndRole(c)
+	isDistrict := isDistrictLeaderOrAdmin(role, roles)
+
+	effectiveZone := ""
+	if !isDistrict {
+		effectiveZone = userZone
+	}
+
 	items := req.Items
 	if len(items) == 0 && len(req.InKindItems) > 0 {
 		items = req.InKindItems
+	}
+
+	// Auto-fill ZoneCode and CreatedBy in background for all updated items
+	for i := range items {
+		if !isDistrict || items[i].ZoneCode == "" {
+			if userZone != "" {
+				items[i].ZoneCode = userZone
+			} else {
+				items[i].ZoneCode = "0303"
+			}
+		}
+		if userID != nil {
+			items[i].CreatedBy = userID
+		}
 	}
 
 	entryNo := 0
@@ -393,7 +498,7 @@ func (h *SponsorshipHandler) Update(c *gin.Context) {
 		Remarks:             strings.TrimSpace(req.Remarks),
 	}
 
-	updated, err := h.repo.UpdateSponsorship(id, &record, items)
+	updated, err := h.repo.UpdateSponsorship(id, &record, items, effectiveZone)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -409,6 +514,22 @@ func (h *SponsorshipHandler) Delete(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid UUID"})
 		return
+	}
+
+	userZone, role, roles := getUserZoneAndRole(c)
+	isDistrict := isDistrictLeaderOrAdmin(role, roles)
+
+	// Guard: Non-district users cannot delete shared records that contain other zones' items
+	if !isDistrict {
+		existing, _ := h.repo.GetSponsorshipByID(id)
+		if existing != nil {
+			for _, it := range existing.Items {
+				if userZone != "" && !strings.HasPrefix(it.ZoneCode, userZone) {
+					c.JSON(http.StatusForbidden, gin.H{"error": "Cannot delete sponsorship record containing items from other zones"})
+					return
+				}
+			}
+		}
 	}
 
 	if err := h.repo.DeleteSponsorship(id); err != nil {
@@ -504,7 +625,15 @@ func (h *SponsorshipHandler) GetSummary(c *gin.Context) {
 	period := c.Query("period")
 	section := c.Query("section")
 
-	summary, err := h.repo.GetSponsorshipSummary(period, section)
+	userZone, role, roles := getUserZoneAndRole(c)
+	isDistrict := isDistrictLeaderOrAdmin(role, roles)
+
+	zone := c.Query("zone_code")
+	if !isDistrict {
+		zone = userZone
+	}
+
+	summary, err := h.repo.GetSponsorshipSummary(period, section, zone)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

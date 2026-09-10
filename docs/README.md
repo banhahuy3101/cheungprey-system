@@ -17,6 +17,6 @@ District Management System.
 - **PDF:** Headless Chrome/Chromedp with Khmer Unicode font support
 - **Access control:** 8-role RBAC with 12 feature flags, multi-role support, merged permissions
 - **Ledger:** Double-entry bookkeeping, immutable audit trail, reversal entries only
-- **Deployment:** Render (Docker) + AWS ECS Fargate
+- **Deployment:** Render (Docker)
 
 For setup and run instructions, see [backend/README.md](../backend/README.md).

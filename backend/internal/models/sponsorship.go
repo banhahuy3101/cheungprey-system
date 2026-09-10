@@ -162,21 +162,23 @@ func (r *SponsorshipRecord) UnmarshalJSON(data []byte) error {
 
 // SponsorshipItem represents in-kind/material or breakdown item (Level 3)
 type SponsorshipItem struct {
-	ID                uuid.UUID `json:"id"`
-	RecordID          uuid.UUID `json:"record_id"`
-	ItemName          string    `json:"item_name"`
-	ItemQty           float64   `json:"item_qty"`
-	ItemUnit          string    `json:"item_unit"`
-	AmountUSD         float64   `json:"amount_usd"`
-	AmountKHR         int64     `json:"amount_khr"`
-	ExpenseAmountUSD  float64   `json:"expense_amount_usd"`
-	ExpenseAmountKHR  int64     `json:"expense_amount_khr"`
-	CashAllocationUSD float64   `json:"cash_allocation_usd"`
-	CashAllocationKHR int64     `json:"cash_allocation_khr"`
-	UsageDescription  string    `json:"usage_description,omitempty"`
-	Remarks           string    `json:"remarks,omitempty"`
-	ItemNotes         string    `json:"item_notes,omitempty"`
-	CreatedAt         time.Time `json:"created_at"`
+	ID                uuid.UUID  `json:"id"`
+	RecordID          uuid.UUID  `json:"record_id"`
+	ZoneCode          string     `json:"zone_code,omitempty"`
+	CreatedBy         *uuid.UUID `json:"created_by,omitempty"`
+	ItemName          string     `json:"item_name"`
+	ItemQty           float64    `json:"item_qty"`
+	ItemUnit          string     `json:"item_unit"`
+	AmountUSD         float64    `json:"amount_usd"`
+	AmountKHR         int64      `json:"amount_khr"`
+	ExpenseAmountUSD  float64    `json:"expense_amount_usd"`
+	ExpenseAmountKHR  int64      `json:"expense_amount_khr"`
+	CashAllocationUSD float64    `json:"cash_allocation_usd"`
+	CashAllocationKHR int64      `json:"cash_allocation_khr"`
+	UsageDescription  string     `json:"usage_description,omitempty"`
+	Remarks           string     `json:"remarks,omitempty"`
+	ItemNotes         string     `json:"item_notes,omitempty"`
+	CreatedAt         time.Time  `json:"created_at"`
 }
 
 func (s *SponsorshipItem) SyncAliases() {
@@ -224,18 +226,20 @@ func (s *SponsorshipItem) UnmarshalJSON(data []byte) error {
 }
 
 type SponsorshipItemInput struct {
-	ItemName          string  `json:"item_name" binding:"required"`
-	ItemQty           float64 `json:"item_qty" binding:"required"`
-	ItemUnit          string  `json:"item_unit" binding:"required"`
-	AmountUSD         float64 `json:"amount_usd"`
-	AmountKHR         int64   `json:"amount_khr"`
-	ExpenseAmountUSD  float64 `json:"expense_amount_usd"`
-	ExpenseAmountKHR  int64   `json:"expense_amount_khr"`
-	CashAllocationUSD float64 `json:"cash_allocation_usd"`
-	CashAllocationKHR int64   `json:"cash_allocation_khr"`
-	UsageDescription  string  `json:"usage_description"`
-	Remarks           string  `json:"remarks"`
-	ItemNotes         string  `json:"item_notes"`
+	ZoneCode          string     `json:"zone_code,omitempty"`
+	CreatedBy         *uuid.UUID `json:"created_by,omitempty"`
+	ItemName          string     `json:"item_name" binding:"required"`
+	ItemQty           float64    `json:"item_qty" binding:"required"`
+	ItemUnit          string     `json:"item_unit" binding:"required"`
+	AmountUSD         float64    `json:"amount_usd"`
+	AmountKHR         int64      `json:"amount_khr"`
+	ExpenseAmountUSD  float64    `json:"expense_amount_usd"`
+	ExpenseAmountKHR  int64      `json:"expense_amount_khr"`
+	CashAllocationUSD float64    `json:"cash_allocation_usd"`
+	CashAllocationKHR int64      `json:"cash_allocation_khr"`
+	UsageDescription  string     `json:"usage_description"`
+	Remarks           string     `json:"remarks"`
+	ItemNotes         string     `json:"item_notes"`
 }
 
 func (s *SponsorshipItemInput) UnmarshalJSON(data []byte) error {
@@ -359,6 +363,7 @@ type SponsorshipFilterParams struct {
 	RecordPeriod string `form:"record_period"`
 	Status       string `form:"status"`
 	Search       string `form:"search"`
+	ZoneCode     string `form:"zone_code"`
 	Page         int    `form:"page"`
 	Limit        int    `form:"limit"`
 }

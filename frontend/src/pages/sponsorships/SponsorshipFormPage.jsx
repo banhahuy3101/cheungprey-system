@@ -279,6 +279,9 @@ function SponsorshipFormContent() {
               const itKhr = it?.amount_khr ?? it?.expense_amount_khr ?? it?.cash_allocation_khr;
               const itLabel = it?.is_expense_label || it?.expense_label || "";
               return {
+                id: it?.id,
+                zone_code: it?.zone_code,
+                created_by: it?.created_by,
                 item_name: it?.item_name || "",
                 item_qty: it?.item_qty !== undefined && it?.item_qty !== null && Number(it?.item_qty) !== 0 ? String(it.item_qty) : "",
                 item_unit: it?.item_unit || "",

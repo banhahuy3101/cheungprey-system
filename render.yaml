@@ -1,7 +1,5 @@
 # Render Blueprint — sync from repo or copy routes/env into the dashboard manually.
 #
-# Frontend on Render (HTTPS) cannot call AWS ECS (HTTP) directly — browsers block mixed content.
-# Option A (static site): VITE_API_URL=/api + rewrite /api/* → AWS (see cheung-prey-system routes).
 # Option B (Docker web): nginx proxies /api using API_UPSTREAM env (no dashboard rewrite needed).
 
 services:

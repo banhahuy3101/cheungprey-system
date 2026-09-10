@@ -167,6 +167,9 @@ export function validateSponsorshipPayload(form, items = []) {
       const usd = parseNumericInput(it.amount_usd !== undefined && it.amount_usd !== "" ? it.amount_usd : it.expense_amount_usd !== undefined && it.expense_amount_usd !== "" ? it.expense_amount_usd : it.cash_allocation_usd, false);
       const khr = parseNumericInput(it.amount_khr !== undefined && it.amount_khr !== "" ? it.amount_khr : it.expense_amount_khr !== undefined && it.expense_amount_khr !== "" ? it.expense_amount_khr : it.cash_allocation_khr, true);
       return {
+        ...(it.id ? { id: it.id } : {}),
+        ...(it.zone_code ? { zone_code: it.zone_code } : {}),
+        ...(it.created_by ? { created_by: it.created_by } : {}),
         item_name: normalizeKhmerText(it.item_name),
         item_qty: parseNumericInput(it.item_qty, false) || 1,
         item_unit: normalizeKhmerText(it.item_unit),
