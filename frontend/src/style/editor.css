@@ -476,8 +476,6 @@ th[data-cell-border-width="0"] {
   width: 100%;
 }
 
-
-
 /* ===== Lexical Word Editor — A4 Sheet Table & Content Styles ===== */
 .word-a4-sheet table {
   width: 100%;
@@ -518,11 +516,35 @@ th[data-cell-border-width="0"] {
 }
 
 /* Heading styles */
-.word-a4-sheet h1 { font-size: 1.85rem; margin: 1.25rem 0 0.5rem; font-weight: 700; }
-.word-a4-sheet h2 { font-size: 1.45rem; margin: 1rem 0 0.4rem; font-weight: 700; }
-.word-a4-sheet h3 { font-size: 1.2rem; margin: 0.85rem 0 0.35rem; font-weight: 600; }
-.word-a4-sheet h4 { font-size: 1.05rem; margin: 0.75rem 0 0.3rem; font-weight: 600; }
-.word-a4-sheet h5 { font-size: 0.95rem; margin: 0.65rem 0 0.25rem; font-weight: 600; }
+.word-a4-sheet h1 {
+  font-size: 1.85rem;
+  margin: 1.25rem 0 0.5rem;
+  font-weight: 700;
+}
+
+.word-a4-sheet h2 {
+  font-size: 1.45rem;
+  margin: 1rem 0 0.4rem;
+  font-weight: 700;
+}
+
+.word-a4-sheet h3 {
+  font-size: 1.2rem;
+  margin: 0.85rem 0 0.35rem;
+  font-weight: 600;
+}
+
+.word-a4-sheet h4 {
+  font-size: 1.05rem;
+  margin: 0.75rem 0 0.3rem;
+  font-weight: 600;
+}
+
+.word-a4-sheet h5 {
+  font-size: 0.95rem;
+  margin: 0.65rem 0 0.25rem;
+  font-weight: 600;
+}
 
 /* List styles */
 .word-a4-sheet ul,
@@ -575,4 +597,68 @@ th[data-cell-border-width="0"] {
 .word-a4-sheet a {
   color: #2563eb;
   text-decoration: underline;
+}
+
+/* Page Break styling in editor & print */
+.word-a4-sheet .word-page-break,
+.word-a4-sheet [data-page-break="true"] {
+  display: block;
+  width: 100%;
+  border: none;
+  border-top: 2px dashed #94a3b8;
+  margin: 2rem 0;
+  position: relative;
+  page-break-after: always;
+}
+
+.word-a4-sheet .word-page-break::after {
+  content: "— Page Break (បំបែកទំព័រ) —";
+  display: block;
+  text-align: center;
+  font-size: 0.75rem;
+  color: #94a3b8;
+  font-weight: 600;
+  margin-top: 0.35rem;
+}
+
+@media print {
+
+  .word-ribbon-container,
+  .text-editor-toolbar,
+  .watermark-overlay,
+  .btn,
+  .btn-icon {
+    display: none !important;
+  }
+
+  .text-editor,
+  .text-editor-word-app {
+    border: none !important;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+
+  .word-paper-canvas {
+    padding: 0 !important;
+    background: transparent !important;
+  }
+
+  .word-a4-sheet {
+    width: 100% !important;
+    max-width: 100% !important;
+    box-shadow: none !important;
+    border: none !important;
+    padding: 0 !important;
+    min-height: auto !important;
+  }
+
+  .word-page-break,
+  .word-a4-sheet [data-page-break="true"] {
+    page-break-after: always !important;
+    border: none !important;
+  }
+
+  .word-page-break::after {
+    display: none !important;
+  }
 }
