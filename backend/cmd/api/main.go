@@ -419,11 +419,31 @@ func main() {
 				fms.GET("/audit", auth.RequireFeatureAction(models.FeatureFinances, "read"), fmsHandler.ListFMSAuditLog)
 			}
 
-			// Sponsorships & Appendix Module (តារាងឧបសម្ព័ន្ធ ថវិកា សម្ភារ)
+			// Sponsorship Periods (Level 1 Master Periods)
+			sponsorshipPeriods := protected.Group("/sponsorship-periods")
+			sponsorshipPeriods.Use(moduleEnabled(repo, "sponsorships"))
+			sponsorshipPeriods.Use(auth.RequireFeature(models.FeatureSponsorships))
+			{
+				sponsorshipPeriods.GET("", auth.RequireFeatureAction(models.FeatureSponsorships, "read"), sponsorshipHandler.ListPeriods)
+				sponsorshipPeriods.GET("/:id", auth.RequireFeatureAction(models.FeatureSponsorships, "read"), sponsorshipHandler.GetPeriodByID)
+				sponsorshipPeriods.POST("", auth.RequireFeatureAction(models.FeatureSponsorships, "create"), sponsorshipHandler.CreatePeriod)
+				sponsorshipPeriods.PUT("/:id", auth.RequireFeatureAction(models.FeatureSponsorships, "update"), sponsorshipHandler.UpdatePeriod)
+				sponsorshipPeriods.POST("/:id/consolidate", auth.RequireFeatureAction(models.FeatureSponsorships, "create"), sponsorshipHandler.ConsolidatePeriod)
+				sponsorshipPeriods.DELETE("/:id", auth.RequireFeatureAction(models.FeatureSponsorships, "delete"), sponsorshipHandler.DeletePeriod)
+			}
+
+			// Sponsorships & Appendix Module (Level 2 Records & Items)
 			sponsorships := protected.Group("/sponsorships")
 			sponsorships.Use(moduleEnabled(repo, "sponsorships"))
 			sponsorships.Use(auth.RequireFeature(models.FeatureSponsorships))
 			{
+				sponsorships.GET("/periods", auth.RequireFeatureAction(models.FeatureSponsorships, "read"), sponsorshipHandler.ListPeriods)
+				sponsorships.GET("/periods/:id", auth.RequireFeatureAction(models.FeatureSponsorships, "read"), sponsorshipHandler.GetPeriodByID)
+				sponsorships.POST("/periods", auth.RequireFeatureAction(models.FeatureSponsorships, "create"), sponsorshipHandler.CreatePeriod)
+				sponsorships.PUT("/periods/:id", auth.RequireFeatureAction(models.FeatureSponsorships, "update"), sponsorshipHandler.UpdatePeriod)
+				sponsorships.POST("/periods/:id/consolidate", auth.RequireFeatureAction(models.FeatureSponsorships, "create"), sponsorshipHandler.ConsolidatePeriod)
+				sponsorships.DELETE("/periods/:id", auth.RequireFeatureAction(models.FeatureSponsorships, "delete"), sponsorshipHandler.DeletePeriod)
+
 				sponsorships.GET("", auth.RequireFeatureAction(models.FeatureSponsorships, "read"), sponsorshipHandler.List)
 				sponsorships.GET("/summary", auth.RequireFeatureAction(models.FeatureSponsorships, "read"), sponsorshipHandler.GetSummary)
 				sponsorships.GET("/:id", auth.RequireFeatureAction(models.FeatureSponsorships, "read"), sponsorshipHandler.GetByID)

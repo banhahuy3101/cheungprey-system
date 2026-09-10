@@ -56,7 +56,6 @@ export const COMMON_MATERIALS = [
 ];
 
 export const COMMON_SECTION_GROUPS = [
-  "ទូទៅ",
   "ថ្នាក់ដឹកនាំ",
   "ក្រុមការងារ",
   "សប្បុរសជន",
@@ -167,8 +166,6 @@ export function validateSponsorshipPayload(form, items = []) {
       }
       const usd = parseNumericInput(it.amount_usd !== undefined && it.amount_usd !== "" ? it.amount_usd : it.expense_amount_usd !== undefined && it.expense_amount_usd !== "" ? it.expense_amount_usd : it.cash_allocation_usd, false);
       const khr = parseNumericInput(it.amount_khr !== undefined && it.amount_khr !== "" ? it.amount_khr : it.expense_amount_khr !== undefined && it.expense_amount_khr !== "" ? it.expense_amount_khr : it.cash_allocation_khr, true);
-      const expenseLabel = normalizeKhmerText(it.is_expense_label || it.expense_label || "");
-
       return {
         item_name: normalizeKhmerText(it.item_name),
         item_qty: parseNumericInput(it.item_qty, false) || 1,
@@ -181,8 +178,6 @@ export function validateSponsorshipPayload(form, items = []) {
         cash_allocation_usd: usd,
         currency_khr: khr,
         cash_allocation_khr: khr,
-        is_expense_label: expenseLabel,
-        expense_label: expenseLabel,
         usage_description: usageDesc,
         remarks: remarkDesc,
         item_notes: notes,
@@ -226,14 +221,14 @@ export function validateSponsorshipPayload(form, items = []) {
       fiscal_year: fiscalYear,
       entry_classification: "sponsorship",
       category: "sponsorship",
-      section_group: normalizeKhmerText(form.section_group) || "ទូទៅ",
+      section_group: normalizeKhmerText(form.section_group) || "",
       is_expense_total: Boolean(form.is_expense_total),
       is_expense_label: expenseLabel,
       expense_label: expenseLabel,
       contributor_name: contributor,
       donor_name: contributor,
       representatives: normalizeKhmerText(form.representatives),
-      record_period: normalizeKhmerText(form.record_period) || "ប្រចាំឆ្នាំ ២០២៥",
+      record_period: normalizeKhmerText(form.record_period) || "",
       expense_amount_usd: usdVal,
       amount_usd: usdVal,
       currency_usd: usdVal,
@@ -253,8 +248,17 @@ export function validateSponsorshipPayload(form, items = []) {
  * Group records by section group (if present)
  */
 export function groupSponsorshipsBySection(records = []) {
-  return records.reduce((acc, rec) => {
-    const key = rec.section_group || "បញ្ជីការឧបត្ថម្ភ";
+  const sorted = [...records].sort((a, b) => {
+    const noA = Number(a.entry_no) || Number(a.record_id) || 0;
+    const noB = Number(b.entry_no) || Number(b.record_id) || 0;
+    if (noA && noB && noA !== noB) return noA - noB;
+    if (noA && !noB) return -1;
+    if (!noA && noB) return 1;
+    return new Date(a.created_at || 0) - new Date(b.created_at || 0);
+  });
+
+  return sorted.reduce((acc, rec) => {
+    const key = (rec.section_group && rec.section_group.trim()) ? rec.section_group.trim() : "";
     if (!acc[key]) acc[key] = [];
     acc[key].push(rec);
     return acc;
@@ -269,8 +273,14 @@ export function calculateSponsorshipTotals(records = []) {
   let totalKHR = 0;
 
   records.forEach((rec) => {
-    totalUSD += Number(rec.expense_amount_usd) || Number(rec.amount_usd) || Number(rec.currency_usd) || 0;
-    totalKHR += Number(rec.expense_amount_khr) || Number(rec.amount_khr) || Number(rec.currency_khr) || 0;
+    const recUsd = Number(rec.expense_amount_usd) || Number(rec.amount_usd) || Number(rec.currency_usd) || 0;
+    const recKhr = Number(rec.expense_amount_khr) || Number(rec.amount_khr) || Number(rec.currency_khr) || 0;
+    const items = rec.items || rec.in_kind_items || [];
+    const itemsUsd = items.reduce((sum, it) => sum + (Number(it.amount_usd) || Number(it.expense_amount_usd) || Number(it.cash_allocation_usd) || 0), 0);
+    const itemsKhr = items.reduce((sum, it) => sum + (Number(it.amount_khr) || Number(it.expense_amount_khr) || Number(it.cash_allocation_khr) || 0), 0);
+
+    totalUSD += recUsd > 0 ? recUsd : itemsUsd;
+    totalKHR += recKhr > 0 ? recKhr : itemsKhr;
   });
 
   return {

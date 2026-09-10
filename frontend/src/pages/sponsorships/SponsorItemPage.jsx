@@ -9,35 +9,39 @@ import {
   LuTrash2,
   LuSearch,
   LuCalendar,
+  LuLayers,
 } from "react-icons/lu";
 import { SponsorshipProvider, useSponsorships } from "../../context/SponsorshipContext";
 import { sponsorshipAPI } from "../../api/sponsorship";
 import { useAuth } from "../../hooks/useAuth";
+import { useToast } from "../../components/Toast";
 import { canAccess, FEATURES, isAdmin } from "../../utils/permissions";
-import { toKhmerDigits } from "../../utils/khmerNumberSpelling";
+import { toKhmerDigits, toKhmerDigitsInText } from "../../utils/khmerNumberSpelling";
 import { calculateSponsorshipTotals } from "../../utils/sponsorshipUtils";
 import PageHeader from "../../components/PageHeader";
+import FormInput from "../../components/FormInput";
+import Pagination from "../../components/Pagination";
 import "../../style/sponsorships.css";
-
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function SponsorItemContent() {
   const { user } = useAuth();
+  const toast = useToast();
   const navigate = useNavigate();
-  const { id } = useParams(); // URL parameter: e.g. /sponsorships/items/:id
+  const { id } = useParams(); // URL parameter: periodId
 
   const {
-    records,
-    loading,
-    filters,
-    setFilters,
+    periods,
     deleteRecord,
     fetchSponsorships,
   } = useSponsorships();
 
-  useEffect(() => {
-    fetchSponsorships?.();
-  }, [fetchSponsorships]);
+  const [period, setPeriod] = useState(null);
+  const [periodRecords, setPeriodRecords] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [consolidating, setConsolidating] = useState(false);
+  const [search, setSearch] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
 
   const canCreate =
     canAccess(user, FEATURES.sponsorships_create) ||
@@ -55,162 +59,53 @@ function SponsorItemContent() {
     canAccess(user, FEATURES.sponsorships) ||
     isAdmin(user);
 
-  // Clean up any legacy localStorage periods
-  useEffect(() => {
+  // Fetch Period and its records from API
+  const loadPeriodData = async () => {
+    if (!id) return;
     try {
-      localStorage.removeItem("cheungprey_custom_periods");
-    } catch {
-      // ignore
-    }
-  }, []);
+      setLoading(true);
 
-  // Fetch the main sponsorship record by ID from the API (GET /sponsorships/:id)
-  const decodedId = id ? decodeURIComponent(id) : null;
-  const isUuidId = Boolean(decodedId && UUID_RE.test(decodedId));
-  const [idRecord, setIdRecord] = useState(null);
+      const [periodRes, recsRes] = await Promise.all([
+        sponsorshipAPI.getPeriodByID(id).catch(() => null),
+        sponsorshipAPI.list({ period_id: id, limit: 1000 }).catch(() => ({ data: { data: [] } })),
+      ]);
+
+      if (periodRes?.data?.data) {
+        setPeriod(periodRes.data.data);
+      }
+      setPeriodRecords(recsRes.data?.data || []);
+    } catch (err) {
+      console.error("loadPeriodData error:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    if (!isUuidId) return undefined;
-    let cancelled = false;
-    sponsorshipAPI
-      .getByID(decodedId)
-      .then((res) => {
-        if (!cancelled) setIdRecord(res.data?.data || null);
-      })
-      .catch((err) => {
-        console.warn("Sponsorship getByID warning:", err);
-        if (!cancelled) setIdRecord(null);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [decodedId, isUuidId]);
+    loadPeriodData();
+  }, [id]);
 
-  // Group database records dynamically from API records ONLY
-  const mainSponsors = useMemo(() => {
-    const periodMap = new Map();
-
-    records.forEach((r) => {
-      const periodName = r.record_period || (r.fiscal_year ? `ប្រចាំឆ្នាំ ${r.fiscal_year}` : "ការឧបត្ថម្ភទូទៅ");
-      if (!periodMap.has(periodName)) {
-        periodMap.set(periodName, {
-          id: r.id, // Purely from API DB UUID
-          name: periodName,
-          year: String(r.fiscal_year || new Date().getFullYear()),
-          period_type: r.period_type || "year",
-          records: [],
-        });
-      }
-      periodMap.get(periodName).records.push(r);
+  const sortedRecords = useMemo(() => {
+    return [...periodRecords].sort((a, b) => {
+      const noA = Number(a.entry_no) || Number(a.record_id) || 0;
+      const noB = Number(b.entry_no) || Number(b.record_id) || 0;
+      if (noA && noB && noA !== noB) return noA - noB;
+      if (noA && !noB) return -1;
+      if (!noA && noB) return 1;
+      return new Date(a.created_at || 0) - new Date(b.created_at || 0);
     });
+  }, [periodRecords]);
 
-    return Array.from(periodMap.values());
-  }, [records]);
-
-  // Determine active main sponsor: primary source is the record fetched by ID from the API
-  const activeMainSponsor = useMemo(() => {
-    if (!id) return null;
-    const decodedId = decodeURIComponent(id);
-
-    if (idRecord && String(idRecord.id) === String(decodedId)) {
-      const pName =
-        idRecord.record_period ||
-        (idRecord.fiscal_year ? `ប្រចាំឆ្នាំ ${idRecord.fiscal_year}` : "ការឧបត្ថម្ភទូទៅ");
-      return {
-        id: idRecord.id,
-        name: pName,
-        year: String(idRecord.fiscal_year || new Date().getFullYear()),
-        period_type: idRecord.period_type || "year",
-        records: records.filter(
-          (r) =>
-            r.record_period === pName ||
-            r.record_period === decodedId ||
-            String(r.id) === String(decodedId) ||
-            (!r.record_period && String(r.fiscal_year) === String(idRecord.fiscal_year))
-        ),
-      };
-    }
-
-    // Fallback: match against list records (non-UUID ids such as period name or index)
-    // Check direct DB record ID match from API
-    const directDbRecord = records.find((r) => String(r.id) === String(id) || String(r.id) === decodedId);
-    if (directDbRecord) {
-      const pName = directDbRecord.record_period || (directDbRecord.fiscal_year ? `ប្រចាំឆ្នាំ ${directDbRecord.fiscal_year}` : "ការឧបត្ថម្ភទូទៅ");
-      return (
-        mainSponsors.find((m) => m.name === pName) || {
-          id: directDbRecord.id,
-          name: pName,
-          year: String(directDbRecord.fiscal_year || new Date().getFullYear()),
-          period_type: directDbRecord.period_type || "year",
-          records: records.filter(
-            (r) =>
-              r.record_period === pName ||
-              r.record_period === decodedId ||
-              String(r.id) === String(decodedId) ||
-              (!r.record_period && String(r.fiscal_year) === String(directDbRecord.fiscal_year))
-          ),
-        }
-      );
-    }
-
-    return (
-      mainSponsors.find((m) => String(m.id) === String(id) || m.name === decodedId) ||
-      (Number(id) > 0 && Number(id) <= mainSponsors.length ? mainSponsors[Number(id) - 1] : null) ||
-      {
-        id: id,
-        name: decodedId,
-        year: String(new Date().getFullYear()),
-        period_type: "custom",
-        records: records.filter(
-          (r) =>
-            r.record_period === decodedId ||
-            r.record_period === String(id) ||
-            String(r.id) === String(id)
-        ),
-      }
-    );
-  }, [id, idRecord, mainSponsors, records]);
-
-  // Line items under this main sponsor
-  const lineItems = useMemo(() => {
-    let list = records;
-    if (activeMainSponsor) {
-      const pName = activeMainSponsor.name;
-      const pYear = String(activeMainSponsor.year || "");
-      const targetId = String(id || "").toLowerCase();
-      const decodedTargetId = decodedId ? String(decodedId).toLowerCase() : "";
-      const idRecPeriod = idRecord?.record_period || "";
-      const idRecYear = idRecord?.fiscal_year ? String(idRecord.fiscal_year) : "";
-
-      list = records.filter((r) => {
-        const rPeriod = r.record_period || "";
-        const rYear = String(r.fiscal_year || "");
-        const rId = String(r.id || "").toLowerCase();
-
-        // 1. Direct period name match
-        if (rPeriod && rPeriod === pName) return true;
-        // 2. Direct ID / UUID match as period or record
-        if (rPeriod && (rPeriod.toLowerCase() === targetId || rPeriod.toLowerCase() === decodedTargetId)) return true;
-        if (rId && (rId === targetId || rId === decodedTargetId)) return true;
-        // 3. Match by idRecord's period
-        if (rPeriod && idRecPeriod && rPeriod === idRecPeriod) return true;
-        // 4. Fallback fiscal year matching if period is empty
-        if (!rPeriod && pYear && rYear === pYear) return true;
-        if (!rPeriod && idRecYear && rYear === idRecYear) return true;
-        if (!rPeriod && pName && pName.includes(rYear)) return true;
-
-        return false;
-      });
-    }
-
-    if (!filters.search) return list;
-    const term = filters.search.toLowerCase();
-    return list.filter((r) => {
-      const name = (r.contributor_name || r.donor_name || "").toLowerCase();
-      const rep = (r.representatives || "").toLowerCase();
-      const usage = (r.usage_description || r.allocation_purpose || "").toLowerCase();
-      const remarks = (r.remarks || "").toLowerCase();
-      const itemsText = (r.items || []).map((it) => it.item_name).join(" ").toLowerCase();
+  const filteredRecords = useMemo(() => {
+    if (!search) return sortedRecords;
+    const term = search.replace(/\s+/g, "").toLowerCase();
+    const normalize = (str) => (str || "").replace(/\s+/g, "").toLowerCase();
+    return sortedRecords.filter((r) => {
+      const name = normalize(r.contributor_name || r.donor_name);
+      const rep = normalize(r.representatives);
+      const usage = normalize(r.usage_description || r.allocation_purpose);
+      const remarks = normalize(r.remarks);
+      const itemsText = normalize((r.items || []).map((it) => it.item_name).join(""));
       return (
         name.includes(term) ||
         rep.includes(term) ||
@@ -219,58 +114,93 @@ function SponsorItemContent() {
         itemsText.includes(term)
       );
     });
-  }, [records, activeMainSponsor, id, decodedId, idRecord, filters.search]);
+  }, [sortedRecords, search]);
 
-  const totals = calculateSponsorshipTotals(lineItems);
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, pageSize]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredRecords.length / pageSize));
+  const paginatedRecords = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredRecords.slice(start, start + pageSize);
+  }, [filteredRecords, currentPage, pageSize]);
+
+  const totals = calculateSponsorshipTotals(filteredRecords);
+
+  const handleDeleteRecord = async (recordId) => {
+    await deleteRecord(recordId);
+    loadPeriodData();
+  };
+
+  const handleConsolidate = async () => {
+    if (!id) return;
+    try {
+      setConsolidating(true);
+      const res = await sponsorshipAPI.consolidatePeriod(id);
+      const mergedCount = res?.data?.merged_count ?? 0;
+      toast?.success?.(
+        `បានប្រមូលផ្តុំទិន្នន័យដោយជោគជ័យ (សរុប ${toKhmerDigits(mergedCount)} អ្នកឧបត្ថម្ភ)`
+      );
+      await loadPeriodData();
+    } catch (err) {
+      console.error("Consolidation error:", err);
+      toast?.error?.(err.response?.data?.error || "មិនអាចប្រមូលផ្តុំទិន្នន័យបានទេ");
+    } finally {
+      setConsolidating(false);
+    }
+  };
 
   const openAppendixReport = () => {
-    if (activeMainSponsor) {
-      navigate(`/sponsorships/appendix?period=${encodeURIComponent(activeMainSponsor.name)}`);
+    if (period) {
+      navigate(`/sponsorships/appendix?period_id=${period.id}&period=${encodeURIComponent(period.period_name)}`);
     } else {
       navigate("/sponsorships/appendix");
     }
   };
 
+  const isConsolidatable = period?.period_type === "year" || period?.period_type === "semester";
+
   return (
     <div className="page sponsorship-page">
       {/* Standard Reusable PageHeader Component */}
       <PageHeader
-        title={activeMainSponsor?.name || `តារាងឧបត្ថម្ភ #${id}`}
+        title={period?.period_name || "តារាងឧបត្ថម្ភលម្អិត"}
         subtitle="តារាងតាមដានការឧបត្ថម្ភថវិកា និងសម្ភារលម្អិត (៧ ជួរឈរផ្លូវការ)"
         showBack={() => navigate("/sponsorships")}
         backText="ត្រឡប់ទៅបញ្ជីតារាងមេ"
         breadcrumbs={[
           { label: "ផ្ទាំងគ្រប់គ្រង", path: "/dashboard" },
           { label: "ការឧបត្ថម្ភ", path: "/sponsorships" },
-          { label: activeMainSponsor?.name || `តារាងឧបត្ថម្ភ #${id}` },
+          { label: period?.period_name || "តារាងលម្អិត" },
         ]}
         badge={
-          activeMainSponsor?.year ? (
-            <span
-              style={{
-                fontSize: "0.8rem",
-                background: "#f1f5f9",
-                padding: "0.2rem 0.6rem",
-                borderRadius: "6px",
-                fontWeight: "600",
-                color: "#334155",
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "0.3rem",
-              }}
-            >
+          period?.fiscal_year ? (
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 text-xs font-semibold rounded-full bg-sky-100 text-sky-800">
               <LuCalendar size={13} />
-              <span>ឆ្នាំ {toKhmerDigits(activeMainSponsor.year)}</span>
+              <span>ឆ្នាំ {toKhmerDigits(period.fiscal_year, false)}</span>
             </span>
           ) : null
         }
         actions={
-          <>
+          <div className="flex items-center gap-2">
+            {isConsolidatable && canCreate && (
+              <button
+                type="button"
+                className="btn btn-secondary flex items-center gap-1.5 font-medium border-indigo-200 text-indigo-700 bg-indigo-50/70 hover:bg-indigo-100"
+                onClick={handleConsolidate}
+                disabled={consolidating}
+                title="ប្រមូលផ្តុំទិន្នន័យពីខែផ្សេងៗក្នុងឆ្នាំនេះ"
+              >
+                <LuLayers size={16} className={consolidating ? "animate-spin" : "text-indigo-600"} />
+                <span>{consolidating ? "កំពុងប្រមូលផ្តុំ..." : "ប្រមូលផ្តុំទិន្នន័យ"}</span>
+              </button>
+            )}
+
             <button
               type="button"
-              className="btn btn-secondary"
+              className="btn btn-secondary flex items-center gap-1.5 font-medium"
               onClick={openAppendixReport}
-              style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}
             >
               <LuPrinter size={16} />
               <span>បោះពុម្ពតារាង (Print)</span>
@@ -279,40 +209,44 @@ function SponsorItemContent() {
             {canCreate && (
               <button
                 type="button"
-                className="btn btn-primary"
+                className="btn btn-primary flex items-center gap-1.5 font-semibold"
                 onClick={() => navigate(`/sponsorships/items/${id}/create`)}
-                style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontWeight: "600" }}
               >
                 <LuPlus size={18} />
-                <span>បញ្ចូលអ្នកឧបត្ថម្ភ</span>
+                <span>បន្ថែមអ្នកឧបត្ថម្ភ</span>
               </button>
             )}
-          </>
+          </div>
         }
       />
 
+      {/* KPI Cards */}
       <div className="sponsorship-kpi-grid">
         <div className="sponsorship-kpi-card">
           <div className="sponsorship-kpi-icon usd">
             <LuDollarSign />
           </div>
           <div>
-            <span className="sponsorship-kpi-value">
-              {toKhmerDigits(totals.totalUSD)} $
+            <span className="sponsorship-kpi-label">ថវិកាសរុបជាដុល្លារ ($ USD)</span>
+            <span className="sponsorship-kpi-value" style={{ color: "#059669" }}>
+              {(totals.totalUSD || Number(period?.total_usd) || 0) > 0
+                ? `${toKhmerDigits(totals.totalUSD || Number(period?.total_usd) || 0)} $`
+                : "០.០០ $"}
             </span>
-            <span className="sponsorship-kpi-label">ថវិកាសរុបជាប្រាក់ដុល្លារ (USD)</span>
           </div>
         </div>
 
         <div className="sponsorship-kpi-card">
           <div className="sponsorship-kpi-icon khr">
-            <span>៛</span>
+            <LuDollarSign />
           </div>
           <div>
-            <span className="sponsorship-kpi-value">
-              {toKhmerDigits(totals.totalKHR)} ៛
+            <span className="sponsorship-kpi-label">ថវិកាសរុបជារៀល (៛ KHR)</span>
+            <span className="sponsorship-kpi-value" style={{ color: "#2563eb" }}>
+              {(totals.totalKHR || Number(period?.total_khr) || 0) > 0
+                ? `${toKhmerDigits(totals.totalKHR || Number(period?.total_khr) || 0)} ៛`
+                : "០ ៛"}
             </span>
-            <span className="sponsorship-kpi-label">ថវិកាសរុបជាប្រាក់រៀល (KHR)</span>
           </div>
         </div>
 
@@ -321,164 +255,144 @@ function SponsorItemContent() {
             <LuPackage />
           </div>
           <div>
-            <span className="sponsorship-kpi-value">
-              {toKhmerDigits(totals.totalRecords)} នាក់
+            <span className="sponsorship-kpi-label">ចំនួនអ្នកឧបត្ថម្ភ</span>
+            <span className="sponsorship-kpi-value" style={{ color: "#7c3aed" }}>
+              {toKhmerDigits(filteredRecords.length > 0 ? filteredRecords.length : (period?.records_count || 0))} នាក់
             </span>
-            <span className="sponsorship-kpi-label">ចំនួនអ្នកឧបត្ថម្ភសរុប</span>
           </div>
         </div>
       </div>
 
-      <div className="sponsorship-filters-card" style={{ padding: "0.75rem 1rem" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-          <LuSearch size={18} color="#64748b" />
-          <input
-            type="text"
-            className="form-control"
-            placeholder="ស្វែងរកតាមឈ្មោះអ្នកឧបត្ថម្ភ, តាមរយៈ, សម្ភារ, ទីកន្លែងទទួល..."
-            value={filters.search || ""}
-            onChange={(e) => setFilters({ ...filters, search: e.target.value })}
-            style={{ border: "none", boxShadow: "none", padding: "0.35rem 0.5rem" }}
+      {/* Search Bar */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "1rem", marginBottom: "1rem", flexWrap: "wrap" }}>
+        <div style={{ width: "100%", maxWidth: "340px" }}>
+          <FormInput
+            leadIcon={<LuSearch size={16} />}
+            placeholder="ស្វែងរកតាមឈ្មោះ, គោលបំណង..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value.replace(/\s+/g, ""))}
           />
-          {filters.search && (
-            <button
-              type="button"
-              className="btn btn-sm btn-light"
-              onClick={() => setFilters({ ...filters, search: "" })}
-            >
-              សម្អាត
-            </button>
-          )}
         </div>
       </div>
 
-      <div className="card" style={{ overflow: "hidden", border: "1px solid #e2e8f0" }}>
-        <div className="table-responsive">
-          <table className="table" style={{ margin: 0 }}>
+      {/* Detail Table */}
+      <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+        <div className="table-responsive" style={{ border: "none", borderRadius: 0, minHeight: "480px" }}>
+          <table className="table" style={{ margin: 0, width: "100%" }}>
             <thead>
-              <tr style={{ background: "#f8fafc" }}>
-                <th style={{ width: "5%", textAlign: "center" }}>ល.រ</th>
-                <th style={{ width: "20%" }}>គោត្តនាម និង នាម</th>
-                <th style={{ width: "18%" }}>សម្ភារ / ឯកតា</th>
-                <th style={{ width: "11%", textAlign: "right" }}>ថវិកា - ដុល្លារ</th>
-                <th style={{ width: "11%", textAlign: "right" }}>ថវិកា - រៀល</th>
-                <th style={{ width: "17%" }}>ទីកន្លែងទទួល និង ប្រើប្រាស់</th>
-                <th style={{ width: "11%" }}>ផ្សេងៗ (Remarks)</th>
-                <th style={{ width: "7%", textAlign: "center" }}>សកម្មភាព</th>
+              <tr className="bg-slate-50 border-b border-slate-200 text-slate-700 text-xs font-semibold uppercase">
+                <th className="w-[4%] text-center py-3 px-3">ល.រ</th>
+                <th className="w-[20%] py-3 px-3">ឈ្មោះអ្នកឧបត្ថម្ភ</th>
+                <th className="w-[10%] text-right py-3 px-3">ថវិកា ($ USD)</th>
+                <th className="w-[11%] text-right py-3 px-3">ថវិកា (៛ KHR)</th>
+                <th className="w-[15%] py-3 px-3">សម្ភារឧបត្ថម្ភ</th>
+                <th className="w-[30%] py-3 px-3">គោលបំណង និង ទីកន្លែងប្រើប្រាស់</th>
+                <th className="w-[10%] text-center py-3 px-3">សកម្មភាព</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-slate-100">
               {loading ? (
                 <tr>
-                  <td colSpan={8} style={{ textAlign: "center", padding: "2.5rem", color: "#64748b" }}>
-                    <div style={{ display: "inline-flex", alignItems: "center", gap: "0.5rem" }}>
-                      <span>កំពុងផ្ទុកទិន្នន័យពីមូលដ្ឋានទិន្នន័យ (DB)...</span>
-                    </div>
+                  <td colSpan={7} className="text-center py-10 text-slate-500">
+                    កំពុងទាញយកទិន្នន័យ...
                   </td>
                 </tr>
-              ) : lineItems.length === 0 ? (
+              ) : filteredRecords.length === 0 ? (
                 <tr>
-                  <td colSpan={8} style={{ textAlign: "center", padding: "3rem 1rem", color: "#94a3b8" }}>
-                    <div style={{ maxWidth: "340px", margin: "0 auto" }}>
-                      <p style={{ fontWeight: "600", fontSize: "1rem", color: "#475569", marginBottom: "0.35rem" }}>
-                        មិនទាន់មានទិន្នន័យអ្នកឧបត្ថម្ភ
-                      </p>
-                      <p style={{ fontSize: "0.85rem", marginBottom: "1rem" }}>
-                        សូមចុចប៊ូតុង &quot;បញ្ចូលអ្នកឧបត្ថម្ភ&quot; ដើម្បីបញ្ចូលទិន្នន័យចូលក្នុងតារាងនេះ។
-                      </p>
-                      {canCreate && (
-                        <button
-                          type="button"
-                          className="btn btn-primary btn-sm"
-                          onClick={() => navigate(`/sponsorships/items/${id}/create`)}
-                        >
-                          + បញ្ចូលអ្នកឧបត្ថម្ភដំបូង
-                        </button>
-                      )}
-                    </div>
+                  <td colSpan={7} className="text-center py-12 text-slate-500">
+                    <div className="mb-2 font-semibold text-slate-700">មិនទាន់មានអ្នកឧបត្ថម្ភក្នុងតារាងនេះនៅឡើយទេ</div>
+                    <p className="m-0 text-sm text-slate-500">
+                      ចុច &quot;បន្ថែមអ្នកឧបត្ថម្ភ&quot; ដើម្បីបញ្ចូលអ្នកឧបត្ថម្ភថ្មី។
+                    </p>
                   </td>
                 </tr>
               ) : (
-                lineItems.map((r, index) => {
-                  const itemsList = r.items || r.in_kind_items || [];
-                  const rowNo = r.entry_no || r.record_id || index + 1;
-                  const usdVal = Number(r.amount_usd) || Number(r.currency_usd) || 0;
-                  const khrVal = Number(r.amount_khr) || Number(r.currency_khr) || 0;
+                paginatedRecords.map((r, idx) => {
+                  const donorName = r.contributor_name || r.donor_name || "មិនមានឈ្មោះ";
+                  const rep = r.representatives ? ` (${r.representatives})` : "";
+                  const items = r.items || r.in_kind_items || [];
+
+                  const recUsd = Number(r.expense_amount_usd) || Number(r.amount_usd) || Number(r.currency_usd) || 0;
+                  const recKhr = Number(r.expense_amount_khr) || Number(r.amount_khr) || Number(r.currency_khr) || 0;
+                  const itemsUsd = items.reduce((sum, it) => sum + (Number(it.amount_usd) || Number(it.expense_amount_usd) || Number(it.cash_allocation_usd) || 0), 0);
+                  const itemsKhr = items.reduce((sum, it) => sum + (Number(it.amount_khr) || Number(it.expense_amount_khr) || Number(it.cash_allocation_khr) || 0), 0);
+                  const displayUsd = recUsd > 0 ? recUsd : itemsUsd;
+                  const displayKhr = recKhr > 0 ? recKhr : itemsKhr;
 
                   return (
-                    <tr key={r.id || index}>
-                      <td style={{ textAlign: "center", fontWeight: "600", verticalAlign: "top" }}>
-                        {toKhmerDigits(rowNo)}
+                    <tr key={r.id || idx} className="hover:bg-slate-50 transition-colors">
+                      <td className="text-center font-bold text-slate-700 py-3 px-3">
+                        {toKhmerDigits(r.entry_no || (currentPage - 1) * pageSize + idx + 1)}
                       </td>
-                      <td style={{ verticalAlign: "top" }}>
-                        <div style={{ fontWeight: "700", color: "#1e293b", fontSize: "0.95rem" }}>
-                          {r.contributor_name || r.donor_name}
-                        </div>
-                        {r.representatives && (
-                          <div style={{ fontSize: "0.8rem", color: "#4f46e5", marginTop: "0.2rem" }}>
-                            {r.representatives}
-                          </div>
+                      <td className="py-3 px-3">
+                        <strong className="text-indigo-900 block font-semibold text-sm">
+                          {toKhmerDigitsInText(donorName)}
+                        </strong>
+                        {rep && (
+                          <span className="font-normal text-slate-500 text-xs block mt-0.5">
+                            {toKhmerDigitsInText(rep)}
+                          </span>
                         )}
                       </td>
-                      <td style={{ verticalAlign: "top" }}>
-                        {itemsList.length > 0 ? (
-                          <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
-                            {itemsList.map((it, itIdx) => (
-                              <div
-                                key={itIdx}
-                                style={{
-                                  fontSize: "0.88rem",
-                                  color: "#334155",
-                                }}
+                      <td className="text-right font-bold text-emerald-600 py-3 px-3 font-mono">
+                        {displayUsd > 0
+                          ? `${toKhmerDigits(displayUsd)} $`
+                          : "-"}
+                      </td>
+                      <td className="text-right font-bold text-blue-600 py-3 px-3 font-mono">
+                        {displayKhr > 0
+                          ? `${toKhmerDigits(displayKhr)} ៛`
+                          : "-"}
+                      </td>
+                      <td className="py-3 px-3">
+                        {items.length > 0 && (
+                          <div className="flex flex-col gap-1">
+                            {items.map((it, iIdx) => (
+                              <span
+                                key={it.id || iIdx}
+                                className="inline-flex items-center text-xs bg-slate-100 text-slate-700 px-2 py-0.5 rounded font-medium"
                               >
-                                • {it.item_name} : <strong>{toKhmerDigits(it.item_qty)} {it.item_unit}</strong>
-                              </div>
+                                • {it.item_name} {it.item_qty ? `${toKhmerDigits(it.item_qty)} ` : ""}{it.item_unit || ""}
+                              </span>
                             ))}
                           </div>
-                        ) : r.expense_label || r.is_expense_total ? (
-                          <span style={{ color: "#b91c1c", fontWeight: "600", fontSize: "0.85rem" }}>
-                            {r.expense_label || "សរុបការចំណាយ"}
-                          </span>
-                        ) : (
-                          <span style={{ color: "#94a3b8", fontSize: "0.85rem" }}>-</span>
                         )}
                       </td>
-                      <td style={{ textAlign: "right", fontWeight: "700", color: "#059669", verticalAlign: "top" }}>
-                        {usdVal > 0 ? `${toKhmerDigits(usdVal)} $` : "-"}
+                      <td className="py-3 px-3 text-xs text-slate-600 leading-relaxed">
+                        {r.usage_description ? (
+                          <div className="flex flex-col gap-1">
+                            {String(r.usage_description)
+                              .split(/\r?\n/)
+                              .map((line, lIdx) => (
+                                <div key={lIdx} className={line.trim() === "" ? "h-2" : ""}>
+                                  {toKhmerDigitsInText(line) || "\u00A0"}
+                                </div>
+                              ))}
+                          </div>
+                        ) : (
+                          <span className="text-slate-400">-</span>
+                        )}
                       </td>
-                      <td style={{ textAlign: "right", fontWeight: "700", color: "#2563eb", verticalAlign: "top" }}>
-                        {khrVal > 0 ? `${toKhmerDigits(khrVal)} ៛` : "-"}
-                      </td>
-                      <td style={{ verticalAlign: "top", fontSize: "0.85rem", color: "#334155", whiteSpace: "pre-line" }}>
-                        {r.usage_description || (itemsList || []).map((it) => it.usage_description).filter(Boolean).join("\n") || r.allocation_purpose || "-"}
-                      </td>
-                      <td style={{ verticalAlign: "top", fontSize: "0.85rem", color: "#64748b", fontStyle: "italic", whiteSpace: "pre-line" }}>
-                        {r.remarks || (itemsList || []).map((it) => it.remarks).filter(Boolean).join(", ") || "-"}
-                      </td>
-                      <td style={{ textAlign: "center", verticalAlign: "top" }}>
-                        <div style={{ display: "inline-flex", gap: "0.4rem", alignItems: "center" }}>
+                      <td className="text-center py-3 px-3">
+                        <div className="inline-flex items-center justify-center gap-1.5">
                           {canEdit && (
                             <button
                               type="button"
-                              className="btn-icon text-primary"
+                              className="btn btn-sm btn-secondary p-1.5 rounded hover:bg-slate-200"
                               onClick={() => navigate(`/sponsorships/items/${id}/edit/${r.id}`)}
-                              title="កែប្រែ"
+                              title="កែសម្រួល"
                             >
-                              <LuPencil size={15} />
+                              <LuPencil size={14} />
                             </button>
                           )}
-
                           {canDelete && (
                             <button
                               type="button"
-                              className="btn-icon text-danger"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                deleteRecord(r.id);
-                              }}
+                              className="btn btn-sm btn-outline-danger p-1.5 rounded"
+                              onClick={() => handleDeleteRecord(r.id)}
                               title="លុប"
                             >
-                              <LuTrash2 size={15} />
+                              <LuTrash2 size={14} />
                             </button>
                           )}
                         </div>
@@ -488,26 +402,43 @@ function SponsorItemContent() {
                 })
               )}
             </tbody>
-
-            {/* Grand Total Bottom Footer */}
-            {!loading && lineItems.length > 0 && (
+            {filteredRecords.length > 0 && (
               <tfoot>
-                <tr style={{ background: "#f1f5f9", fontWeight: "700", borderTop: "2px solid #cbd5e1" }}>
-                  <td colSpan={3} style={{ textAlign: "center", padding: "0.75rem", fontSize: "0.95rem" }}>
-                    សរុបរួម ({activeMainSponsor?.name})
+                <tr className="bg-slate-100 font-bold border-t border-slate-200 text-slate-800">
+                  <td colSpan={2} className="text-right py-3 px-4">
+                    សរុបរួម ៖
                   </td>
-                  <td style={{ textAlign: "right", color: "#059669", fontSize: "1rem", padding: "0.75rem" }}>
-                    {toKhmerDigits(totals.totalUSD)} $
+                  <td className="text-right text-emerald-600 py-3 px-3 font-mono font-bold">
+                    {(totals.totalUSD || Number(period?.total_usd) || 0) > 0
+                      ? `${toKhmerDigits(totals.totalUSD || Number(period?.total_usd) || 0)} $`
+                      : "-"}
                   </td>
-                  <td style={{ textAlign: "right", color: "#2563eb", fontSize: "1rem", padding: "0.75rem" }}>
-                    {toKhmerDigits(totals.totalKHR)} ៛
+                  <td className="text-right text-blue-600 py-3 px-3 font-mono font-bold">
+                    {(totals.totalKHR || Number(period?.total_khr) || 0) > 0
+                      ? `${toKhmerDigits(totals.totalKHR || Number(period?.total_khr) || 0)} ៛`
+                      : "-"}
                   </td>
-                  <td colSpan={3}></td>
+                  <td colSpan={2} />
                 </tr>
               </tfoot>
             )}
           </table>
         </div>
+
+        {/* Reusable Pagination Component */}
+        <Pagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          totalItems={filteredRecords.length}
+          pageSize={pageSize}
+          pageSizeOptions={[25, 50, 100]}
+          onPageChange={(page) => setCurrentPage(page)}
+          onPageSizeChange={(size) => {
+            setPageSize(size);
+            setCurrentPage(1);
+          }}
+          itemLabel="នាក់"
+        />
       </div>
     </div>
   );

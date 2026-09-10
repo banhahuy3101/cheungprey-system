@@ -8,8 +8,10 @@ import { lunarDate, solarDate, numeric } from '@kdamdev/khmerformat';
 export { lunarDate, solarDate, numeric };
 
 export function toKhmerDigits(num, useGrouping = true) {
-  if (num === null || num === undefined || isNaN(Number(num))) return '០';
-  const n = Number(num);
+  if (num === null || num === undefined || num === '') return '០';
+  const cleanStr = String(num).replace(/,/g, '').trim();
+  if (isNaN(Number(cleanStr))) return '០';
+  const n = Number(cleanStr);
   const parts = n.toLocaleString('en-US', { maximumFractionDigits: 2 }).split('.');
   const intStr = parts[0].replace(/,/g, '');
   const intKhmer = numeric(intStr).toKhmer(useGrouping);
@@ -18,6 +20,20 @@ export function toKhmerDigits(num, useGrouping = true) {
     return `${intKhmer}.${decKhmer}`;
   }
   return intKhmer;
+}
+
+export function toKhmerDigitsInText(text) {
+  if (text === null || text === undefined) return '';
+  const khmerDigitMap = {
+    '0': '០', '1': '១', '2': '២', '3': '៣', '4': '៤',
+    '5': '៥', '6': '៦', '7': '៧', '8': '៨', '9': '៩',
+  };
+  return String(text).replace(/[0-9]/g, (d) => khmerDigitMap[d] || d);
+}
+
+export function toKhmerYear(year) {
+  if (year === null || year === undefined) return '';
+  return toKhmerDigits(year, false);
 }
 
 export function formatKhmerCurrency(amount, currency = 'USD') {

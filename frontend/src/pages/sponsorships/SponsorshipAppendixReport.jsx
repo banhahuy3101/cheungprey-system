@@ -1,10 +1,11 @@
 import { useState, useEffect, useMemo, useRef, Fragment } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
-import { LuPrinter, LuCalendar, LuDownload } from "react-icons/lu";
+import { LuPrinter, LuCalendarDays, LuDownload } from "react-icons/lu";
 import { sponsorshipAPI } from "../../api/sponsorship";
 import { lunarDate, solarDate, numeric } from "@kdamdev/khmerformat";
 import {
   toKhmerDigits,
+  toKhmerDigitsInText,
   numberToKhmerWords,
   getKhmerSolarDate,
   getKhmerLunarHeaderDate,
@@ -20,9 +21,11 @@ export default function SponsorshipAppendixReport() {
   const reportRef = useRef(null);
 
   const periodParam = searchParams.get("period") || "";
+  const periodIdParam = searchParams.get("period_id") || "";
   const sectionParam = searchParams.get("section") || "";
 
   const [records, setRecords] = useState([]);
+  const [periodData, setPeriodData] = useState(null);
   const [summary, setSummary] = useState(null);
   const [displayPeriod, setDisplayPeriod] = useState("");
   const [loading, setLoading] = useState(true);
@@ -34,51 +37,43 @@ export default function SponsorshipAppendixReport() {
       try {
         setLoading(true);
         const listRes = await sponsorshipAPI.list({
+          period_id: periodIdParam || undefined,
           section_group: sectionParam || undefined,
           limit: 2000,
         });
 
         const allList = listRes.data?.data || [];
-        let filtered = allList;
+        const filtered = [...allList].sort((a, b) => {
+          const noA = Number(a.entry_no) || Number(a.record_id) || 0;
+          const noB = Number(b.entry_no) || Number(b.record_id) || 0;
+          if (noA && noB && noA !== noB) return noA - noB;
+          if (noA && !noB) return -1;
+          if (!noA && noB) return 1;
+          return new Date(a.created_at || 0) - new Date(b.created_at || 0);
+        });
         let resolvedPeriodName = periodParam;
+        let fetchedPeriod = null;
 
-        if (periodParam && periodParam.trim() !== "") {
-          const decoded = decodeURIComponent(periodParam).trim();
-          // 1. Check if periodParam matches a record ID (UUID)
-          const matchedById = allList.find(
-            (r) => String(r.id).toLowerCase() === periodParam.toLowerCase() || String(r.id).toLowerCase() === decoded.toLowerCase()
-          );
-
-          if (matchedById) {
-            resolvedPeriodName = matchedById.record_period || (matchedById.fiscal_year ? `ប្រចាំឆ្នាំ ${matchedById.fiscal_year}` : "");
-            if (resolvedPeriodName) {
-              filtered = allList.filter(
-                (r) =>
-                  r.record_period === resolvedPeriodName ||
-                  (!r.record_period && matchedById.fiscal_year && String(r.fiscal_year) === String(matchedById.fiscal_year))
-              );
-            } else {
-              filtered = [matchedById];
+        if (periodIdParam) {
+          try {
+            const pRes = await sponsorshipAPI.getPeriodByID(periodIdParam);
+            if (pRes.data?.data) {
+              fetchedPeriod = pRes.data.data;
+              if (fetchedPeriod.period_name) {
+                resolvedPeriodName = fetchedPeriod.period_name;
+              }
             }
-          } else {
-            // 2. Filter by period name or fiscal year
-            const byPeriod = allList.filter(
-              (r) =>
-                (r.record_period && r.record_period.trim() === decoded) ||
-                (r.fiscal_year && String(r.fiscal_year) === decoded) ||
-                (r.record_period && r.record_period.toLowerCase().includes(decoded.toLowerCase()))
-            );
-            if (byPeriod.length > 0) {
-              filtered = byPeriod;
-              resolvedPeriodName = decoded;
-            } else {
-              // If none matched, show all records so table isn't blank
-              filtered = allList;
-              resolvedPeriodName = "";
-            }
+          } catch {
+            // fallback to periodParam
           }
         }
 
+        if (!resolvedPeriodName && periodParam && periodParam.trim() !== "") {
+          const decoded = decodeURIComponent(periodParam).trim();
+          resolvedPeriodName = decoded;
+        }
+
+        setPeriodData(fetchedPeriod);
         setRecords(filtered);
         setDisplayPeriod(resolvedPeriodName);
 
@@ -115,16 +110,27 @@ export default function SponsorshipAppendixReport() {
         setLoading(false);
       }
     })();
-  }, [periodParam, sectionParam]);
+  }, [periodParam, periodIdParam, sectionParam]);
 
   const handlePrint = () => {
+    const cleanPeriod = (displayPeriod || "Appendix_Report").replace(/[\s/\\:]+/g, "_");
+    const originalTitle = document.title;
+    document.title = `តារាងឧបសម្ព័ន្ធ_${cleanPeriod}_${reportDate}`;
     window.print();
+    setTimeout(() => {
+      document.title = originalTitle;
+    }, 1500);
   };
 
   const handleDownloadPDF = async () => {
     if (!reportRef.current) return;
     try {
       setDownloadingPDF(true);
+
+      // Wait for fonts to be ready before rendering canvas
+      if (document.fonts) {
+        await document.fonts.ready;
+      }
 
       // Dynamically load html2pdf bundle if not loaded yet
       if (!window.html2pdf) {
@@ -140,7 +146,7 @@ export default function SponsorshipAppendixReport() {
       const cleanPeriod = (displayPeriod || "Appendix_Report").replace(/[\s/\\:]+/g, "_");
       const filename = `តារាងឧបសម្ព័ន្ធ_${cleanPeriod}_${reportDate}.pdf`;
       const opt = {
-        margin: 0,
+        margin: [10, 12, 10, 12], // mm: [top, left, bottom, right] - generous 12mm margins prevent motto clipping
         filename: filename,
         image: { type: "jpeg", quality: 0.98 },
         html2canvas: {
@@ -150,24 +156,49 @@ export default function SponsorshipAppendixReport() {
           scrollX: 0,
           scrollY: 0,
           onclone: (clonedDoc) => {
+            // Explicitly copy fonts into the cloned iframe so html2canvas computes correct metrics
+            if (document.fonts) {
+              document.fonts.forEach((font) => {
+                try {
+                  clonedDoc.fonts.add(font);
+                } catch {
+                  // ignore
+                }
+              });
+            }
+
             const container = clonedDoc.querySelector(".appendix-paper-container");
             if (container) {
-              container.style.padding = "10mm 14mm 8mm 14mm";
-              container.style.margin = "0px";
-              container.style.border = "none";
-              container.style.boxShadow = "none";
-              container.style.width = "100%";
-              container.style.maxWidth = "100%";
+              container.style.setProperty("padding", "0px", "important");
+              container.style.setProperty("margin", "0px", "important");
+              container.style.setProperty("border", "none", "important");
+              container.style.setProperty("box-shadow", "none", "important");
+              container.style.setProperty("width", "100%", "important");
+              container.style.setProperty("max-width", "100%", "important");
+            }
+            const footer = clonedDoc.querySelector(".appendix-page-footer");
+            if (footer) {
+              footer.style.setProperty("display", "none", "important");
             }
           },
         },
         jsPDF: { unit: "mm", format: "a4", orientation: "landscape" },
-        pagebreak: { mode: ["avoid-all", "css", "legacy"] },
+        pagebreak: {
+          mode: ["avoid-all", "css", "legacy"],
+          avoid: [
+            "tr",
+            ".appendix-table-section-row",
+            ".appendix-table-subtotal-row",
+            ".appendix-footer-summary",
+            ".appendix-signatures",
+            ".signature-box",
+          ],
+        },
       };
       await window.html2pdf().set(opt).from(reportRef.current).save();
     } catch (err) {
       console.error("Direct PDF download error:", err);
-      window.print();
+      handlePrint();
     } finally {
       setDownloadingPDF(false);
     }
@@ -215,38 +246,24 @@ export default function SponsorshipAppendixReport() {
           ]}
           actions={
             <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
-              <div
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={handlePrint}
                 style={{
                   display: "flex",
                   alignItems: "center",
                   gap: "0.5rem",
-                  background: "#ffffff",
-                  border: "1px solid #cbd5e1",
+                  padding: "0.55rem 1.25rem",
+                  fontWeight: "600",
+                  fontSize: "0.92rem",
                   borderRadius: "8px",
-                  padding: "0.4rem 0.85rem",
-                  boxShadow: "0 1px 3px rgba(0, 0, 0, 0.05)",
+                  boxShadow: "0 1px 3px rgba(0, 0, 0, 0.1)",
                 }}
               >
-                <LuCalendar size={18} style={{ color: "#2563eb" }} />
-                <span style={{ fontSize: "0.88rem", fontWeight: "600", color: "#334155" }}>
-                  ជ្រើសរើសថ្ងៃ ៖
-                </span>
-                <input
-                  type="date"
-                  value={reportDate}
-                  onChange={(e) => setReportDate(e.target.value)}
-                  style={{
-                    border: "none",
-                    outline: "none",
-                    fontSize: "0.9rem",
-                    fontFamily: "inherit",
-                    fontWeight: "600",
-                    color: "#0f172a",
-                    cursor: "pointer",
-                    background: "transparent",
-                  }}
-                />
-              </div>
+                <LuPrinter size={18} />
+                <span>បោះពុម្ព / រក្សាទុកជា PDF (Save as PDF)</span>
+              </button>
 
               <button
                 type="button"
@@ -269,29 +286,53 @@ export default function SponsorshipAppendixReport() {
                 }}
               >
                 <LuDownload size={18} style={{ color: "#059669" }} />
-                <span>{downloadingPDF ? "កំពុងបង្កើត PDF..." : "ទាញយកជា PDF (Direct)"}</span>
-              </button>
-
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={handlePrint}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "0.5rem",
-                  padding: "0.55rem 1.25rem",
-                  fontWeight: "600",
-                  fontSize: "0.92rem",
-                  borderRadius: "8px",
-                }}
-              >
-                <LuPrinter size={18} />
-                <span>បោះពុម្ពតារាង (Print)</span>
+                <span>{downloadingPDF ? "កំពុងទាញយក..." : "ទាញយកជា PDF (Direct)"}</span>
               </button>
             </div>
           }
         />
+
+        {/* Date Selector Row on its own line */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", marginTop: "0.4rem", marginBottom: "0.5rem" }}>
+          <div
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "0.35rem",
+              background: "#ffffff",
+              border: "1px solid #cbd5e1",
+              borderRadius: "6px",
+              padding: "0.2rem 0.45rem",
+              boxShadow: "0 1px 2px rgba(0, 0, 0, 0.04)",
+            }}
+          >
+            <LuCalendarDays size={15} style={{ color: "#2563eb" }} />
+            <span style={{ fontSize: "0.82rem", fontWeight: "600", color: "#334155" }}>
+              ជ្រើសរើសថ្ងៃធ្វើរបាយការណ៍ ៖
+            </span>
+            <input
+              type="date"
+              className="no-calendar-icon"
+              value={reportDate}
+              onChange={(e) => setReportDate(e.target.value)}
+              onClick={(e) => e.target.showPicker?.()}
+              style={{
+                border: "none",
+                outline: "none",
+                width: "105px",
+                maxWidth: "110px",
+                padding: "0",
+                margin: "0",
+                fontSize: "0.82rem",
+                fontFamily: "inherit",
+                fontWeight: "600",
+                color: "#0f172a",
+                cursor: "pointer",
+                background: "transparent",
+              }}
+            />
+          </div>
+        </div>
       </div>
 
       <div ref={reportRef} className={`appendix-paper-container ${downloadingPDF ? "is-exporting-pdf" : ""}`}>
@@ -315,36 +356,45 @@ export default function SponsorshipAppendixReport() {
             តារាងឧបសម្ព័ន្ធ ថវិកា សម្ភារ ដែលសប្បុរសជន លោកជំទាវ លោកឧកញ៉ា លោក លោកស្រី
           </div>
           <div className="appendix-sub-title">
-            ក្រុមការងារ និងសប្បុរសជន ឧបត្ថម្ភជូន{displayPeriod ? `ប្រចាំ ${displayPeriod}` : "ប្រចាំ ឆ្នាំ ២០២៥"}
+            {(() => {
+              if (!displayPeriod) {
+                return `ក្រុមការងារ និងសប្បុរសជន ឧបត្ថម្ភជូនប្រចាំ ឆ្នាំ ${toKhmerDigits(new Date().getFullYear(), false)}`;
+              }
+              const trimmed = toKhmerDigitsInText(displayPeriod).trim();
+              if (trimmed.startsWith("ប្រចាំ")) {
+                return `ក្រុមការងារ និងសប្បុរសជន ឧបត្ថម្ភជូន${trimmed}`;
+              }
+              return `ក្រុមការងារ និងសប្បុរសជន ឧបត្ថម្ភជូនប្រចាំ ${trimmed}`;
+            })()}
           </div>
         </div>
 
         <table className="appendix-table">
           <thead>
             <tr>
-              <th rowSpan={2} style={{ width: "5%", textAlign: "center", verticalAlign: "middle" }}>
+              <th rowSpan={2} style={{ width: "4%", textAlign: "center", verticalAlign: "middle" }}>
                 ល.រ
               </th>
-              <th rowSpan={2} style={{ width: "23%", textAlign: "center", verticalAlign: "middle" }}>
+              <th rowSpan={2} style={{ width: "18%", textAlign: "center", verticalAlign: "middle" }}>
                 គោត្តនាម និង នាម
               </th>
-              <th rowSpan={2} style={{ width: "17%", textAlign: "center", verticalAlign: "middle" }}>
+              <th rowSpan={2} style={{ width: "8%", textAlign: "center", verticalAlign: "middle" }}>
                 <div>សម្ភារ</div>
                 <div>ឯកតា</div>
               </th>
               <th colSpan={2} style={{ width: "18%", textAlign: "center" }}>
                 ថវិកា
               </th>
-              <th rowSpan={2} style={{ width: "22%", textAlign: "center", verticalAlign: "middle" }}>
+              <th rowSpan={2} style={{ width: "44%", textAlign: "center", verticalAlign: "middle" }}>
                 ទីកន្លែងទទួល និង ប្រើប្រាស់
               </th>
-              <th rowSpan={2} style={{ width: "15%", textAlign: "center", verticalAlign: "middle" }}>
+              <th rowSpan={2} style={{ width: "8%", textAlign: "center", verticalAlign: "middle" }}>
                 ផ្សេងៗ
               </th>
             </tr>
             <tr>
-              <th style={{ width: "9%", textAlign: "center" }}>ដុល្លារ</th>
-              <th style={{ width: "9%", textAlign: "center" }}>រៀល</th>
+              <th style={{ width: "8%", textAlign: "center" }}>ដុល្លារ</th>
+              <th style={{ width: "10%", textAlign: "center" }}>រៀល</th>
             </tr>
           </thead>
           <tbody>
@@ -356,13 +406,17 @@ export default function SponsorshipAppendixReport() {
               </tr>
             ) : (
               Object.entries(grouped).map(([sectionTitle, secRecords], secIdx) => {
+                const hasSectionName = Boolean(sectionTitle && sectionTitle.trim() !== "");
+
                 return (
-                  <Fragment key={sectionTitle}>
-                    <tr className="appendix-table-section-row">
-                      <td colSpan={7} style={{ fontWeight: "700", textAlign: "left", paddingLeft: "36px", verticalAlign: "middle", paddingTop: "0.55rem", paddingBottom: "0.55rem" }}>
-                        {sectionTitle}
-                      </td>
-                    </tr>
+                  <Fragment key={sectionTitle || `unnamed-${secIdx}`}>
+                    {hasSectionName && (
+                      <tr className="appendix-table-section-row" style={{ pageBreakInside: "avoid", breakInside: "avoid" }}>
+                        <td colSpan={7} style={{ fontWeight: "700", textAlign: "left", paddingLeft: "36px", verticalAlign: "middle", paddingTop: "0.55rem", paddingBottom: "0.55rem" }}>
+                          {toKhmerDigitsInText(sectionTitle)}
+                        </td>
+                      </tr>
+                    )}
 
                     {(() => {
                       const sectionTotalUSD = secRecords.reduce((acc, r) => acc + (Number(r.expense_amount_usd) || Number(r.amount_usd) || Number(r.currency_usd) || 0), 0);
@@ -370,109 +424,86 @@ export default function SponsorshipAppendixReport() {
 
                       // Find custom section expense label if defined on any record in this section
                       const recWithLabel = secRecords.find((r) => r.expense_label || r.is_expense_label);
-                      const sectionLabel = recWithLabel ? (recWithLabel.expense_label || recWithLabel.is_expense_label) : `${sectionTitle}`;
+                      const rawSectionLabel = recWithLabel
+                        ? (recWithLabel.expense_label || recWithLabel.is_expense_label)
+                        : (hasSectionName ? sectionTitle : "សរុប");
+                      const sectionLabel = toKhmerDigitsInText(rawSectionLabel);
 
                       return (
                         <>
                           {secRecords.map((r, itemIdx) => {
                             const rawItems = r.items && r.items.length > 0 ? r.items : (r.in_kind_items && r.in_kind_items.length > 0 ? r.in_kind_items : []);
                             const itemsList = rawItems.filter((it) => it && it.item_name && it.item_name.trim() !== "");
-                            const rowSpan = Math.max(itemsList.length, 1);
                             const hasItems = itemsList.length > 0;
                             const rUsd = Number(r.expense_amount_usd) || Number(r.amount_usd) || Number(r.currency_usd) || 0;
                             const rKhr = Number(r.expense_amount_khr) || Number(r.amount_khr) || Number(r.currency_khr) || 0;
 
-                            if (!hasItems) {
-                              return (
-                                <tr key={r.id || itemIdx}>
-                                  <td style={{ textAlign: "center", verticalAlign: "middle" }}>
-                                    {toKhmerDigits(r.entry_no || itemIdx + 1)}
-                                  </td>
-                                  <td style={{ verticalAlign: "middle" }}>
-                                    <div style={{ fontWeight: "700" }}>{r.contributor_name || r.donor_name}</div>
-                                    {r.representatives && (
-                                      <div style={{ fontSize: "0.82rem", color: "#312e81", fontWeight: "600" }}>
-                                        {r.representatives}
-                                      </div>
-                                    )}
-                                  </td>
-                                  <td style={{ textAlign: "center", verticalAlign: "middle" }}></td>
-                                  <td style={{ textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
-                                    {rUsd > 0 ? `${toKhmerDigits(rUsd)} $` : "-"}
-                                  </td>
-                                  <td style={{ textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
-                                    {rKhr > 0 ? `${toKhmerDigits(rKhr)} ៛` : "-"}
-                                  </td>
-                                  <td style={{ fontSize: "0.85rem", whiteSpace: "pre-wrap" }}>
-                                    <div>{r.usage_description || "-"}</div>
-                                  </td>
-                                  <td style={{ fontSize: "0.85rem", color: "#4b5563", fontStyle: "italic" }}>
-                                    {r.remarks || "-"}
-                                  </td>
-                                </tr>
-                              );
-                            }
-
-                            return itemsList.map((it, subIdx) => {
-                              const itUsd = Number(it.amount_usd) || Number(it.expense_amount_usd) || Number(it.cash_allocation_usd) || 0;
-                              const itKhr = Number(it.amount_khr) || Number(it.expense_amount_khr) || Number(it.cash_allocation_khr) || 0;
-                              const displayUsd = itUsd > 0 ? `${toKhmerDigits(itUsd)} $` : (subIdx === 0 && rUsd > 0 && itemsList.every((i) => !Number(i.amount_usd || i.expense_amount_usd || i.cash_allocation_usd)) ? `${toKhmerDigits(rUsd)} $` : "-");
-                              const displayKhr = itKhr > 0 ? `${toKhmerDigits(itKhr)} ៛` : (subIdx === 0 && rKhr > 0 && itemsList.every((i) => !Number(i.amount_khr || i.expense_amount_khr || i.cash_allocation_khr)) ? `${toKhmerDigits(rKhr)} ៛` : "-");
-
-                              return (
-                                <tr key={`${r.id || itemIdx}-${subIdx}`}>
-                                  {subIdx === 0 && (
-                                    <>
-                                      <td rowSpan={rowSpan} style={{ textAlign: "center", verticalAlign: "middle" }}>
-                                        {toKhmerDigits(r.entry_no || itemIdx + 1)}
-                                      </td>
-                                      <td rowSpan={rowSpan} style={{ verticalAlign: "middle" }}>
-                                        <div style={{ fontWeight: "700" }}>{r.contributor_name || r.donor_name}</div>
-                                        {r.representatives && (
-                                          <div style={{ fontSize: "0.82rem", color: "#312e81", fontWeight: "600" }}>
-                                            {r.representatives}
-                                          </div>
-                                        )}
-                                      </td>
-                                    </>
+                            return (
+                              <tr key={r.id || itemIdx} style={{ pageBreakInside: "avoid", breakInside: "avoid" }}>
+                                <td style={{ textAlign: "center", verticalAlign: "top" }}>
+                                  {toKhmerDigits(r.entry_no || itemIdx + 1)}
+                                </td>
+                                <td style={{ verticalAlign: "top" }}>
+                                  <div style={{ fontWeight: "700" }}>{toKhmerDigitsInText(r.contributor_name || r.donor_name)}</div>
+                                  {r.representatives && (
+                                    <div style={{ fontSize: "0.82rem", color: "#312e81", fontWeight: "600", marginTop: "0.2rem" }}>
+                                      {toKhmerDigitsInText(r.representatives)}
+                                    </div>
                                   )}
-                                  <td>
-                                    <strong>{it.item_name}</strong>
-                                    {(it.item_qty || it.item_unit) && (
-                                      <span> {toKhmerDigits(it.item_qty)} {it.item_unit}</span>
-                                    )}
-                                    {(it.is_expense_label || it.expense_label) && (
-                                      <div style={{ marginTop: "0.15rem" }}>
-                                        <span style={{ fontSize: "0.75rem", background: "#fee2e2", color: "#b91c1c", padding: "0.1rem 0.4rem", borderRadius: "3px", fontWeight: "600" }}>
-                                          {it.is_expense_label || it.expense_label}
-                                        </span>
-                                      </div>
-                                    )}
-                                  </td>
-                                  <td style={{ textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
-                                    {displayUsd}
-                                  </td>
-                                  <td style={{ textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
-                                    {displayKhr}
-                                  </td>
-                                  <td style={{ fontSize: "0.85rem", whiteSpace: "pre-wrap" }}>
-                                    {it.usage_description ? (
-                                      <div>{it.usage_description}</div>
-                                    ) : subIdx === 0 ? (
-                                      <div>{r.usage_description || "-"}</div>
-                                    ) : "-"}
-                                  </td>
-                                  <td style={{ fontSize: "0.85rem", color: "#4b5563", fontStyle: "italic" }}>
-                                    {it.remarks || (subIdx === 0 ? r.remarks : "") || "-"}
-                                  </td>
-                                </tr>
-                              );
-                            });
+                                </td>
+                                <td style={{ verticalAlign: "top" }}>
+                                  {hasItems ? (
+                                    <div style={{ display: "flex", flexDirection: "column", gap: "0.3rem" }}>
+                                      {itemsList.map((it, sIdx) => (
+                                        <div key={sIdx} style={{ lineHeight: 1.5 }}>
+                                          <strong>{toKhmerDigitsInText(it.item_name)}</strong>
+                                          {(it.item_qty || it.item_unit) && (
+                                            <span> {toKhmerDigits(it.item_qty)} {toKhmerDigitsInText(it.item_unit)}</span>
+                                          )}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  ) : "-"}
+                                </td>
+                                <td style={{ textAlign: "right", fontVariantNumeric: "tabular-nums", verticalAlign: "top" }}>
+                                  {rUsd > 0 ? `${toKhmerDigits(rUsd)} $` : "-"}
+                                </td>
+                                <td style={{ textAlign: "right", fontVariantNumeric: "tabular-nums", verticalAlign: "top" }}>
+                                  {rKhr > 0 ? `${toKhmerDigits(rKhr)} ៛` : "-"}
+                                </td>
+                                <td style={{ fontSize: "0.84rem", verticalAlign: "top", lineHeight: "22px", letterSpacing: "0.01px", wordBreak: "break-word" }}>
+                                  {r.usage_description ? (
+                                    String(r.usage_description)
+                                      .split(/\r?\n/)
+                                      .map((line, lIdx) => (
+                                        <div key={lIdx} style={{ minHeight: line.trim() === "" ? "12px" : undefined, lineHeight: "22px", marginBottom: "4px" }}>
+                                          {toKhmerDigitsInText(line) || "\u00A0"}
+                                        </div>
+                                      ))
+                                  ) : (
+                                    "-"
+                                  )}
+                                </td>
+                                <td style={{ fontSize: "0.84rem", color: "#4b5563", fontStyle: "italic", verticalAlign: "top", lineHeight: "22px", letterSpacing: "0.01px", wordBreak: "break-word" }}>
+                                  {r.remarks ? (
+                                    String(r.remarks)
+                                      .split(/\r?\n/)
+                                      .map((line, lIdx) => (
+                                        <div key={lIdx} style={{ minHeight: line.trim() === "" ? "12px" : undefined, lineHeight: "22px", marginBottom: "4px" }}>
+                                          {toKhmerDigitsInText(line) || "\u00A0"}
+                                        </div>
+                                      ))
+                                  ) : (
+                                    "-"
+                                  )}
+                                </td>
+                              </tr>
+                            );
                           })}
 
                           {/* Section Subtotal Row (Right below section item rows) - Display ONLY if is_expense_total is ticked */}
                           {secRecords.some((r) => r.is_expense_total) && (sectionTotalUSD > 0 || sectionTotalKHR > 0) && (
-                            <tr className="appendix-table-subtotal-row">
+                            <tr className="appendix-table-subtotal-row" style={{ pageBreakInside: "avoid", breakInside: "avoid" }}>
                               <td colSpan={3} style={{ fontWeight: "700", textAlign: "left", paddingLeft: "0.6rem", verticalAlign: "middle" }}>
                                 {sectionLabel}
                               </td>
@@ -500,14 +531,15 @@ export default function SponsorshipAppendixReport() {
         {/* Section C: Master Appendix Footer Summary Roll-Up */}
         {summary && (
           <div className="appendix-footer-summary">
-            {/* Inventory Goods Rollup String */}
-            {summary.inventory_rollup && summary.inventory_rollup.length > 0 && (
+            {/* Inventory Goods Rollup String or Period Materials Summary */}
+            {(periodData?.materials_summary || (summary.inventory_rollup && summary.inventory_rollup.length > 0)) && (
               <p style={{ margin: "0 0 0.25rem" }}>
                 <strong>១. មុខសម្ភារឧបត្ថម្ភសរុប ៖ </strong>
-                {summary.inventory_rollup
-                  .map((inv) => `${inv.item_name} ចំនួន ${toKhmerDigits(inv.total_qty)} ${inv.item_unit}`)
-                  .join(", ")}
-                ។
+                {periodData?.materials_summary
+                  ? toKhmerDigitsInText(periodData.materials_summary)
+                  : summary.inventory_rollup
+                    .map((inv) => `${toKhmerDigitsInText(inv.item_name)} ចំនួន ${toKhmerDigits(inv.total_qty)} ${toKhmerDigitsInText(inv.item_unit)}`)
+                    .join(", ") + " ។"}
               </p>
             )}
 

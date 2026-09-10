@@ -3,39 +3,32 @@ import { useNavigate, useParams } from "react-router-dom";
 import {
   LuPlus,
   LuPrinter,
-  LuDollarSign,
-  LuPackage,
-  LuPencil,
-  LuTrash2,
-  LuSearch,
-  LuArrowLeft,
   LuFolderOpen,
   LuEye,
+  LuTrash2,
+  LuCalendar,
+  LuDollarSign,
+  LuUsers,
+  LuPackage,
 } from "react-icons/lu";
 import { SponsorshipProvider, useSponsorships } from "../../context/SponsorshipContext";
 import { useAuth } from "../../hooks/useAuth";
 import { canAccess, FEATURES, isAdmin } from "../../utils/permissions";
 import { toKhmerDigits } from "../../utils/khmerNumberSpelling";
-import { calculateSponsorshipTotals, PERIOD_TYPE_MAP } from "../../utils/sponsorshipUtils";
+import { PERIOD_TYPE_MAP } from "../../utils/sponsorshipUtils";
 import PageHeader from "../../components/PageHeader";
-import SponsorshipForm from "./SponsorshipForm";
 import MainSponsorshipModal from "./MainSponsorshipModal";
 import "../../style/sponsorships.css";
 
 function SponsorshipsContent() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const { id } = useParams(); // URL parameter: e.g. /sponsorships/1 or /sponsorships/period-name
 
   const {
-    records,
-    loading,
-    filters,
-    setFilters,
-    openCreateModal,
-    openEditModal,
-    deleteRecord,
-    createRecord,
+    periods,
+    periodsLoading,
+    fetchPeriods,
+    deletePeriod,
   } = useSponsorships();
 
   const canCreate =
@@ -43,566 +36,249 @@ function SponsorshipsContent() {
     canAccess(user, FEATURES.sponsorships, "create") ||
     canAccess(user, FEATURES.sponsorships) ||
     isAdmin(user);
-  const canEdit =
-    canAccess(user, FEATURES.sponsorships_update) ||
-    canAccess(user, FEATURES.sponsorships, "update") ||
-    canAccess(user, FEATURES.sponsorships) ||
+  const canDelete =
+    canAccess(user, FEATURES.sponsorships_delete) ||
+    canAccess(user, FEATURES.users) ||
     isAdmin(user);
-  const canDelete = canAccess(user, FEATURES.sponsorships_delete) || canAccess(user, FEATURES.users) || isAdmin(user);
 
   const [createModalOpen, setCreateModalOpen] = useState(false);
 
-  // Clean up any legacy localStorage periods
   useEffect(() => {
-    try {
-      localStorage.removeItem("cheungprey_custom_periods");
-    } catch {
-      // ignore
-    }
-  }, []);
+    fetchPeriods();
+  }, [fetchPeriods]);
 
-  // Group database records dynamically from API records ONLY
-  const mainSponsors = useMemo(() => {
-    const periodMap = new Map();
+  // Summary stats across all periods
+  const totalStats = useMemo(() => {
+    let usd = 0;
+    let khr = 0;
+    let totalRecs = 0;
+    let totalItems = 0;
 
-    records.forEach((r) => {
-      const periodName = r.record_period || (r.fiscal_year ? `ប្រចាំឆ្នាំ ${r.fiscal_year}` : "ការឧបត្ថម្ភទូទៅ");
-      if (!periodMap.has(periodName)) {
-        periodMap.set(periodName, {
-          id: r.id, // Purely from API DB UUID
-          name: periodName,
-          year: String(r.fiscal_year || new Date().getFullYear()),
-          period_type: r.period_type || "year",
-          records: [],
-        });
-      }
-      periodMap.get(periodName).records.push(r);
+    periods.forEach((p) => {
+      usd += p.total_usd || 0;
+      khr += p.total_khr || 0;
+      totalRecs += p.records_count || 0;
+      totalItems += p.items_count || 0;
     });
 
-    return Array.from(periodMap.values());
-  }, [records]);
+    return { usd, khr, totalRecs, totalItems, periodsCount: periods.length };
+  }, [periods]);
 
-  // Determine active main sponsor from URL :id (supports DB UUID, period name, or index from API)
-  const activeMainSponsor = useMemo(() => {
-    if (!id) return null;
-    const decodedId = decodeURIComponent(id);
-
-    // Check direct DB record ID match from API
-    const directDbRecord = records.find((r) => String(r.id) === String(id) || String(r.id) === decodedId);
-    if (directDbRecord) {
-      const pName = directDbRecord.record_period || (directDbRecord.fiscal_year ? `ប្រចាំឆ្នាំ ${directDbRecord.fiscal_year}` : "ការឧបត្ថម្ភទូទៅ");
-      return (
-        mainSponsors.find((m) => m.name === pName) || {
-          id: directDbRecord.id,
-          name: pName,
-          year: String(directDbRecord.fiscal_year || new Date().getFullYear()),
-          period_type: directDbRecord.period_type || "year",
-          records: records.filter((r) => r.record_period === pName || (!r.record_period && String(r.fiscal_year) === String(directDbRecord.fiscal_year))),
-        }
-      );
+  const handlePeriodCreated = (newPeriod) => {
+    if (newPeriod?.id) {
+      navigate(`/sponsorships/items/${newPeriod.id}`);
     }
-
-    return (
-      mainSponsors.find((m) => String(m.id) === String(id) || m.name === decodedId) ||
-      (Number(id) > 0 && Number(id) <= mainSponsors.length ? mainSponsors[Number(id) - 1] : null) ||
-      {
-        id: id,
-        name: decodedId,
-        year: String(new Date().getFullYear()),
-        period_type: "custom",
-        records: records.filter((r) => r.record_period === decodedId || String(r.id) === String(id)),
-      }
-    );
-  }, [id, mainSponsors, records]);
-
-  // Create a new Main Sponsor period via backend API
-  const handleCreateMainSponsor = async (newMain) => {
-    try {
-      const created = await createRecord({
-        record_period: newMain.name,
-        fiscal_year: Number(newMain.year) || new Date().getFullYear(),
-        contributor_name: "ការឧបត្ថម្ភ",
-        entry_classification: "sponsorship",
-        section_group: "ទូទៅ",
-        amount_usd: 0,
-        amount_khr: 0,
-        usage_description: "",
-        items: [],
-      });
-      if (created?.id) {
-        navigate(`/sponsorships/items/${created.id}`);
-      }
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  // Line items under the active main sponsor
-  const lineItems = useMemo(() => {
-    let list = records;
-    if (activeMainSponsor) {
-      list = records.filter(
-        (r) =>
-          r.record_period === activeMainSponsor.name ||
-          (!r.record_period && activeMainSponsor.name.includes(String(r.fiscal_year)))
-      );
-    }
-
-    if (!filters.search) return list;
-    const term = filters.search.toLowerCase();
-    return list.filter((r) => {
-      const name = (r.contributor_name || r.donor_name || "").toLowerCase();
-      const rep = (r.representatives || "").toLowerCase();
-      const usage = (r.usage_description || r.allocation_purpose || "").toLowerCase();
-      const remarks = (r.remarks || "").toLowerCase();
-      const itemsText = (r.items || []).map((it) => it.item_name).join(" ").toLowerCase();
-      return (
-        name.includes(term) ||
-        rep.includes(term) ||
-        usage.includes(term) ||
-        remarks.includes(term) ||
-        itemsText.includes(term)
-      );
-    });
-  }, [records, activeMainSponsor, filters.search]);
-
-  const totals = calculateSponsorshipTotals(lineItems);
-
-  const openAppendixReport = () => {
-    if (activeMainSponsor) {
-      navigate(`/sponsorships/appendix?period=${encodeURIComponent(activeMainSponsor.name)}`);
-    } else {
-      navigate("/sponsorships/appendix");
-    }
-  };
-
-  // Helper to compute stats for a single main sponsor row from DB records
-  const getMainSponsorStats = (periodName) => {
-    const periodRecords = records.filter((r) => r.record_period === periodName);
-    const periodTotals = calculateSponsorshipTotals(periodRecords);
-    return {
-      totalUSD: periodTotals.totalUSD,
-      totalKHR: periodTotals.totalKHR,
-      count: periodRecords.length,
-    };
   };
 
   return (
     <div className="page sponsorship-page">
-      {/* ============================================================ */}
-      {/* SCREEN 1: ALL MAIN SPONSORSHIPS TABLE LIST (/sponsorships) */}
-      {/* ============================================================ */}
-      {!activeMainSponsor ? (
-        <>
-          {/* Reusable PageHeader Component */}
-          <PageHeader
-            title="តារាងឧបត្ថម្ភមេ (Main Sponsorships)"
-            subtitle="ទិន្នន័យពីមូលដ្ឋានទិន្នន័យ (DB) តាម ខែ (Month), ឆមាស (Semester) ឬ ឆ្នាំ (Year)"
-            breadcrumbs={[
-              { label: "ផ្ទាំងគ្រប់គ្រង", path: "/dashboard" },
-              { label: "ការឧបត្ថម្ភ" },
-            ]}
-            actions={
-              <>
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  onClick={openAppendixReport}
-                  style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}
-                >
-                  <LuPrinter size={16} />
-                  <span>បោះពុម្ពតារាងរួម (Print All)</span>
-                </button>
+      {/* Page Header */}
+      <PageHeader
+        title="តារាងឧបត្ថម្ភមេ (Sponsorship Periods)"
+        subtitle="គ្រប់គ្រងកាលបរិច្ឆេទឧបត្ថម្ភតាម ខែ (Month), ឆមាស (Semester) ឬ ឆ្នាំ (Year)"
+        breadcrumbs={[
+          { label: "ផ្ទាំងគ្រប់គ្រង", path: "/dashboard" },
+          { label: "ការឧបត្ថម្ភ" },
+        ]}
+        actions={
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              className="btn btn-secondary flex items-center gap-1.5 font-medium"
+              onClick={() => navigate("/sponsorships/appendix")}
+            >
+              <LuPrinter size={16} />
+              <span>បោះពុម្ពតារាងរួម (Print All)</span>
+            </button>
 
-                {canCreate && (
-                  <button
-                    type="button"
-                    className="btn btn-primary"
-                    onClick={() => setCreateModalOpen(true)}
-                    style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontWeight: "600" }}
-                  >
-                    <LuPlus size={18} />
-                    <span>+ បង្កើតតារាងឧបត្ថម្ភមេ</span>
-                  </button>
-                )}
-              </>
-            }
-          />
+            {canCreate && (
+              <button
+                type="button"
+                className="btn btn-primary flex items-center gap-1.5 font-semibold"
+                onClick={() => setCreateModalOpen(true)}
+              >
+                <LuPlus size={18} />
+                <span>បង្កើតតារាងឧបត្ថម្ភមេ</span>
+              </button>
+            )}
+          </div>
+        }
+      />
 
-          {/* Master Table of Main Sponsors from DB */}
-          <div className="card" style={{ overflow: "hidden", border: "1px solid #e2e8f0" }}>
-            <div className="table-responsive">
-              <table className="table" style={{ margin: 0 }}>
-                <thead>
-                  <tr style={{ background: "#f8fafc" }}>
-                    <th style={{ width: "6%", textAlign: "center" }}>ល.រ</th>
-                    <th style={{ width: "32%" }}>ឈ្មោះតារាងឧបត្ថម្ភមេ (Main Sponsor Period)</th>
-                    <th style={{ width: "14%" }}>ប្រភេទកាលបរិច្ឆេទ</th>
-                    <th style={{ width: "16%", textAlign: "right" }}>ថវិកាសរុប ($ USD)</th>
-                    <th style={{ width: "16%", textAlign: "right" }}>ថវិកាសរុប (៛ KHR)</th>
-                    <th style={{ width: "8%", textAlign: "center" }}>ចំនួនអ្នកឧបត្ថម្ភ</th>
-                    <th style={{ width: "8%", textAlign: "center" }}>សកម្មភាព</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {loading ? (
-                    <tr>
-                      <td colSpan={7} style={{ textAlign: "center", padding: "2.5rem", color: "#64748b" }}>
-                        កំពុងទាញយកទិន្នន័យពីមូលដ្ឋានទិន្នន័យ (Database)...
+      {/* KPI / Overview Summary Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <div className="card p-4 border-l-4 border-l-blue-600 bg-white rounded-xl shadow-sm">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+              តារាងមេសរុប (Periods)
+            </span>
+            <LuCalendar size={20} className="text-blue-600" />
+          </div>
+          <div className="text-2xl font-extrabold text-slate-800 mt-2">
+            {toKhmerDigits(totalStats.periodsCount)} តារាង
+          </div>
+        </div>
+
+        <div className="card p-4 border-l-4 border-l-emerald-600 bg-white rounded-xl shadow-sm">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+              ថវិកាសរុបជាដុល្លារ ($ USD)
+            </span>
+            <LuDollarSign size={20} className="text-emerald-600" />
+          </div>
+          <div className="text-2xl font-extrabold text-emerald-600 mt-2">
+            {toKhmerDigits(totalStats.usd)} $
+          </div>
+        </div>
+
+        <div className="card p-4 border-l-4 border-l-purple-600 bg-white rounded-xl shadow-sm">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+              ថវិកាសរុបជារៀល (៛ KHR)
+            </span>
+            <LuDollarSign size={20} className="text-purple-600" />
+          </div>
+          <div className="text-2xl font-extrabold text-purple-600 mt-2">
+            {toKhmerDigits(totalStats.khr)} ៛
+          </div>
+        </div>
+
+        <div className="card p-4 border-l-4 border-l-amber-600 bg-white rounded-xl shadow-sm">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+              អ្នកឧបត្ថម្ភសរុប (Donors)
+            </span>
+            <LuUsers size={20} className="text-amber-600" />
+          </div>
+          <div className="text-2xl font-extrabold text-amber-600 mt-2">
+            {toKhmerDigits(totalStats.totalRecs)} នាក់
+          </div>
+        </div>
+      </div>
+
+      {/* Master Table of Sponsorship Periods */}
+      <div className="card overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+        <div className="table-responsive">
+          <table className="table m-0 w-full">
+            <thead>
+              <tr className="bg-slate-50 border-b border-slate-200 text-slate-700 text-xs font-semibold uppercase">
+                <th className="w-[5%] text-center py-3 px-3">ល.រ</th>
+                <th className="w-[32%] py-3 px-3">ឈ្មោះតារាងឧបត្ថម្ភមេ (Sponsorship Period)</th>
+                <th className="w-[12%] py-3 px-3">ប្រភេទកាលបរិច្ឆេទ</th>
+                <th className="w-[10%] text-center py-3 px-3">ឆ្នាំ (Year)</th>
+                <th className="w-[15%] text-right py-3 px-3">ថវិកាសរុប ($ USD)</th>
+                <th className="w-[15%] text-right py-3 px-3">ថវិកាសរុប (៛ KHR)</th>
+                <th className="w-[8%] text-center py-3 px-3">អ្នកឧបត្ថម្ភ</th>
+                <th className="w-[11%] text-center py-3 px-3">សកម្មភាព</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {periodsLoading ? (
+                <tr>
+                  <td colSpan={8} className="text-center py-10 text-slate-500">
+                    កំពុងទាញយកទិន្នន័យពីមូលដ្ឋានទិន្នន័យ (Database)...
+                  </td>
+                </tr>
+              ) : periods.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="text-center py-12 text-slate-500">
+                    <div className="mb-2 text-base font-semibold text-slate-700">
+                      មិនទាន់មានតារាងឧបត្ថម្ភមេនៅឡើយទេ
+                    </div>
+                    <p className="m-0 text-sm text-slate-500">
+                      ចុចប៊ូតុង &quot;+ បង្កើតតារាងឧបត្ថម្ភមេ&quot; ខាងលើ ដើម្បីបង្កើតកាលបរិច្ឆេទថ្មី (ខែ, ឆមាស ឬ ឆ្នាំ)។
+                    </p>
+                  </td>
+                </tr>
+              ) : (
+                periods.map((p, idx) => {
+                  const typeLabel = PERIOD_TYPE_MAP[p.period_type] || p.period_type || "ប្រចាំឆ្នាំ";
+
+                  return (
+                    <tr
+                      key={p.id || idx}
+                      onClick={() => navigate(`/sponsorships/items/${p.id}`)}
+                      className="cursor-pointer hover:bg-slate-50 transition-colors"
+                    >
+                      <td className="text-center font-bold text-slate-700 py-3 px-3">
+                        {toKhmerDigits(idx + 1)}
                       </td>
-                    </tr>
-                  ) : mainSponsors.length === 0 ? (
-                    <tr>
-                      <td colSpan={7} style={{ textAlign: "center", padding: "2.5rem", color: "#64748b" }}>
-                        មិនទាន់មានទិន្នន័យក្នុងមូលដ្ឋានទិន្នន័យ (DB) នៅឡើយទេ (ចុច &quot;+ បង្កើតតារាងឧបត្ថម្ភមេ&quot; ដើម្បីចាប់ផ្តើម)
+                      <td className="py-3 px-3">
+                        <div className="flex items-center gap-2">
+                          <LuFolderOpen size={18} className="text-blue-600 shrink-0" />
+                          <span className="font-semibold text-indigo-900 text-sm hover:underline">
+                            {p.period_name}
+                          </span>
+                        </div>
                       </td>
-                    </tr>
-                  ) : (
-                    mainSponsors.map((m, idx) => {
-                      const stats = getMainSponsorStats(m.name);
-                      const displayId = m.id || String(idx + 1);
-                      const typeLabel = PERIOD_TYPE_MAP[m.period_type] || m.period_type || "ប្រចាំឆ្នាំ";
-
-                      return (
-                        <tr
-                          key={m.name || idx}
-                          onClick={() => navigate(`/sponsorships/items/${displayId}`)}
-                          style={{ cursor: "pointer" }}
-                          className="hover-row"
-                        >
-                          <td style={{ textAlign: "center", fontWeight: "600" }}>
-                            {toKhmerDigits(displayId)}
-                          </td>
-                          <td>
-                            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                              <LuFolderOpen size={18} color="#2563eb" />
-                              <span style={{ fontWeight: "700", color: "#1e3a8a", fontSize: "0.95rem" }}>
-                                {m.name}
-                              </span>
-                            </div>
-                          </td>
-                          <td>
-                            <span style={{ fontSize: "0.8rem", background: "#f1f5f9", padding: "0.2rem 0.5rem", borderRadius: "4px", color: "#475569" }}>
-                              {typeLabel}
-                            </span>
-                          </td>
-                          <td style={{ textAlign: "right", fontWeight: "700", color: "#059669" }}>
-                            {stats.totalUSD > 0 ? `${toKhmerDigits(stats.totalUSD)} $` : "-"}
-                          </td>
-                          <td style={{ textAlign: "right", fontWeight: "700", color: "#2563eb" }}>
-                            {stats.totalKHR > 0 ? `${toKhmerDigits(stats.totalKHR)} ៛` : "-"}
-                          </td>
-                          <td style={{ textAlign: "center", fontWeight: "600" }}>
-                            {toKhmerDigits(stats.count)} នាក់
-                          </td>
-                          <td style={{ textAlign: "center" }}>
+                      <td className="py-3 px-3">
+                        <span className="text-xs bg-slate-100 text-slate-700 px-2 py-0.5 rounded font-medium">
+                          {typeLabel}
+                        </span>
+                      </td>
+                      <td className="text-center font-medium text-slate-700 py-3 px-3">
+                        {toKhmerDigits(p.fiscal_year, false)}
+                      </td>
+                      <td className="text-right font-bold text-emerald-600 py-3 px-3 font-mono">
+                        {(p.total_usd || 0) > 0
+                          ? `${toKhmerDigits(p.total_usd)} $`
+                          : "-"}
+                      </td>
+                      <td className="text-right font-bold text-blue-600 py-3 px-3 font-mono">
+                        {(p.total_khr || 0) > 0
+                          ? `${toKhmerDigits(p.total_khr)} ៛`
+                          : "-"}
+                      </td>
+                      <td className="text-center font-bold text-slate-700 py-3 px-3">
+                        {toKhmerDigits(p.records_count || 0)} នាក់
+                      </td>
+                      <td className="text-center py-3 px-3" onClick={(e) => e.stopPropagation()}>
+                        <div className="inline-flex items-center justify-center gap-1.5">
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-primary p-1.5 rounded"
+                            onClick={() => navigate(`/sponsorships/items/${p.id}`)}
+                            title="បើកមើលអ្នកឧបត្ថម្ភ"
+                            aria-label="បើកមើល"
+                          >
+                            <LuEye size={14} />
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-secondary p-1.5 rounded hover:bg-slate-200"
+                            onClick={() => navigate(`/sponsorships/appendix?period_id=${p.id}&period=${encodeURIComponent(p.period_name)}`)}
+                            title="បោះពុម្ពតារាងឧបសម្ព័ន្ធ"
+                            aria-label="បោះពុម្ព"
+                          >
+                            <LuPrinter size={14} />
+                          </button>
+                          {canDelete && (
                             <button
                               type="button"
-                              className="btn btn-sm btn-primary"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                navigate(`/sponsorships/items/${displayId}`);
-                              }}
-                              style={{ padding: "0.25rem 0.6rem", fontSize: "0.78rem", display: "inline-flex", alignItems: "center", gap: "0.25rem" }}
+                              className="btn btn-sm btn-outline-danger p-1.5 rounded"
+                              onClick={() => deletePeriod(p.id)}
+                              title="លុបតារាងមេ"
+                              aria-label="លុប"
                             >
-                              <LuEye size={13} />
-                              <span>បើកមើល</span>
+                              <LuTrash2 size={14} />
                             </button>
-                          </td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </>
-      ) : (
-        /* ============================================================ */
-        /* SCREEN 2: DETAIL VIEW 7-COLUMN TABLE (/sponsorships/:id)     */
-        /* ============================================================ */
-        <>
-          {/* Reusable PageHeader Component */}
-          <PageHeader
-            title={activeMainSponsor.name}
-            subtitle="តារាងតាមដានការឧបត្ថម្ភថវិកា និងសម្ភារលម្អិត"
-            showBack={() => navigate("/sponsorships")}
-            backText="ត្រឡប់ទៅបញ្ជីតារាងមេ"
-            breadcrumbs={[
-              { label: "ផ្ទាំងគ្រប់គ្រង", path: "/dashboard" },
-              { label: "ការឧបត្ថម្ភ", path: "/sponsorships" },
-              { label: activeMainSponsor.name },
-            ]}
-            actions={
-              <>
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  onClick={openAppendixReport}
-                  style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}
-                >
-                  <LuPrinter size={16} />
-                  <span>បោះពុម្ពតារាង (Print)</span>
-                </button>
-
-                {canCreate && (
-                  <button
-                    type="button"
-                    className="btn btn-primary"
-                    onClick={openCreateModal}
-                    style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontWeight: "600" }}
-                  >
-                    <LuPlus size={18} />
-                    <span>+ បញ្ចូលអ្នកឧបត្ថម្ភ</span>
-                  </button>
-                )}
-              </>
-            }
-          />
-
-          {/* KPI Summary for this Main Sponsor */}
-          <div className="sponsorship-kpi-grid">
-            <div className="sponsorship-kpi-card">
-              <div className="sponsorship-kpi-icon usd">
-                <LuDollarSign />
-              </div>
-              <div>
-                <span className="sponsorship-kpi-value">
-                  {toKhmerDigits(totals.totalUSD)} $
-                </span>
-                <span className="sponsorship-kpi-label">ថវិកាសរុបជាប្រាក់ដុល្លារ (USD)</span>
-              </div>
-            </div>
-
-            <div className="sponsorship-kpi-card">
-              <div className="sponsorship-kpi-icon khr">
-                <span>៛</span>
-              </div>
-              <div>
-                <span className="sponsorship-kpi-value">
-                  {toKhmerDigits(totals.totalKHR)} ៛
-                </span>
-                <span className="sponsorship-kpi-label">ថវិកាសរុបជាប្រាក់រៀល (KHR)</span>
-              </div>
-            </div>
-
-            <div className="sponsorship-kpi-card">
-              <div className="sponsorship-kpi-icon material">
-                <LuPackage />
-              </div>
-              <div>
-                <span className="sponsorship-kpi-value">
-                  {toKhmerDigits(totals.totalRecords)} នាក់
-                </span>
-                <span className="sponsorship-kpi-label">ចំនួនអ្នកឧបត្ថម្ភសរុប</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Search Bar */}
-          <div className="sponsorship-filters-card" style={{ padding: "0.75rem 1rem" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-              <LuSearch size={18} color="#64748b" />
-              <input
-                type="text"
-                className="form-control"
-                placeholder="ស្វែងរកតាមឈ្មោះអ្នកឧបត្ថម្ភ, តាមរយៈ, សម្ភារ, ទីកន្លែងទទួល..."
-                value={filters.search || ""}
-                onChange={(e) => setFilters({ ...filters, search: e.target.value })}
-                style={{ border: "none", boxShadow: "none", padding: "0.35rem 0.5rem" }}
-              />
-              {filters.search && (
-                <button
-                  type="button"
-                  className="btn btn-sm btn-light"
-                  onClick={() => setFilters({ ...filters, search: "" })}
-                >
-                  សម្អាត
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* 7-Column Master-Detail Data Table */}
-          <div className="card" style={{ overflow: "hidden", border: "1px solid #e2e8f0" }}>
-            <div className="table-responsive">
-              <table className="table" style={{ margin: 0 }}>
-                <thead>
-                  <tr style={{ background: "#f8fafc" }}>
-                    <th style={{ width: "5%", textAlign: "center" }}>ល.រ</th>
-                    <th style={{ width: "23%" }}>គោត្តនាម និង នាម</th>
-                    <th style={{ width: "20%" }}>សម្ភារ / ឯកតា</th>
-                    <th style={{ width: "12%", textAlign: "right" }}>ថវិកា - ដុល្លារ</th>
-                    <th style={{ width: "12%", textAlign: "right" }}>ថវិកា - រៀល</th>
-                    <th style={{ width: "20%" }}>ទីកន្លែងទទួល និង ប្រើប្រាស់</th>
-                    <th style={{ width: "8%", textAlign: "center" }}>សកម្មភាព</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {loading ? (
-                    <tr>
-                      <td colSpan={7} style={{ textAlign: "center", padding: "2.5rem", color: "#64748b" }}>
-                        <div style={{ display: "inline-flex", alignItems: "center", gap: "0.5rem" }}>
-                          <span>កំពុងផ្ទុកទិន្នន័យពីមូលដ្ឋានទិន្នន័យ (DB)...</span>
+                          )}
                         </div>
                       </td>
                     </tr>
-                  ) : lineItems.length === 0 ? (
-                    <tr>
-                      <td colSpan={7} style={{ textAlign: "center", padding: "3rem", color: "#64748b" }}>
-                        <div>មិនទាន់មានទិន្នន័យអ្នកឧបត្ថម្ភក្នុង &quot;{activeMainSponsor.name}&quot; នៅឡើយទេ</div>
-                        {canCreate && (
-                          <div style={{ marginTop: "1rem" }}>
-                            <button
-                              type="button"
-                              className="btn btn-primary btn-sm"
-                              onClick={openCreateModal}
-                            >
-                              + បញ្ចូលអ្នកឧបត្ថម្ភដំបូង
-                            </button>
-                          </div>
-                        )}
-                      </td>
-                    </tr>
-                  ) : (
-                    lineItems.map((r, idx) => {
-                      const itemsList = r.items || r.in_kind_items || [];
-                      const usdVal = Number(r.amount_usd) || Number(r.currency_usd) || 0;
-                      const khrVal = Number(r.amount_khr) || Number(r.currency_khr) || 0;
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
 
-                      return (
-                        <tr key={r.id || idx}>
-                          {/* Col 1: ល.រ (Sequential Row Number) */}
-                          <td style={{ textAlign: "center", fontWeight: "600", verticalAlign: "top" }}>
-                            {toKhmerDigits(r.entry_no || idx + 1)}
-                          </td>
-
-                          {/* Col 2: គោត្តនាម និង នាម (Honorific & Full Name including representative) */}
-                          <td style={{ verticalAlign: "top" }}>
-                            <div style={{ fontWeight: "700", color: "#1e293b", fontSize: "0.95rem" }}>
-                              {r.contributor_name || r.donor_name}
-                            </div>
-                            {r.representatives && (
-                              <div style={{ fontSize: "0.8rem", color: "#4f46e5", marginTop: "0.2rem" }}>
-                                {r.representatives}
-                              </div>
-                            )}
-                            {r.remarks && (
-                              <div style={{ fontSize: "0.75rem", color: "#64748b", marginTop: "0.2rem", fontStyle: "italic" }}>
-                                ផ្សេងៗ ៖ {r.remarks}
-                              </div>
-                            )}
-                          </td>
-
-                          {/* Col 3: សម្ភារ / ឯកតា (Material Description and Unit Count) */}
-                          <td style={{ verticalAlign: "top" }}>
-                            {itemsList.length > 0 ? (
-                              <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
-                                {itemsList.map((it, itIdx) => (
-                                  <div
-                                    key={itIdx}
-                                    style={{
-                                      fontSize: "0.85rem",
-                                      color: "#334155",
-                                    }}
-                                  >
-                                    • {it.item_name} : <strong>{toKhmerDigits(it.item_qty)} {it.item_unit}</strong>
-                                  </div>
-                                ))}
-                              </div>
-                            ) : (
-                              <span style={{ color: "#94a3b8", fontSize: "0.85rem" }}>-</span>
-                            )}
-                          </td>
-
-                          {/* Col 4: ថវិកា - ដុល្លារ (Amount in USD) */}
-                          <td style={{ textAlign: "right", fontWeight: "700", color: "#059669", verticalAlign: "top" }}>
-                            {usdVal > 0 ? `${toKhmerDigits(usdVal)} $` : "-"}
-                          </td>
-
-                          {/* Col 5: ថវិកា - រៀល (Amount in KHR) */}
-                          <td style={{ textAlign: "right", fontWeight: "700", color: "#2563eb", verticalAlign: "top" }}>
-                            {khrVal > 0 ? `${toKhmerDigits(khrVal)} ៛` : "-"}
-                          </td>
-
-                          {/* Col 6: ទីកន្លែងទទួល និង ប្រើប្រាស់ (Structured text) */}
-                          <td style={{ verticalAlign: "top", fontSize: "0.85rem", color: "#334155", whiteSpace: "pre-line" }}>
-                            {r.usage_description || r.allocation_purpose || "-"}
-                          </td>
-
-                          {/* Col 7: សកម្មភាព (Actions) */}
-                          <td style={{ textAlign: "center", verticalAlign: "top" }}>
-                            <div style={{ display: "inline-flex", gap: "0.4rem", alignItems: "center" }}>
-                              {canEdit && (
-                                <button
-                                  type="button"
-                                  className="btn-icon text-primary"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    openEditModal(r);
-                                  }}
-                                  title="កែប្រែ"
-                                >
-                                  <LuPencil size={15} />
-                                </button>
-                              )}
-
-                              {canDelete && (
-                                <button
-                                  type="button"
-                                  className="btn-icon text-danger"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    deleteRecord(r.id);
-                                  }}
-                                  title="លុប"
-                                >
-                                  <LuTrash2 size={15} />
-                                </button>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-
-                {/* Grand Total Bottom Footer */}
-                {!loading && lineItems.length > 0 && (
-                  <tfoot>
-                    <tr style={{ background: "#f1f5f9", fontWeight: "700", borderTop: "2px solid #cbd5e1" }}>
-                      <td colSpan={3} style={{ textAlign: "center", padding: "0.75rem", fontSize: "0.95rem" }}>
-                        សរុបរួម ({activeMainSponsor.name})
-                      </td>
-                      <td style={{ textAlign: "right", color: "#059669", fontSize: "1rem", padding: "0.75rem" }}>
-                        {toKhmerDigits(totals.totalUSD)} $
-                      </td>
-                      <td style={{ textAlign: "right", color: "#2563eb", fontSize: "1rem", padding: "0.75rem" }}>
-                        {toKhmerDigits(totals.totalKHR)} ៛
-                      </td>
-                      <td colSpan={2}></td>
-                    </tr>
-                  </tfoot>
-                )}
-              </table>
-            </div>
-          </div>
-        </>
-      )}
-
-      {/* Main Sponsorship Creation Modal */}
+      {/* Main Sponsorship Creation Modal (Level 1) */}
       <MainSponsorshipModal
         isOpen={createModalOpen}
         onClose={() => setCreateModalOpen(false)}
-        onCreated={handleCreateMainSponsor}
-      />
-
-      {/* Sponsor Line-Item Entry Modal */}
-      <SponsorshipForm
-        currentPeriod={activeMainSponsor}
-        availablePeriods={mainSponsors}
+        onCreated={handlePeriodCreated}
       />
     </div>
   );

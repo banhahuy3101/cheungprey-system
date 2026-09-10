@@ -21,6 +21,138 @@ func NewSponsorshipHandler(repo *repository.Repository) *SponsorshipHandler {
 	return &SponsorshipHandler{repo: repo}
 }
 
+// -----------------------------------------------------------------------------
+// LEVEL 1: SPONSORSHIP PERIODS HANDLERS
+// -----------------------------------------------------------------------------
+
+// ListPeriods handles GET /api/sponsorship-periods
+func (h *SponsorshipHandler) ListPeriods(c *gin.Context) {
+	periods, err := h.repo.ListSponsorshipPeriods()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"data":  periods,
+		"total": len(periods),
+	})
+}
+
+// GetPeriodByID handles GET /api/sponsorship-periods/:id
+func (h *SponsorshipHandler) GetPeriodByID(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid UUID"})
+		return
+	}
+
+	period, err := h.repo.GetSponsorshipPeriodByID(id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if period == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Period not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"data": period})
+}
+
+// CreatePeriod handles POST /api/sponsorship-periods
+func (h *SponsorshipHandler) CreatePeriod(c *gin.Context) {
+	var req models.CreatePeriodRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	var userID *uuid.UUID
+	if uid, err := auth.GetUserID(c); err == nil && uid != uuid.Nil {
+		userID = &uid
+	}
+
+	created, err := h.repo.CreateSponsorshipPeriod(req, userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusCreated, gin.H{"data": created})
+}
+
+// UpdatePeriod handles PUT /api/sponsorship-periods/:id
+func (h *SponsorshipHandler) UpdatePeriod(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid UUID"})
+		return
+	}
+
+	var req models.UpdatePeriodRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	updated, err := h.repo.UpdateSponsorshipPeriod(id, req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"data": updated})
+}
+
+// ConsolidatePeriod handles POST /api/sponsorship-periods/:id/consolidate
+func (h *SponsorshipHandler) ConsolidatePeriod(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid UUID"})
+		return
+	}
+
+	var userID *uuid.UUID
+	if uid, err := auth.GetUserID(c); err == nil && uid != uuid.Nil {
+		userID = &uid
+	}
+
+	mergedCount, err := h.repo.ConsolidateRecordsForPeriod(id, userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":      "Successfully consolidated sponsorship records",
+		"merged_count": mergedCount,
+	})
+}
+
+// DeletePeriod handles DELETE /api/sponsorship-periods/:id
+func (h *SponsorshipHandler) DeletePeriod(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid UUID"})
+		return
+	}
+
+	if err := h.repo.DeleteSponsorshipPeriod(id); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Period deleted successfully"})
+}
+
+// -----------------------------------------------------------------------------
+// LEVEL 2: SPONSORSHIP RECORDS HANDLERS
+// -----------------------------------------------------------------------------
+
 // List handles GET /api/sponsorships
 func (h *SponsorshipHandler) List(c *gin.Context) {
 	var params models.SponsorshipFilterParams
@@ -73,7 +205,6 @@ func (h *SponsorshipHandler) Create(c *gin.Context) {
 		return
 	}
 
-	// Support BRD alias mappings
 	usd := req.AmountUSD
 	if usd == 0 && req.ExpenseAmountUSD != 0 {
 		usd = req.ExpenseAmountUSD
@@ -99,57 +230,44 @@ func (h *SponsorshipHandler) Create(c *gin.Context) {
 	if donor == "" {
 		donor = strings.TrimSpace(req.DonorName)
 	}
-	if donor == "" {
-		donor = "អ្នកឧបត្ថម្ភទូទៅ"
+
+	classification := strings.TrimSpace(req.EntryClassification)
+	if classification == "" {
+		classification = strings.TrimSpace(req.Category)
 	}
+	if classification == "" {
+		classification = "sponsorship"
+	}
+
 	usage := strings.TrimSpace(req.UsageDescription)
 	if usage == "" {
 		usage = strings.TrimSpace(req.AllocationPurpose)
 	}
-	category := strings.TrimSpace(req.Category)
-	if category == "" {
-		category = strings.TrimSpace(req.EntryClassification)
+
+	var userID *uuid.UUID
+	if uid, err := auth.GetUserID(c); err == nil && uid != uuid.Nil {
+		userID = &uid
 	}
-	if category == "" {
-		category = "donation"
-	}
+
 	items := req.Items
 	if len(items) == 0 && len(req.InKindItems) > 0 {
 		items = req.InKindItems
 	}
 
-	fiscalYear := req.FiscalYear
-	if fiscalYear <= 0 {
-		fiscalYear = time.Now().Year()
-	}
-
-	// Master sponsor profile creation: item fields and cash amounts can be added immediately or left blank initially (FR-1.2)
-	userID, _ := auth.GetUserID(c)
-
-	status := "draft"
-	if req.SubmitImmediately {
-		status = "submitted"
-	}
-
 	entryNo := 0
-	if req.EntryNo != nil {
+	if req.EntryNo != nil && *req.EntryNo > 0 {
 		entryNo = *req.EntryNo
-	} else if req.RecordID != nil {
+	} else if req.RecordID != nil && *req.RecordID > 0 {
 		entryNo = *req.RecordID
 	}
 
-	sectionGroup := strings.TrimSpace(req.SectionGroup)
-	if sectionGroup == "" {
-		sectionGroup = "ការឧបត្ថម្ភទូទៅ"
-	}
-
 	record := models.SponsorshipRecord{
+		PeriodID:            req.PeriodID,
 		EntryNo:             entryNo,
-		RecordID:            entryNo,
-		FiscalYear:          fiscalYear,
-		EntryClassification: category,
-		Category:            category,
-		SectionGroup:        sectionGroup,
+		FiscalYear:          req.FiscalYear,
+		EntryClassification: classification,
+		Category:            classification,
+		SectionGroup:        strings.TrimSpace(req.SectionGroup),
 		ContributorName:     donor,
 		DonorName:           donor,
 		Representatives:     strings.TrimSpace(req.Representatives),
@@ -166,16 +284,22 @@ func (h *SponsorshipHandler) Create(c *gin.Context) {
 		UsageDescription:    usage,
 		AllocationPurpose:   usage,
 		Remarks:             strings.TrimSpace(req.Remarks),
-		Status:              status,
+		Status:              "draft",
+		CreatedBy:           userID,
 	}
-	if userID != uuid.Nil {
-		record.CreatedBy = &userID
+	if record.FiscalYear == 0 {
+		record.FiscalYear = time.Now().Year()
 	}
 
 	created, err := h.repo.CreateSponsorship(&record, items)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
+	}
+
+	if req.SubmitImmediately {
+		_ = h.repo.SubmitSponsorship(created.ID)
+		created.Status = "submitted"
 	}
 
 	c.JSON(http.StatusCreated, gin.H{"data": created})
@@ -190,40 +314,12 @@ func (h *SponsorshipHandler) Update(c *gin.Context) {
 		return
 	}
 
-	existing, err := h.repo.GetSponsorshipByID(id)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
-	var status string = "draft"
-	var existingEntryNo int = 0
-	var existingFiscalYear int = time.Now().Year()
-	var existingSectionGroup string = "ការឧបត្ថម្ភទូទៅ"
-	var existingCategory string = "donation"
-
-	if existing != nil {
-		// If record is already approved, prevent updates unless user is admin
-		perms, _ := auth.GetPermissions(c)
-		isAdmin := perms != nil && (perms[models.FeatureUsers] || perms[models.FeatureTechnical])
-		if existing.Status == "approved" && !isAdmin {
-			c.JSON(http.StatusForbidden, gin.H{"error": "កំណត់ត្រាត្រូវបានអនុម័តរួចហើយ មិនអាចកែប្រែបានទេ (Approved record cannot be modified)"})
-			return
-		}
-		status = existing.Status
-		existingEntryNo = existing.EntryNo
-		existingFiscalYear = existing.FiscalYear
-		existingSectionGroup = existing.SectionGroup
-		existingCategory = existing.EntryClassification
-	}
-
 	var req models.UpdateSponsorshipRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	// Support BRD alias mappings
 	usd := req.AmountUSD
 	if usd == 0 && req.ExpenseAmountUSD != 0 {
 		usd = req.ExpenseAmountUSD
@@ -249,55 +345,36 @@ func (h *SponsorshipHandler) Update(c *gin.Context) {
 	if donor == "" {
 		donor = strings.TrimSpace(req.DonorName)
 	}
+
+	classification := strings.TrimSpace(req.EntryClassification)
+	if classification == "" {
+		classification = strings.TrimSpace(req.Category)
+	}
+
 	usage := strings.TrimSpace(req.UsageDescription)
 	if usage == "" {
 		usage = strings.TrimSpace(req.AllocationPurpose)
 	}
-	category := strings.TrimSpace(req.Category)
-	if category == "" {
-		category = strings.TrimSpace(req.EntryClassification)
-	}
-	if category == "" {
-		category = existingCategory
-		if category == "" {
-			category = "donation"
-		}
-	}
+
 	items := req.Items
 	if len(items) == 0 && len(req.InKindItems) > 0 {
 		items = req.InKindItems
 	}
 
-	fiscalYear := req.FiscalYear
-	if fiscalYear <= 0 {
-		fiscalYear = existingFiscalYear
-		if fiscalYear <= 0 {
-			fiscalYear = time.Now().Year()
-		}
-	}
-
-	entryNo := existingEntryNo
+	entryNo := 0
 	if req.EntryNo != nil && *req.EntryNo > 0 {
 		entryNo = *req.EntryNo
 	} else if req.RecordID != nil && *req.RecordID > 0 {
 		entryNo = *req.RecordID
 	}
 
-	sectionGroup := strings.TrimSpace(req.SectionGroup)
-	if sectionGroup == "" {
-		sectionGroup = existingSectionGroup
-		if sectionGroup == "" {
-			sectionGroup = "ការឧបត្ថម្ភទូទៅ"
-		}
-	}
-
 	record := models.SponsorshipRecord{
+		PeriodID:            req.PeriodID,
 		EntryNo:             entryNo,
-		RecordID:            entryNo,
-		FiscalYear:          fiscalYear,
-		EntryClassification: category,
-		Category:            category,
-		SectionGroup:        sectionGroup,
+		FiscalYear:          req.FiscalYear,
+		EntryClassification: classification,
+		Category:            classification,
+		SectionGroup:        strings.TrimSpace(req.SectionGroup),
 		ContributorName:     donor,
 		DonorName:           donor,
 		Representatives:     strings.TrimSpace(req.Representatives),
@@ -314,7 +391,6 @@ func (h *SponsorshipHandler) Update(c *gin.Context) {
 		UsageDescription:    usage,
 		AllocationPurpose:   usage,
 		Remarks:             strings.TrimSpace(req.Remarks),
-		Status:              status,
 	}
 
 	updated, err := h.repo.UpdateSponsorship(id, &record, items)
@@ -340,7 +416,7 @@ func (h *SponsorshipHandler) Delete(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Deleted successfully"})
+	c.JSON(http.StatusOK, gin.H{"message": "Sponsorship record deleted successfully"})
 }
 
 // Submit handles POST /api/sponsorships/:id/submit
@@ -357,7 +433,7 @@ func (h *SponsorshipHandler) Submit(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Submitted successfully"})
+	c.JSON(http.StatusOK, gin.H{"message": "Sponsorship record submitted for review"})
 }
 
 // Review handles POST /api/sponsorships/:id/review
@@ -370,7 +446,7 @@ func (h *SponsorshipHandler) Review(c *gin.Context) {
 	}
 
 	var req struct {
-		Action string `json:"action" binding:"required"` // "review" or "return"
+		Action string `json:"action" binding:"required"` // approve, return
 		Notes  string `json:"notes"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -378,7 +454,12 @@ func (h *SponsorshipHandler) Review(c *gin.Context) {
 		return
 	}
 
-	reviewerID, _ := auth.GetUserID(c)
+	reviewerID, err := auth.GetUserID(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
 	status := "reviewed"
 	if req.Action == "return" {
 		status = "returned"
@@ -389,7 +470,7 @@ func (h *SponsorshipHandler) Review(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Reviewed status updated successfully", "status": status})
+	c.JSON(http.StatusOK, gin.H{"message": "Sponsorship record review updated"})
 }
 
 // Approve handles POST /api/sponsorships/:id/approve
@@ -404,20 +485,24 @@ func (h *SponsorshipHandler) Approve(c *gin.Context) {
 	var req models.SponsorshipStatusRequest
 	_ = c.ShouldBindJSON(&req)
 
-	approverID, _ := auth.GetUserID(c)
+	approverID, err := auth.GetUserID(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
 
 	if err := h.repo.ApproveSponsorship(id, approverID, req.Notes); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Approved and locked successfully"})
+	c.JSON(http.StatusOK, gin.H{"message": "Sponsorship record approved and locked"})
 }
 
 // GetSummary handles GET /api/sponsorships/summary
 func (h *SponsorshipHandler) GetSummary(c *gin.Context) {
-	period := c.Query("record_period")
-	section := c.Query("section_group")
+	period := c.Query("period")
+	section := c.Query("section")
 
 	summary, err := h.repo.GetSponsorshipSummary(period, section)
 	if err != nil {

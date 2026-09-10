@@ -22,12 +22,14 @@ import PageHeader from "../../components/PageHeader";
 import FormSelect from "../../components/FormSelect";
 import FormInput from "../../components/FormInput";
 import FormDropdown from "../../components/FormDropdown";
+import { useToast } from "../../components/Toast";
 import SponsorshipItemModal from "./SponsorshipItemModal";
 import "../../style/sponsorships.css";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function SponsorshipFormContent() {
+  const toast = useToast();
   const navigate = useNavigate();
   const { periodId, id } = useParams(); // URL: /sponsorships/items/:periodId/create or /sponsorships/items/:periodId/edit/:id
   const isEdit = Boolean(id);
@@ -41,7 +43,6 @@ function SponsorshipFormContent() {
   const [periodRecord, setPeriodRecord] = useState(null);
 
   const loadedRecordIdRef = useRef(null);
-  const initializedCreateRef = useRef(false);
 
   const decodedPeriodId = periodId ? decodeURIComponent(periodId) : null;
   const periodIdIsUuid = Boolean(decodedPeriodId && UUID_RE.test(decodedPeriodId));
@@ -129,7 +130,7 @@ function SponsorshipFormContent() {
     record_period: activePeriod?.name || "",
     fiscal_year: activePeriod?.year || String(new Date().getFullYear()),
     entry_no: "",
-    section_group: "ទូទៅ",
+    section_group: "",
     contributor_name: "",
     representatives: "",
     expense_label: "",
@@ -257,7 +258,7 @@ function SponsorshipFormContent() {
           record_period: editRecord.record_period || activePeriod?.name || "",
           entry_no: editRecord.entry_no ? String(editRecord.entry_no) : editRecord.record_id ? String(editRecord.record_id) : "",
           fiscal_year: editRecord.fiscal_year ? String(editRecord.fiscal_year) : activePeriod?.year || String(new Date().getFullYear()),
-          section_group: editRecord.section_group || "ទូទៅ",
+          section_group: editRecord.section_group || "",
           contributor_name: editRecord.contributor_name || editRecord.donor_name || "",
           representatives: editRecord.representatives || "",
           expense_label: expLabel,
@@ -378,6 +379,13 @@ function SponsorshipFormContent() {
   const handleSubmit = async () => {
     setError("");
 
+    if (!form.contributor_name?.trim()) {
+      const msg = "សូមបញ្ចូល គោត្តនាម និង នាមអ្នកឧបត្ថម្ភ";
+      setError(msg);
+      toast?.error?.(msg);
+      return;
+    }
+
     const isKeepingCurrentNo =
       isEdit &&
       editRecord &&
@@ -385,7 +393,24 @@ function SponsorshipFormContent() {
 
     if (form.entry_no && !isKeepingCurrentNo && takenRowNos.has(Number(form.entry_no))) {
       const donor = takenRowNos.get(Number(form.entry_no));
-      setError(`ល.រ ${toKhmerDigits(form.entry_no)} ត្រូវបានជ្រើសរើសរួចហើយ (${donor}) សូមជ្រើសរើសលេខរៀងផ្សេង`);
+      const msg = `ល.រ ${toKhmerDigits(form.entry_no)} បានជ្រើសរើសរួចហើយ (${donor}) សូមជ្រើសរើសលេខផ្សេង`;
+      setError(msg);
+      toast?.error?.(msg);
+      return;
+    }
+
+    const validation = validateSponsorshipPayload(
+      {
+        ...form,
+        is_expense_total: isExpenseTotal,
+      },
+      items
+    );
+
+    if (!validation.valid) {
+      const msg = validation.error || "ទិន្នន័យមិនត្រឹមត្រូវ សូមពិនិត្យព័ត៌មានឡើងវិញ";
+      setError(msg);
+      toast?.error?.(msg);
       return;
     }
 
@@ -402,6 +427,8 @@ function SponsorshipFormContent() {
 
     const submissionData = {
       ...validation.data,
+      section_group: form.section_group?.trim() || "",
+      period_id: periodId || activePeriod?.id || undefined,
       record_period: finalPeriod,
       fiscal_year: Number(finalYear) || new Date().getFullYear(),
     };
@@ -416,7 +443,9 @@ function SponsorshipFormContent() {
       navigate(periodId ? `/sponsorships/items/${periodId}` : "/sponsorships");
     } catch (err) {
       console.error("Save sponsorship error:", err);
-      setError(err?.response?.data?.error || err?.message || "មានបញ្ហាក្នុងការរក្សាទុកទិន្នន័យ");
+      const msg = err?.response?.data?.error || err?.message || "មានបញ្ហាក្នុងការរក្សាទុកទិន្នន័យ";
+      setError(msg);
+      toast?.error?.(msg);
     } finally {
       setSaving(false);
     }
@@ -425,7 +454,7 @@ function SponsorshipFormContent() {
   const backUrl = periodId ? `/sponsorships/items/${periodId}` : "/sponsorships";
 
   return (
-    <div className="sponsorship-page-container">
+    <div className="page sponsorship-page">
       {/* Page Header with Breadcrumbs */}
       <PageHeader
         title={isEdit ? "កែប្រែទិន្នន័យឧបត្ថម្ភ" : "បញ្ចូលអ្នកឧបត្ថម្ភ និងសម្ភារ/ថវិកា"}
@@ -439,37 +468,46 @@ function SponsorshipFormContent() {
           { label: isEdit ? "កែប្រែ" : "បញ្ចូលថ្មី" },
         ]}
         actions={
-          <button
-            type="button"
-            className="btn btn-primary"
-            onClick={handleSubmit}
-            disabled={saving}
-            style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontWeight: "600" }}
-          >
-            <LuSave size={16} />
-            <span>{saving ? "កំពុងរក្សាទុក..." : isEdit ? "រក្សាទុកការកែប្រែ" : "រក្សាទុក"}</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              className="btn btn-secondary flex items-center gap-1.5 font-medium"
+              onClick={() => navigate(backUrl)}
+              disabled={saving}
+            >
+              <span>បោះបង់</span>
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary flex items-center gap-1.5 font-semibold"
+              onClick={handleSubmit}
+              disabled={saving}
+            >
+              <LuSave size={16} />
+              <span>{saving ? "កំពុងរក្សាទុក..." : isEdit ? "រក្សាទុកការកែប្រែ" : "រក្សាទុក"}</span>
+            </button>
+          </div>
         }
       />
 
-      <div style={{ maxWidth: "1200px", margin: "0 auto", paddingBottom: "3rem" }}>
+      <div className="max-w-6xl mx-auto px-4 mt-4">
         {error && (
-          <div className="alert alert-danger" style={{ marginBottom: "1.25rem", borderRadius: "8px", fontWeight: "600" }}>
+          <div className="mb-4 p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm font-semibold shadow-sm">
             {error}
           </div>
         )}
 
-        <div className="card" style={{ padding: "1.5rem", borderRadius: "12px", border: "1px solid #e2e8f0", background: "#ffffff", boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}>
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex flex-col gap-6">
           {/* Section 1: Contributor Info */}
-          <div className="sponsorship-form-section" style={{ border: "1px solid #e2e8f0", borderRadius: "10px", padding: "1.25rem", background: "#f8fafc", marginBottom: "1.5rem" }}>
-            <h4 style={{ margin: "0 0 1rem 0", fontSize: "1rem", fontWeight: "700", color: "#1e3a8a", display: "flex", alignItems: "center", gap: "0.5rem" }}>
-              <LuUser size={18} color="#2563eb" />
+          <div className="p-5 bg-slate-50/80 border border-slate-200 rounded-xl flex flex-col gap-4">
+            <h4 className="text-base font-bold text-slate-800 flex items-center gap-2">
+              <LuUser className="w-5 h-5 text-blue-600" />
               <span>ព័ត៌មានអ្នកឧបត្ថម្ភ (Contributor Profile)</span>
             </h4>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* Section Group */}
-              <div style={{ gridColumn: "1 / -1" }}>
+              <div className="md:col-span-2">
                 <FormDropdown
                   label="ក្រុមឧបត្ថម្ភ (Section Group)"
                   editable
@@ -481,12 +519,12 @@ function SponsorshipFormContent() {
               </div>
 
               {/* Contributor Name */}
-              <div style={{ gridColumn: "1 / -1" }}>
+              <div className="md:col-span-2">
                 <FormDropdown
                   label="គោត្តនាម និង នាមអ្នកឧបត្ថម្ភ (Honorific & Full Name)"
                   required
                   editable
-                  leadIcon={<LuUser size={16} />}
+                  leadIcon={<LuUser className="w-4 h-4 text-blue-600" />}
                   placeholder="ឧ. ឯកឧត្តម... / លោកជំទាវ... / លោក..."
                   value={form.contributor_name}
                   onChange={(e) => setForm({ ...form, contributor_name: e.target.value })}
@@ -495,7 +533,7 @@ function SponsorshipFormContent() {
               </div>
 
               {/* Representative / Via */}
-              <div style={{ gridColumn: "1 / -1" }}>
+              <div className="md:col-span-2">
                 <FormInput
                   label="តាមរយៈ (Representative / Via - ស្រេចចិត្ត)"
                   placeholder="ឧ. តាមរយៈ ឯកឧត្តម..."
@@ -525,85 +563,99 @@ function SponsorshipFormContent() {
               {/* Fiscal Year */}
               <FormSelect
                 label="ឆ្នាំប្រតិបត្តិការ (Fiscal Year)"
+                required
                 value={form.fiscal_year}
                 onChange={(e) => setForm({ ...form, fiscal_year: e.target.value })}
                 options={Array.from({ length: 2050 - 2015 + 1 }, (_, i) => String(2015 + i)).map((y) => ({
                   value: y,
-                  label: `${y} (ឆ្នាំ ${toKhmerDigits(y)})`,
+                  label: `${y} (ឆ្នាំ ${toKhmerDigits(y, false)})`,
                 }))}
               />
 
-              {/* Direct Cash / Expense Section (Shows inputs only when ticked) */}
-              <div style={{ gridColumn: "1 / -1", marginTop: "0.5rem", paddingTop: "0.85rem", borderTop: "1px dashed #cbd5e1" }}>
+              {/* Special Case: Pure Expense Total (Direct Cash Amount without Items) */}
+              <div className="md:col-span-2 pt-2 border-t border-slate-200">
                 {/* Tick box for សរុបការចំណាយ */}
-                <div style={{ marginBottom: isExpenseTotal ? "0.85rem" : "0.25rem" }}>
-                  <label style={{ display: "inline-flex", alignItems: "center", gap: "0.55rem", cursor: "pointer", fontWeight: "700", fontSize: "0.95rem", color: isExpenseTotal ? "#b91c1c" : "#1e3a8a", userSelect: "none" }}>
-                    <input
-                      type="checkbox"
-                      checked={isExpenseTotal}
-                      onChange={(e) => {
-                        const checked = e.target.checked;
-                        setIsExpenseTotal(checked);
-                        if (!checked) {
-                          setForm((prev) => ({
-                            ...prev,
-                            amount_usd: "",
-                            amount_khr: "",
-                          }));
-                        }
-                      }}
-                      style={{ width: "19px", height: "19px", cursor: "pointer", accentColor: "#dc2626" }}
-                    />
-                    <span>ជាកំណត់ត្រា ៖ សរុបការចំណាយ (Mark as Total Expense / Pure Cash Allocation)</span>
-                  </label>
-                </div>
+                <label className="inline-flex items-center gap-2.5 cursor-pointer font-bold text-sm text-slate-800 select-none">
+                  <input
+                    type="checkbox"
+                    className="w-4 h-4 rounded text-red-600 focus:ring-red-500 border-slate-300 transition-all cursor-pointer"
+                    checked={isExpenseTotal}
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+                      setIsExpenseTotal(checked);
+                      if (checked) {
+                        setForm((prev) => ({
+                          ...prev,
+                          expense_label: prev.expense_label || "សរុបការចំណាយ",
+                          is_expense_label: prev.is_expense_label || "សរុបការចំណាយ",
+                        }));
+                      }
+                    }}
+                  />
+                  <span className={isExpenseTotal ? "text-red-700 font-bold" : "text-slate-700"}>
+                    កំណត់ជា ការសរុបចំណាយ (Mark as Total Expense / Allocation)
+                  </span>
+                </label>
 
                 {isExpenseTotal && (
-                  /* Dedicated Expense Panel (Visible ONLY when isExpenseTotal is ticked) */
-                  <div style={{ background: "#fef2f2", padding: "1.1rem", borderRadius: "10px", border: "1.5px solid #fecaca", boxShadow: "0 1px 3px rgba(185, 28, 28, 0.05)" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", marginBottom: "0.85rem", color: "#991b1b", fontWeight: "700", fontSize: "0.92rem" }}>
-                      <LuDollarSign size={18} color="#dc2626" />
-                      <span>ព័ត៌មាន និងចំនួនទឹកប្រាក់សរុបការចំណាយ (Total Expense Details & Amounts)</span>
+                  <div className="mt-3 p-4 bg-red-50/60 border border-red-200 rounded-xl flex flex-col gap-4 animate-in fade-in duration-200">
+                    <div className="flex items-center gap-2 text-sm font-bold text-red-800">
+                      <LuDollarSign className="w-4 h-4 text-red-600" />
+                      <span>ព័ត៌មាន និងចំនួនទឹកប្រាក់សរុបការចំណាយ</span>
                     </div>
 
-                    {/* 1. Expense Display Label */}
-                    <div style={{ marginBottom: "0.9rem" }}>
-                      <FormInput
-                        label="ស្លាកសម្គាល់ការចំណាយសម្រាប់បង្ហាញក្នុងតារាងឧបសម្ព័ន្ធ (Expense Display Label)"
-                        placeholder="ឧ. សរុបការចំណាយ, ចំណាយក្នុងកម្មវិធី..."
-                        value={form.expense_label ?? form.is_expense_label ?? ""}
-                        onChange={(e) => setForm({ ...form, expense_label: e.target.value, is_expense_label: e.target.value })}
-                      />
-                    </div>
+                    <FormInput
+                      label="ឈ្មោះសម្គាល់សរុបការចំណាយដែលបង្ហាញលើតារាង"
+                      placeholder="ឧ. សរុបចំណាយ, សរុបការចំណាយ..."
+                      value={form.expense_label || form.is_expense_label}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          expense_label: e.target.value,
+                          is_expense_label: e.target.value,
+                        })
+                      }
+                    />
 
-                    {/* 2. Expense Dollar and Riel Amount Inputs */}
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div>
                         <FormInput
-                          label="ចំនួនថវិកាចំណាយ - ដុល្លារ ($ USD)"
-                          placeholder="0"
+                          label="ចំណាយជាក់ស្តែង - ដុល្លារ ($ USD)"
+                          placeholder="0.00"
                           value={form.amount_usd}
-                          onChange={(e) => setForm({ ...form, amount_usd: sanitizeNumericInput(e.target.value, true) })}
-                          style={{ fontWeight: "700", color: "#059669", background: "#ffffff" }}
+                          onChange={(e) => {
+                            const val = sanitizeNumericInput(e.target.value);
+                            setForm({
+                              ...form,
+                              amount_usd: val,
+                              expense_amount_usd: val,
+                            });
+                          }}
                         />
                         {Number(form.amount_usd) > 0 && (
-                          <div style={{ fontSize: "0.78rem", color: "#047857", marginTop: "0.25rem", fontWeight: "600" }}>
-                            = {toKhmerDigits(form.amount_usd)} $ ({numberToKhmerWords(form.amount_usd, "USD")})
+                          <div className="text-xs text-emerald-700 font-semibold mt-1">
+                            {numberToKhmerWords(form.amount_usd, "USD")}
                           </div>
                         )}
                       </div>
 
                       <div>
                         <FormInput
-                          label="ចំនួនថវិកាចំណាយ - រៀល (៛ KHR)"
+                          label="ចំណាយជាក់ស្តែង - រៀល (៛ KHR)"
                           placeholder="0"
                           value={form.amount_khr}
-                          onChange={(e) => setForm({ ...form, amount_khr: sanitizeNumericInput(e.target.value, false) })}
-                          style={{ fontWeight: "700", color: "#2563eb", background: "#ffffff" }}
+                          onChange={(e) => {
+                            const val = sanitizeNumericInput(e.target.value);
+                            setForm({
+                              ...form,
+                              amount_khr: val,
+                              expense_amount_khr: val,
+                            });
+                          }}
                         />
                         {Number(form.amount_khr) > 0 && (
-                          <div style={{ fontSize: "0.78rem", color: "#1d4ed8", marginTop: "0.25rem", fontWeight: "600" }}>
-                            = {toKhmerDigits(form.amount_khr)} ៛ ({numberToKhmerWords(form.amount_khr, "KHR")})
+                          <div className="text-xs text-blue-700 font-semibold mt-1">
+                            {numberToKhmerWords(form.amount_khr, "KHR")}
                           </div>
                         )}
                       </div>
@@ -614,180 +666,122 @@ function SponsorshipFormContent() {
             </div>
           </div>
 
-          {/* Section 2: Physical Goods & Material Allocations Table */}
-          <div className="sponsorship-form-section" style={{ border: "1px solid #fed7aa", borderRadius: "10px", padding: "1.25rem", background: "#ffffff", marginBottom: "1.5rem" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem", flexWrap: "wrap", gap: "0.5rem" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                <div
-                  style={{
-                    width: "36px",
-                    height: "36px",
-                    borderRadius: "8px",
-                    background: "#ffedd5",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    color: "#c2410c",
-                  }}
-                >
-                  <LuPackage size={20} />
-                </div>
-                <div>
-                  <h4 style={{ margin: 0, fontSize: "1rem", fontWeight: "700", color: "#9a3412" }}>
-                    សម្ភារ / ឯកតា (Materials & Goods Line Items)
+          {/* Section 2: Material Items List */}
+          <div className="p-5 bg-orange-50/50 border border-orange-200 rounded-xl flex flex-col gap-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <div className="flex items-center gap-2">
+                  <LuPackage className="w-5 h-5 text-orange-600" />
+                  <h4 className="text-base font-bold text-orange-950">
+                    សម្ភារ / ទំនិញដែលបានឧបត្ថម្ភ (Materials & Goods Items)
                   </h4>
-                  <span style={{ fontSize: "0.8rem", color: "#ea580c" }}>
-                    {items.length > 0 ? `មាន ${toKhmerDigits(items.length)} មុខសម្ភារ` : "ចុចប៊ូតុងខាងស្តាំដើម្បីបញ្ចូលមុខសម្ភារ"}
-                  </span>
                 </div>
+                <span className="text-xs text-orange-700 font-medium">
+                  {items.length > 0 ? `មាន ${toKhmerDigits(items.length)} មុខសម្ភារ` : "មិនទាន់មានមុខសម្ភារណាមួយនៅឡើយ"}
+                </span>
               </div>
 
               <button
                 type="button"
-                className="btn btn-sm"
+                className="btn btn-primary flex items-center gap-1.5 font-semibold"
                 onClick={handleOpenAddItemModal}
-                style={{
-                  background: "#ea580c",
-                  color: "#ffffff",
-                  border: "none",
-                  borderRadius: "8px",
-                  padding: "0.45rem 1rem",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "0.4rem",
-                  fontWeight: "600",
-                  fontSize: "0.88rem",
-                  boxShadow: "0 2px 4px rgba(234, 88, 12, 0.25)",
-                  cursor: "pointer",
-                }}
               >
-                <LuPlus size={18} />
-                <span>+ បន្ថែមសម្ភារ</span>
+                <LuPlus size={16} />
+                <span>បន្ថែមសម្ភារ</span>
               </button>
             </div>
 
+            {/* Empty State */}
             {items.length === 0 ? (
-              <div
-                className="sponsorship-empty-goods"
-                onClick={handleOpenAddItemModal}
-                style={{
-                  cursor: "pointer",
-                  padding: "2.5rem",
-                  textAlign: "center",
-                  background: "#fff7ed",
-                  borderRadius: "8px",
-                  border: "1px dashed #fdba74",
-                  transition: "all 0.2s ease",
-                }}
-              >
-                <LuPackage size={40} color="#ea580c" style={{ opacity: 0.8 }} />
-                <div style={{ fontWeight: "600", fontSize: "0.95rem", color: "#9a3412", marginTop: "0.5rem" }}>
-                  មិនទាន់មានមុខសម្ភារនៅឡើយទេ
+              <div className="p-8 text-center bg-white border border-dashed border-orange-300 rounded-xl">
+                <div className="w-12 h-12 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center mx-auto mb-3">
+                  <LuPackage className="w-6 h-6" />
                 </div>
-                <div style={{ fontSize: "0.85rem", color: "#c2410c", marginTop: "0.25rem" }}>
-                  ចុចទីនេះ ឬចុចប៊ូតុង <strong>&quot;+ បន្ថែមសម្ភារ&quot;</strong> ដើម្បីបើកផ្ទាំងបញ្ចូលមុខសម្ភារ
+                <div className="text-sm font-bold text-orange-900">
+                  មិនទាន់មានមុខសម្ភារណាមួយនៅឡើយទេ
+                </div>
+                <div className="text-xs text-orange-600/80 mt-1">
+                  សូមចុចប៊ូតុង <strong>&quot;+ បន្ថែមសម្ភារ&quot;</strong> ខាងលើដើម្បីបញ្ចូលមុខសម្ភារ
                 </div>
               </div>
             ) : (
-              <div className="table-responsive" style={{ border: "1px solid #fed7aa", borderRadius: "8px", overflow: "hidden" }}>
-                <table className="table" style={{ margin: 0 }}>
+              <div className="overflow-x-auto rounded-xl border border-orange-200 bg-white">
+                <table className="w-full text-left border-collapse text-sm">
                   <thead>
-                    <tr style={{ background: "#fff7ed", color: "#9a3412", fontSize: "0.82rem" }}>
-                      <th style={{ width: "5%", textAlign: "center" }}>ល.រ</th>
-                      <th style={{ width: "22%" }}>ឈ្មោះសម្ភារ</th>
-                      <th style={{ width: "13%", textAlign: "center" }}>បរិមាណ / ឯកតា</th>
-                      <th style={{ width: "12%", textAlign: "right" }}>ថវិកា ($ USD)</th>
-                      <th style={{ width: "13%", textAlign: "right" }}>ថវិកា (៛ KHR)</th>
-                      <th style={{ width: "20%" }}>ទីកន្លែងទទួល និង ប្រើប្រាស់</th>
-                      <th style={{ width: "8%", textAlign: "center" }}>សកម្មភាព</th>
+                    <tr className="bg-orange-50 text-orange-950 border-b border-orange-200 text-xs font-bold">
+                      <th className="py-3 px-3 text-center w-12">ល.រ</th>
+                      <th className="py-3 px-3">មុខសម្ភារ</th>
+                      <th className="py-3 px-3 text-center">ចំនួន / ឯកតា</th>
+                      <th className="py-3 px-3 text-right">តម្លៃ ($ USD)</th>
+                      <th className="py-3 px-3 text-right">តម្លៃ (៛ KHR)</th>
+                      <th className="py-3 px-3">គោលបំណង និង ទីកន្លែងប្រើប្រាស់</th>
+                      <th className="py-3 px-3 text-center w-24">សកម្មភាព</th>
                     </tr>
                   </thead>
-                  <tbody>
+                  <tbody className="divide-y divide-orange-100">
                     {items.map((it, idx) => {
                       const usd = Number(it.amount_usd || it.expense_amount_usd || it.cash_allocation_usd) || 0;
                       const khr = Number(it.amount_khr || it.expense_amount_khr || it.cash_allocation_khr) || 0;
                       const expenseLabel = it.is_expense_label || it.expense_label;
 
                       return (
-                        <tr key={idx} style={{ background: idx % 2 === 0 ? "#ffffff" : "#fffbf5" }}>
-                          <td style={{ textAlign: "center", fontWeight: "700", color: "#9a3412" }}>
+                        <tr
+                          key={idx}
+                          className={idx % 2 === 0 ? "bg-white hover:bg-orange-50/40" : "bg-orange-50/20 hover:bg-orange-50/50"}
+                        >
+                          <td className="py-2.5 px-3 text-center font-bold text-orange-900">
                             {toKhmerDigits(idx + 1)}
                           </td>
-                          <td>
-                            <div style={{ fontWeight: "600", color: "#1e293b", fontSize: "0.92rem" }}>
-                              {it.item_name || <span style={{ color: "#94a3b8" }}>-</span>}
+                          <td className="py-2.5 px-3">
+                            <div className="font-semibold text-slate-800">
+                              {it.item_name || <span className="text-slate-400">-</span>}
                             </div>
                             {expenseLabel && (
-                              <div style={{ marginTop: "0.15rem" }}>
-                                <span style={{ fontSize: "0.75rem", background: "#fee2e2", color: "#b91c1c", padding: "0.1rem 0.45rem", borderRadius: "4px", fontWeight: "600" }}>
+                              <div className="mt-0.5">
+                                <span className="inline-block text-[11px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded font-semibold">
                                   {expenseLabel}
                                 </span>
                               </div>
                             )}
                             {it.remarks && (
-                              <div style={{ fontSize: "0.78rem", color: "#64748b", fontStyle: "italic", marginTop: "0.15rem" }}>
+                              <div className="text-xs text-slate-500 italic mt-0.5">
                                 ផ្សេងៗ ៖ {it.remarks}
                               </div>
                             )}
                           </td>
-                          <td style={{ textAlign: "center" }}>
-                            <span
-                              style={{
-                                background: "#fef3c7",
-                                color: "#92400e",
-                                padding: "0.2rem 0.6rem",
-                                borderRadius: "6px",
-                                fontWeight: "700",
-                                fontSize: "0.85rem",
-                              }}
-                            >
+                          <td className="py-2.5 px-3 text-center">
+                            <span className="inline-block px-2.5 py-1 bg-amber-100 text-amber-900 rounded-md text-xs font-bold">
                               {toKhmerDigits(it.item_qty)} {it.item_unit}
                             </span>
                           </td>
-                          <td style={{ textAlign: "right", fontWeight: "600", color: "#059669" }}>
+                          <td className="py-2.5 px-3 text-right font-semibold text-emerald-600">
                             {usd > 0 ? `${toKhmerDigits(usd)} $` : "-"}
                           </td>
-                          <td style={{ textAlign: "right", fontWeight: "600", color: "#2563eb" }}>
+                          <td className="py-2.5 px-3 text-right font-semibold text-blue-600">
                             {khr > 0 ? `${toKhmerDigits(khr)} ៛` : "-"}
                           </td>
-                          <td style={{ fontSize: "0.82rem", color: "#334155", whiteSpace: "pre-line" }}>
+                          <td className="py-2.5 px-3 text-xs text-slate-700 whitespace-pre-line">
                             {it.usage_description || "-"}
                           </td>
-                          <td style={{ textAlign: "center" }}>
-                            <div style={{ display: "inline-flex", gap: "0.35rem", alignItems: "center" }}>
+                          <td className="py-2.5 px-3 text-center">
+                            <div className="inline-flex items-center justify-center gap-1.5">
                               <button
                                 type="button"
-                                className="btn-icon text-primary"
+                                className="btn btn-sm btn-primary p-1.5 rounded"
                                 onClick={() => handleOpenEditItemModal(idx)}
                                 title="កែប្រែមុខសម្ភារនេះ"
-                                style={{
-                                  width: "28px",
-                                  height: "28px",
-                                  borderRadius: "6px",
-                                  background: "#eff6ff",
-                                  display: "inline-flex",
-                                  alignItems: "center",
-                                  justifyContent: "center",
-                                }}
+                                aria-label="កែប្រែ"
                               >
-                                <LuPencil size={14} color="#2563eb" />
+                                <LuPencil size={14} />
                               </button>
                               <button
                                 type="button"
-                                className="btn-icon text-danger"
+                                className="btn btn-sm btn-outline-danger p-1.5 rounded"
                                 onClick={() => handleRemoveItem(idx)}
                                 title="លុបមុខសម្ភារនេះ"
-                                style={{
-                                  width: "28px",
-                                  height: "28px",
-                                  borderRadius: "6px",
-                                  background: "#fee2e2",
-                                  display: "inline-flex",
-                                  alignItems: "center",
-                                  justifyContent: "center",
-                                }}
+                                aria-label="លុប"
                               >
-                                <LuTrash2 size={14} color="#dc2626" />
+                                <LuTrash2 size={14} />
                               </button>
                             </div>
                           </td>
@@ -797,14 +791,14 @@ function SponsorshipFormContent() {
                   </tbody>
                   {items.length > 0 && (
                     <tfoot>
-                      <tr style={{ background: "#ffedd5", fontWeight: "700" }}>
-                        <td colSpan={3} style={{ textAlign: "center", color: "#9a3412", padding: "0.6rem" }}>
+                      <tr className="bg-orange-100/70 border-t-2 border-orange-200 font-bold text-sm">
+                        <td colSpan={3} className="py-3 px-3 text-center text-orange-950">
                           សរុបរួមមុខសម្ភារ ({toKhmerDigits(items.length)} មុខ)
                         </td>
-                        <td style={{ textAlign: "right", color: "#059669", padding: "0.6rem" }}>
+                        <td className="py-3 px-3 text-right text-emerald-700">
                           {summaryTotals.usd > 0 ? `${toKhmerDigits(summaryTotals.usd)} $` : "0 $"}
                         </td>
-                        <td style={{ textAlign: "right", color: "#2563eb", padding: "0.6rem" }}>
+                        <td className="py-3 px-3 text-right text-blue-700">
                           {summaryTotals.khr > 0 ? `${toKhmerDigits(summaryTotals.khr)} ៛` : "0 ៛"}
                         </td>
                         <td colSpan={2}></td>
@@ -817,42 +811,25 @@ function SponsorshipFormContent() {
           </div>
 
           {/* Form Actions Footer */}
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "flex-end",
-              alignItems: "center",
-              flexWrap: "wrap",
-              gap: "0.75rem",
-              paddingTop: "1rem",
-              borderTop: "1px solid #e2e8f0",
-            }}
-          >
+          <div className="flex items-center justify-end flex-wrap gap-3 pt-4 border-t border-slate-200">
             {error && (
-              <div
-                style={{
-                  marginRight: "auto",
-                  color: "#b91c1c",
-                  fontWeight: "600",
-                  fontSize: "0.9rem",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "0.35rem",
-                  textAlign: "left",
-                }}
-              >
+              <div className="mr-auto text-sm font-semibold text-red-700">
                 {error}
               </div>
             )}
-            <button type="button" className="btn btn-secondary" onClick={() => navigate(backUrl)} disabled={saving}>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => navigate(backUrl)}
+              disabled={saving}
+            >
               បោះបង់
             </button>
             <button
               type="button"
-              className="btn btn-primary"
+              className="btn btn-primary flex items-center gap-1.5 font-semibold"
               onClick={handleSubmit}
               disabled={saving}
-              style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontWeight: "600", padding: "0.6rem 1.5rem" }}
             >
               <LuSave size={16} />
               <span>{saving ? "កំពុងរក្សាទុក..." : isEdit ? "រក្សាទុកការកែប្រែ" : "រក្សាទុក"}</span>

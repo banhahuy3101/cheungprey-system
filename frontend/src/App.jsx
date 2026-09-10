@@ -90,9 +90,12 @@ function App() {
               <Route path="performance/:id" element={<FeatureRoute feature={FEATURES.performance}><Performance /></FeatureRoute>} />
 
               <Route path="sponsorships" element={<FeatureRoute feature={FEATURES.sponsorships}><Sponsorships /></FeatureRoute>} />
+              <Route path="sponsorships-period" element={<FeatureRoute feature={FEATURES.sponsorships}><Sponsorships /></FeatureRoute>} />
+              <Route path="sponsorship-periods" element={<FeatureRoute feature={FEATURES.sponsorships}><Sponsorships /></FeatureRoute>} />
               <Route path="sponsorships/items/:periodId/create" element={<FeatureRoute feature={FEATURES.sponsorships} action="create"><SponsorshipFormPage /></FeatureRoute>} />
               <Route path="sponsorships/items/:periodId/edit/:id" element={<FeatureRoute feature={FEATURES.sponsorships} action="update"><SponsorshipFormPage /></FeatureRoute>} />
               <Route path="sponsorships/items/:id" element={<FeatureRoute feature={FEATURES.sponsorships}><SponsorItemPage /></FeatureRoute>} />
+              <Route path="sponsorships-period/:id" element={<FeatureRoute feature={FEATURES.sponsorships}><SponsorItemPage /></FeatureRoute>} />
               <Route path="sponsorships/sponsor-item/:id" element={<FeatureRoute feature={FEATURES.sponsorships}><SponsorItemPage /></FeatureRoute>} />
               <Route path="sponsorships/appendix" element={<FeatureRoute feature={FEATURES.sponsorships}><SponsorshipAppendixReport /></FeatureRoute>} />
               <Route path="sponsorships/:id" element={<FeatureRoute feature={FEATURES.sponsorships}><SponsorItemPage /></FeatureRoute>} />

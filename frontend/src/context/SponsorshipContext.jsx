@@ -13,6 +13,7 @@ export function useSponsorships() {
 }
 
 const DEFAULT_FILTERS = {
+  period_id: "",
   section_group: "",
   record_period: "",
   status: "",
@@ -22,6 +23,12 @@ const DEFAULT_FILTERS = {
 export function SponsorshipProvider({ children }) {
   const toast = useToast();
 
+  // Level 1: Periods State
+  const [periods, setPeriods] = useState([]);
+  const [periodsLoading, setPeriodsLoading] = useState(true);
+  const [activePeriod, setActivePeriod] = useState(null);
+
+  // Level 2 & 3: Records & Items State
   const [records, setRecords] = useState([]);
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -31,15 +38,97 @@ export function SponsorshipProvider({ children }) {
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState(null);
 
-  const fetchSponsorships = useCallback(async () => {
+  // -------------------------------------------------------------
+  // LEVEL 1: PERIODS CRUD
+  // -------------------------------------------------------------
+  const fetchPeriods = useCallback(async () => {
+    try {
+      setPeriodsLoading(true);
+      const res = await sponsorshipAPI.listPeriods();
+      const list = res.data?.data || [];
+      setPeriods(list);
+      return list;
+    } catch (err) {
+      console.error("fetchPeriods error:", err);
+      setPeriods([]);
+      return [];
+    } finally {
+      setPeriodsLoading(false);
+    }
+  }, []);
+
+  const createPeriod = useCallback(async (payload) => {
+    try {
+      const res = await sponsorshipAPI.createPeriod(payload);
+      toast?.success?.("បានបង្កើតតារាងឧបត្ថម្ភមេជោគជ័យ");
+      const created = res.data?.data;
+      if (created) {
+        setPeriods((prev) => [created, ...prev.filter((p) => String(p.id) !== String(created.id))]);
+      }
+      fetchPeriods();
+      return created;
+    } catch (err) {
+      const msg = err.response?.data?.error || "មិនអាចបង្កើតតារាងឧបត្ថម្ភមេបានទេ";
+      toast?.error?.(msg);
+      throw err;
+    }
+  }, [toast, fetchPeriods]);
+
+  const updatePeriod = useCallback(async (id, payload) => {
+    try {
+      const res = await sponsorshipAPI.updatePeriod(id, payload);
+      toast?.success?.("បានកែប្រែតារាងឧបត្ថម្ភមេជោគជ័យ");
+      const updated = res.data?.data;
+      if (updated) {
+        setPeriods((prev) =>
+          prev.map((p) => (String(p.id) === String(id) ? { ...p, ...updated } : p))
+        );
+        if (activePeriod && String(activePeriod.id) === String(id)) {
+          setActivePeriod((prev) => ({ ...prev, ...updated }));
+        }
+      }
+      fetchPeriods();
+      return updated;
+    } catch (err) {
+      const msg = err.response?.data?.error || "មិនអាចកែប្រែបានទេ";
+      toast?.error?.(msg);
+      throw err;
+    }
+  }, [toast, activePeriod, fetchPeriods]);
+
+  const deletePeriod = useCallback(async (id) => {
+    if (!window.confirm("តើអ្នកពិតជាចង់លុបតារាងឧបត្ថម្ភមេនេះ និងកំណត់ត្រាទាំងអស់ខាងក្នុងមែនទេ?")) return;
+    try {
+      await sponsorshipAPI.deletePeriod(id);
+      toast?.success?.("បានលុបតារាងឧបត្ថម្ភមេជោគជ័យ");
+      setPeriods((prev) => prev.filter((p) => String(p.id) !== String(id)));
+      if (activePeriod && String(activePeriod.id) === String(id)) {
+        setActivePeriod(null);
+      }
+      fetchPeriods();
+    } catch (err) {
+      const msg = err.response?.data?.error || "មិនអាចលុបបានទេ";
+      toast?.error?.(msg);
+      throw err;
+    }
+  }, [toast, activePeriod, fetchPeriods]);
+
+  // -------------------------------------------------------------
+  // LEVEL 2 & 3: RECORDS CRUD
+  // -------------------------------------------------------------
+  const fetchSponsorships = useCallback(async (customParams = {}) => {
     try {
       setLoading(true);
+      const activePId = customParams.period_id || filters.period_id || (activePeriod?.id ? String(activePeriod.id) : undefined);
+
       const queryParams = {
+        period_id: activePId && activePId !== "all" ? activePId : undefined,
         section_group: filters.section_group && filters.section_group !== "ទាំងអស់ (All)" ? filters.section_group : undefined,
         record_period: filters.record_period && filters.record_period !== "ទាំងអស់ (All)" ? filters.record_period : undefined,
         status: filters.status || undefined,
         search: filters.search || undefined,
         limit: 1000,
+        ...customParams,
       };
 
       const listPromise = sponsorshipAPI.list(queryParams).catch((err) => {
@@ -62,7 +151,11 @@ export function SponsorshipProvider({ children }) {
     } finally {
       setLoading(false);
     }
-  }, [filters]);
+  }, [filters, activePeriod]);
+
+  useEffect(() => {
+    fetchPeriods();
+  }, [fetchPeriods]);
 
   useEffect(() => {
     fetchSponsorships();
@@ -89,10 +182,16 @@ export function SponsorshipProvider({ children }) {
 
   const createRecord = useCallback(async (payload, submitImmediately = false) => {
     try {
-      const res = await sponsorshipAPI.create({
+      // Auto-assign activePeriod id and name if available
+      const finalPayload = {
         ...payload,
+        period_id: payload.period_id || activePeriod?.id || undefined,
+        record_period: payload.record_period || activePeriod?.period_name || payload.record_period,
+        fiscal_year: payload.fiscal_year || activePeriod?.fiscal_year || new Date().getFullYear(),
         submit_immediately: submitImmediately,
-      });
+      };
+
+      const res = await sponsorshipAPI.create(finalPayload);
       toast?.success?.(
         submitImmediately ? "បង្កើត និងដាក់ស្នើបានជោគជ័យ" : "រក្សាទុកជាសេចក្តីព្រាងបានជោគជ័យ"
       );
@@ -102,13 +201,14 @@ export function SponsorshipProvider({ children }) {
       }
       closeModal();
       fetchSponsorships();
+      fetchPeriods(); // refresh period totals
       return created;
     } catch (err) {
       const msg = err.response?.data?.error || "មានបញ្ហាក្នុងការបង្កើតកំណត់ត្រា";
       toast?.error?.(msg);
       throw err;
     }
-  }, [closeModal, toast, fetchSponsorships]);
+  }, [closeModal, toast, fetchSponsorships, fetchPeriods, activePeriod]);
 
   const updateRecord = useCallback(async (id, payload) => {
     try {
@@ -122,13 +222,14 @@ export function SponsorshipProvider({ children }) {
       }
       closeModal();
       fetchSponsorships();
+      fetchPeriods();
       return updated;
     } catch (err) {
       const msg = err.response?.data?.error || "មានបញ្ហាក្នុងការកែប្រែទិន្នន័យ";
       toast?.error?.(msg);
       throw err;
     }
-  }, [closeModal, toast, fetchSponsorships]);
+  }, [closeModal, toast, fetchSponsorships, fetchPeriods]);
 
   const deleteRecord = useCallback(async (id) => {
     if (!window.confirm("តើអ្នកពិតជាចង់លុបកំណត់ត្រានេះមែនទេ?")) return;
@@ -136,12 +237,13 @@ export function SponsorshipProvider({ children }) {
       await sponsorshipAPI.delete(id);
       toast?.success?.("បានលុបកំណត់ត្រាជោគជ័យ");
       setRecords((prev) => prev.filter((r) => String(r.id || r.ID) !== String(id)));
+      fetchPeriods();
     } catch (err) {
       const msg = err.response?.data?.error || "មិនអាចលុបកំណត់ត្រាបានទេ";
       toast?.error?.(msg);
       throw err;
     }
-  }, [toast]);
+  }, [toast, fetchPeriods]);
 
   const submitRecord = useCallback(async (id) => {
     try {
@@ -200,6 +302,17 @@ export function SponsorshipProvider({ children }) {
 
   const value = useMemo(
     () => ({
+      // Periods (Level 1)
+      periods,
+      periodsLoading,
+      activePeriod,
+      setActivePeriod,
+      fetchPeriods,
+      createPeriod,
+      updatePeriod,
+      deletePeriod,
+
+      // Records & Items (Level 2 & 3)
       records,
       summary,
       loading,
@@ -207,6 +320,7 @@ export function SponsorshipProvider({ children }) {
       setFilters,
       resetFilters,
       refresh: fetchSponsorships,
+      fetchSponsorships,
       modalOpen,
       selectedRecord,
       openCreateModal,
@@ -220,6 +334,13 @@ export function SponsorshipProvider({ children }) {
       approveRecord,
     }),
     [
+      periods,
+      periodsLoading,
+      activePeriod,
+      fetchPeriods,
+      createPeriod,
+      updatePeriod,
+      deletePeriod,
       records,
       summary,
       loading,

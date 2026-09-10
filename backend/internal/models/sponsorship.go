@@ -7,8 +7,55 @@ import (
 	"github.com/google/uuid"
 )
 
+// SponsorshipPeriod represents a master period (Level 1)
+type SponsorshipPeriod struct {
+	ID               uuid.UUID  `json:"id"`
+	PeriodName       string     `json:"period_name"`
+	FiscalYear       int        `json:"fiscal_year"`
+	PeriodType       string     `json:"period_type"` // 'month', 'semester', 'year', 'custom'
+	StartDate        *string    `json:"start_date,omitempty"`
+	EndDate          *string    `json:"end_date,omitempty"`
+	Status           string     `json:"status"` // 'draft', 'active', 'closed'
+	Remarks          string     `json:"remarks,omitempty"`
+	MaterialsSummary string     `json:"materials_summary,omitempty"`
+	CreatedBy        *uuid.UUID `json:"created_by,omitempty"`
+	CreatedAt        time.Time  `json:"created_at"`
+	UpdatedAt        time.Time  `json:"updated_at"`
+
+	// Computed statistics
+	TotalUSD     float64 `json:"total_usd"`
+	TotalKHR     int64   `json:"total_khr"`
+	RecordsCount int     `json:"records_count"`
+	ItemsCount   int     `json:"items_count"`
+}
+
+type CreatePeriodRequest struct {
+	PeriodName       string  `json:"period_name" binding:"required"`
+	FiscalYear       int     `json:"fiscal_year"`
+	PeriodType       string  `json:"period_type"`
+	StartDate        *string `json:"start_date"`
+	EndDate          *string `json:"end_date"`
+	Status           string  `json:"status"`
+	Remarks          string  `json:"remarks"`
+	MaterialsSummary string  `json:"materials_summary,omitempty"`
+	AutoConsolidate  *bool   `json:"auto_consolidate,omitempty"`
+}
+
+type UpdatePeriodRequest struct {
+	PeriodName       *string `json:"period_name"`
+	FiscalYear       *int    `json:"fiscal_year"`
+	PeriodType       *string `json:"period_type"`
+	StartDate        *string `json:"start_date"`
+	EndDate          *string `json:"end_date"`
+	Status           *string `json:"status"`
+	Remarks          *string `json:"remarks"`
+	MaterialsSummary *string `json:"materials_summary"`
+}
+
+// SponsorshipRecord represents an individual contributor/donor record (Level 2)
 type SponsorshipRecord struct {
 	ID                  uuid.UUID  `json:"id"`
+	PeriodID            *uuid.UUID `json:"period_id,omitempty"`
 	EntryNo             int        `json:"entry_no"`
 	RecordID            int        `json:"record_id"` // BRD alias for entry_no
 	FiscalYear          int        `json:"fiscal_year"`
@@ -18,6 +65,7 @@ type SponsorshipRecord struct {
 	ContributorName     string     `json:"contributor_name"`
 	DonorName           string     `json:"donor_name"` // BRD alias for contributor_name
 	Representatives     string     `json:"representatives,omitempty"`
+	TargetLocation      string     `json:"target_location,omitempty"`
 	RecordPeriod        string     `json:"record_period"`
 	IsExpenseTotal      bool       `json:"is_expense_total"`
 	ExpenseLabel        string     `json:"expense_label,omitempty"`
@@ -41,6 +89,8 @@ type SponsorshipRecord struct {
 	ApproverNotes       string     `json:"approver_notes,omitempty"`
 	CreatedAt           time.Time  `json:"created_at"`
 	UpdatedAt           time.Time  `json:"updated_at"`
+
+	Period *SponsorshipPeriod `json:"period,omitempty"`
 }
 
 func (r *SponsorshipRecord) SyncAliases() {
@@ -110,28 +160,7 @@ func (r *SponsorshipRecord) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (s *SponsorshipItem) SyncAliases() {
-	usd := s.AmountUSD
-	if usd == 0 && s.ExpenseAmountUSD != 0 {
-		usd = s.ExpenseAmountUSD
-	} else if usd == 0 && s.CashAllocationUSD != 0 {
-		usd = s.CashAllocationUSD
-	}
-	s.AmountUSD = usd
-	s.ExpenseAmountUSD = usd
-	s.CashAllocationUSD = usd
-
-	khr := s.AmountKHR
-	if khr == 0 && s.ExpenseAmountKHR != 0 {
-		khr = s.ExpenseAmountKHR
-	} else if khr == 0 && s.CashAllocationKHR != 0 {
-		khr = s.CashAllocationKHR
-	}
-	s.AmountKHR = khr
-	s.ExpenseAmountKHR = khr
-	s.CashAllocationKHR = khr
-}
-
+// SponsorshipItem represents in-kind/material or breakdown item (Level 3)
 type SponsorshipItem struct {
 	ID                uuid.UUID `json:"id"`
 	RecordID          uuid.UUID `json:"record_id"`
@@ -142,7 +171,6 @@ type SponsorshipItem struct {
 	AmountKHR         int64     `json:"amount_khr"`
 	ExpenseAmountUSD  float64   `json:"expense_amount_usd"`
 	ExpenseAmountKHR  int64     `json:"expense_amount_khr"`
-	IsExpenseLabel    string    `json:"is_expense_label,omitempty"`
 	CashAllocationUSD float64   `json:"cash_allocation_usd"`
 	CashAllocationKHR int64     `json:"cash_allocation_khr"`
 	UsageDescription  string    `json:"usage_description,omitempty"`
@@ -151,16 +179,7 @@ type SponsorshipItem struct {
 	CreatedAt         time.Time `json:"created_at"`
 }
 
-func (s *SponsorshipItem) UnmarshalJSON(data []byte) error {
-	type Alias SponsorshipItem
-	aux := struct {
-		*Alias
-	}{
-		Alias: (*Alias)(s),
-	}
-	if err := json.Unmarshal(data, &aux); err != nil {
-		return err
-	}
+func (s *SponsorshipItem) SyncAliases() {
 	if s.AmountUSD == 0 {
 		if s.ExpenseAmountUSD != 0 {
 			s.AmountUSD = s.ExpenseAmountUSD
@@ -188,6 +207,19 @@ func (s *SponsorshipItem) UnmarshalJSON(data []byte) error {
 	if s.CashAllocationKHR == 0 {
 		s.CashAllocationKHR = s.AmountKHR
 	}
+}
+
+func (s *SponsorshipItem) UnmarshalJSON(data []byte) error {
+	type Alias SponsorshipItem
+	aux := struct {
+		*Alias
+	}{
+		Alias: (*Alias)(s),
+	}
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	s.SyncAliases()
 	return nil
 }
 
@@ -199,7 +231,6 @@ type SponsorshipItemInput struct {
 	AmountKHR         int64   `json:"amount_khr"`
 	ExpenseAmountUSD  float64 `json:"expense_amount_usd"`
 	ExpenseAmountKHR  int64   `json:"expense_amount_khr"`
-	IsExpenseLabel    string  `json:"is_expense_label"`
 	CashAllocationUSD float64 `json:"cash_allocation_usd"`
 	CashAllocationKHR int64   `json:"cash_allocation_khr"`
 	UsageDescription  string  `json:"usage_description"`
@@ -257,6 +288,7 @@ type SponsorshipWithItems struct {
 }
 
 type CreateSponsorshipRequest struct {
+	PeriodID            *uuid.UUID             `json:"period_id"`
 	EntryNo             *int                   `json:"entry_no"`
 	RecordID            *int                   `json:"record_id"`
 	FiscalYear          int                    `json:"fiscal_year"`
@@ -266,6 +298,7 @@ type CreateSponsorshipRequest struct {
 	ContributorName     string                 `json:"contributor_name"`
 	DonorName           string                 `json:"donor_name"`
 	Representatives     string                 `json:"representatives"`
+	TargetLocation      string                 `json:"target_location"`
 	RecordPeriod        string                 `json:"record_period"`
 	IsExpenseTotal      bool                   `json:"is_expense_total"`
 	ExpenseLabel        string                 `json:"expense_label"`
@@ -285,6 +318,7 @@ type CreateSponsorshipRequest struct {
 }
 
 type UpdateSponsorshipRequest struct {
+	PeriodID            *uuid.UUID             `json:"period_id"`
 	EntryNo             *int                   `json:"entry_no"`
 	RecordID            *int                   `json:"record_id"`
 	FiscalYear          int                    `json:"fiscal_year"`
@@ -294,6 +328,7 @@ type UpdateSponsorshipRequest struct {
 	ContributorName     string                 `json:"contributor_name"`
 	DonorName           string                 `json:"donor_name"`
 	Representatives     string                 `json:"representatives"`
+	TargetLocation      string                 `json:"target_location"`
 	RecordPeriod        string                 `json:"record_period"`
 	IsExpenseTotal      bool                   `json:"is_expense_total"`
 	ExpenseLabel        string                 `json:"expense_label"`
@@ -316,6 +351,7 @@ type SponsorshipStatusRequest struct {
 }
 
 type SponsorshipFilterParams struct {
+	PeriodID     string `form:"period_id"`
 	FiscalYear   int    `form:"fiscal_year"`
 	SectionGroup string `form:"section_group"`
 	Category     string `form:"category"`

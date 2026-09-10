@@ -235,91 +235,50 @@ export default function SponsorshipForm({ currentPeriod, availablePeriods = [] }
       return;
     }
 
-    const validation = validateSponsorshipPayload(form, items);
-    if (!validation.valid) {
-      setError(validation.error);
-      return;
-    }
-
-    setSaving(true);
-    try {
-      if (isEdit) {
-        const recordId = selectedRecord?.id || selectedRecord?.ID;
-        await updateRecord(recordId, validation.data);
-      } else {
-        await createRecord(validation.data, false);
-      }
-      closeModal();
-    } catch (err) {
-      console.error("Save sponsorship error:", err);
-      setError(err?.response?.data?.error || err?.message || "មានបញ្ហាក្នុងការរក្សាទុកទិន្នន័យ");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <div className="sponsorship-modal-backdrop" onClick={closeModal}>
-      <div className="sponsorship-modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "860px" }}>
+    const validation = validateSponsorshipPayload(f  return (
+    <div
+      className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4"
+      onClick={closeModal}
+    >
+      <div
+        className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-4xl overflow-hidden max-h-[92vh] flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Simple Modal Header */}
-        <div className="sponsorship-modal-header">
+        <div className="flex items-center justify-between px-6 py-4 bg-gradient-to-r from-blue-50/80 to-indigo-50/80 border-b border-blue-100">
           <div>
-            <h3 style={{ margin: 0, fontSize: "1.15rem", fontWeight: "700", color: "#1e3a8a" }}>
+            <h3 className="text-base font-bold text-slate-900 leading-tight">
               {isEdit ? "កែប្រែទិន្នន័យឧបត្ថម្ភ" : "បញ្ចូលអ្នកឧបត្ថម្ភ និងសម្ភារ/ថវិកា"}
             </h3>
-            <span style={{ fontSize: "0.8rem", color: "#64748b" }}>
+            <span className="text-xs text-slate-500">
               {form.record_period ? `ក្រោមតារាងមេ ៖ ${form.record_period}` : "ទម្រង់បញ្ចូលទិន្នន័យអ្នកឧបត្ថម្ភ"}
             </span>
           </div>
           <button
             type="button"
-            className="btn-icon"
+            className="w-8 h-8 rounded-full bg-white border border-slate-200 hover:bg-slate-100 text-slate-500 hover:text-slate-700 flex items-center justify-center transition-colors cursor-pointer"
             onClick={closeModal}
             aria-label="បិទ"
-            style={{
-              background: "#ffffff",
-              border: "1px solid #cbd5e1",
-              borderRadius: "50%",
-              width: "32px",
-              height: "32px",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              color: "#64748b",
-              cursor: "pointer",
-            }}
           >
-            <LuX size={17} />
+            <LuX className="w-4 h-4" />
           </button>
         </div>
 
         {/* Modal Body */}
-        <div className="sponsorship-modal-body" style={{ gap: "1rem" }}>
+        <div className="p-6 overflow-y-auto flex flex-col gap-4">
           {error && (
-            <div
-              style={{
-                padding: "0.75rem 1rem",
-                background: "#fef2f2",
-                border: "1px solid #fecaca",
-                color: "#b91c1c",
-                borderRadius: "8px",
-                fontSize: "0.88rem",
-                display: "flex",
-                alignItems: "center",
-                gap: "0.5rem",
-              }}
-            >
-              <LuShieldAlert size={18} />
+            <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-xs font-semibold flex items-center gap-2">
+              <LuShieldAlert className="w-4 h-4 text-red-600 shrink-0" />
               <span>{error}</span>
             </div>
           )}
 
           {/* Main Sponsorship Selection */}
           {availablePeriods.length > 0 && (
-            <div style={{ background: "#f8fafc", padding: "0.75rem", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
+            <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
               <FormSelect
                 label="តារាងឧបត្ថម្ភមេ (Main Sponsorship Period)"
-                icon={<LuCalendar size={15} color="#1e3a8a" />}
+                icon={<LuCalendar className="w-4 h-4 text-blue-600" />}
                 value={form.record_period}
                 onChange={(e) => {
                   const newPeriod = e.target.value;
@@ -339,19 +298,19 @@ export default function SponsorshipForm({ currentPeriod, availablePeriods = [] }
           )}
 
           {/* Section 1: Sponsor Info (Master) */}
-          <div className="sponsorship-form-section tinted">
-            <h4 className="sponsorship-form-section-title">
-              <LuUser size={17} />
+          <div className="p-4 bg-slate-50/80 border border-slate-200 rounded-xl flex flex-col gap-3">
+            <h4 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+              <LuUser className="w-4 h-4 text-blue-600" />
               <span>ព័ត៌មានអ្នកឧបត្ថម្ភ (Sponsor)</span>
             </h4>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.85rem" }}>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
               {/* Contributor / Full Name */}
-              <div style={{ gridColumn: "1 / -1" }}>
+              <div className="sm:col-span-2">
                 <FormInput
                   label="គោត្តនាម និង នាម (Honorific & Full Name)"
                   required
-                  leadIcon={<LuUser size={16} />}
+                  leadIcon={<LuUser className="w-4 h-4 text-blue-600" />}
                   placeholder="ឧ. ឯកឧត្តមបណ្ឌិត ម៉ា ឈឿន ឬ លោកជំទាវ..."
                   value={form.contributor_name}
                   onChange={(e) => setForm({ ...form, contributor_name: e.target.value })}
@@ -360,7 +319,7 @@ export default function SponsorshipForm({ currentPeriod, availablePeriods = [] }
               </div>
 
               {/* Representative / Via */}
-              <div style={{ gridColumn: "1 / -1" }}>
+              <div className="sm:col-span-2">
                 <FormInput
                   label="តាមរយៈ (Representative / Via - ស្រេចចិត្ត)"
                   placeholder="ឧ. តាមរយៈ ឯកឧត្តម..."
@@ -394,35 +353,24 @@ export default function SponsorshipForm({ currentPeriod, availablePeriods = [] }
                 onChange={(e) => setForm({ ...form, fiscal_year: e.target.value })}
                 options={Array.from({ length: 2050 - 2015 + 1 }, (_, i) => String(2015 + i)).map((y) => ({
                   value: y,
-                  label: `${y} (ឆ្នាំ ${toKhmerDigits(y)})`,
+                  label: `${y} (ឆ្នាំ ${toKhmerDigits(y, false)})`,
                 }))}
               />
             </div>
           </div>
 
           {/* Section 2: Physical Goods / Materials & Line Item Allocations */}
-          <div className="sponsorship-form-section" style={{ background: "#ffffff", border: "1px solid #fed7aa" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.85rem", flexWrap: "wrap", gap: "0.5rem" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                <div
-                  style={{
-                    width: "32px",
-                    height: "32px",
-                    borderRadius: "8px",
-                    background: "#ffedd5",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    color: "#c2410c",
-                  }}
-                >
-                  <LuPackage size={18} />
+          <div className="p-4 bg-white border border-orange-200 rounded-xl flex flex-col gap-3 shadow-sm">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-orange-100 text-orange-600 flex items-center justify-center">
+                  <LuPackage className="w-4 h-4" />
                 </div>
                 <div>
-                  <h4 style={{ margin: 0, fontSize: "0.95rem", fontWeight: "700", color: "#9a3412" }}>
+                  <h4 className="text-sm font-bold text-orange-950">
                     សម្ភារ / ឯកតា (Materials & Goods)
                   </h4>
-                  <span style={{ fontSize: "0.75rem", color: "#ea580c" }}>
+                  <span className="text-xs text-orange-700">
                     {items.length > 0 ? `មាន ${toKhmerDigits(items.length)} មុខសម្ភារ` : "ស្រេចចិត្ត (Optional)"}
                   </span>
                 </div>
@@ -430,69 +378,46 @@ export default function SponsorshipForm({ currentPeriod, availablePeriods = [] }
 
               <button
                 type="button"
-                className="btn btn-sm"
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-orange-600 hover:bg-orange-700 active:bg-orange-800 text-white rounded-lg text-xs font-semibold shadow-sm hover:shadow transition-all cursor-pointer"
                 onClick={handleAddItem}
-                style={{
-                  background: "#ea580c",
-                  color: "#ffffff",
-                  border: "none",
-                  borderRadius: "8px",
-                  padding: "0.35rem 0.75rem",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "0.35rem",
-                  fontWeight: "600",
-                  fontSize: "0.85rem",
-                  boxShadow: "0 1px 2px rgba(234, 88, 12, 0.2)",
-                  cursor: "pointer",
-                }}
               >
-                <LuPlus size={16} />
-                <span>+ បន្ថែមសម្ភារ</span>
+                <LuPlus className="w-3.5 h-3.5" />
+                <span>បន្ថែមសម្ភារ</span>
               </button>
             </div>
 
             {items.length === 0 ? (
-              <div className="sponsorship-empty-goods" onClick={handleAddItem} style={{ cursor: "pointer" }}>
-                <LuPackage size={30} color="#ea580c" style={{ opacity: 0.8 }} />
-                <div style={{ fontWeight: "600", fontSize: "0.9rem", color: "#9a3412" }}>
+              <div
+                className="p-6 text-center bg-orange-50/60 rounded-xl border border-dashed border-orange-300 hover:bg-orange-50 cursor-pointer transition-colors"
+                onClick={handleAddItem}
+              >
+                <LuPackage className="w-8 h-8 text-orange-400 mx-auto mb-1.5" />
+                <div className="text-xs font-bold text-orange-900">
                   មិនទាន់មានមុខសម្ភារនៅឡើយទេ
                 </div>
-                <div style={{ fontSize: "0.8rem", color: "#c2410c" }}>
-                  ចុចទីនេះ ឬចុចប៊ូតុង <strong>&quot;+ បន្ថែមសម្ភារ&quot;</strong> ប្រសិនបើមានការឧបត្ថម្ភជាសម្ភារ
+                <div className="text-xs text-orange-700 mt-0.5">
+                  ចុចទីនេះ ឬចុចប៊ូតុង <strong>&quot;បន្ថែមសម្ភារ&quot;</strong> ប្រសិនបើមានការឧបត្ថម្ភជាសម្ភារ
                 </div>
               </div>
             ) : (
-              <div className="sponsorship-goods-container">
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "24px minmax(110px, 1fr) 60px 75px 80px 80px minmax(130px, 1.2fr) minmax(100px, 1fr) 28px",
-                    gap: "0.4rem",
-                    padding: "0 0.5rem",
-                    fontSize: "0.76rem",
-                    fontWeight: "700",
-                    color: "#9a3412",
-                  }}
-                >
-                  <span style={{ textAlign: "center" }}>ល.រ</span>
-                  <span>ឈ្មោះសម្ភារ (Item Name)</span>
-                  <span style={{ textAlign: "center" }}>បរិមាណ</span>
-                  <span>ឯកតា</span>
-                  <span style={{ textAlign: "right" }}>ថវិកា ($)</span>
-                  <span style={{ textAlign: "right" }}>ថវិកា (៛)</span>
-                  <span>ទីកន្លែងទទួល និង ប្រើប្រាស់</span>
-                  <span>ផ្សេងៗ (Remarks)</span>
-                  <span></span>
+              <div className="flex flex-col gap-2">
+                <div className="hidden sm:grid grid-cols-12 gap-2 px-2 text-xs font-bold text-orange-950">
+                  <span className="col-span-1 text-center">ល.រ</span>
+                  <span className="col-span-3">ឈ្មោះសម្ភារ</span>
+                  <span className="col-span-1 text-center">បរិមាណ</span>
+                  <span className="col-span-2">ឯកតា</span>
+                  <span className="col-span-2 text-right">ថវិកា ($)</span>
+                  <span className="col-span-2 text-right">ថវិកា (៛)</span>
+                  <span className="col-span-1"></span>
                 </div>
 
                 {items.map((it, idx) => (
-                  <div key={idx} className="sponsorship-good-row">
-                    <div className="sponsorship-good-index">
+                  <div key={idx} className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex flex-col sm:grid sm:grid-cols-12 gap-2 items-center">
+                    <div className="col-span-1 font-bold text-orange-900 text-center">
                       {toKhmerDigits(idx + 1)}
                     </div>
 
-                    <div>
+                    <div className="col-span-3 w-full">
                       <FormDropdown
                         compact
                         editable
@@ -504,7 +429,7 @@ export default function SponsorshipForm({ currentPeriod, availablePeriods = [] }
                       />
                     </div>
 
-                    <div>
+                    <div className="col-span-1 w-full">
                       <FormInput
                         compact
                         placeholder="1"
@@ -514,7 +439,7 @@ export default function SponsorshipForm({ currentPeriod, availablePeriods = [] }
                       />
                     </div>
 
-                    <div>
+                    <div className="col-span-2 w-full">
                       <FormDropdown
                         compact
                         editable
@@ -525,7 +450,7 @@ export default function SponsorshipForm({ currentPeriod, availablePeriods = [] }
                       />
                     </div>
 
-                    <div>
+                    <div className="col-span-2 w-full">
                       <FormInput
                         compact
                         placeholder="0 $"
@@ -535,7 +460,7 @@ export default function SponsorshipForm({ currentPeriod, availablePeriods = [] }
                       />
                     </div>
 
-                    <div>
+                    <div className="col-span-2 w-full">
                       <FormInput
                         compact
                         placeholder="0 ៛"
@@ -545,23 +470,47 @@ export default function SponsorshipForm({ currentPeriod, availablePeriods = [] }
                       />
                     </div>
 
-                    <div>
-                      <FormDropdown
-                        compact
-                        editable
-                        placeholder="ទីកន្លែងទទួល / គោលបំណង..."
-                        value={it.usage_description}
-                        onChange={(e) => handleItemChange(idx, "usage_description", e.target.value)}
-                        options={PURPOSE_OPTIONS}
-                      />
+                    <div className="col-span-1 text-center">
+                      <button
+                        type="button"
+                        className="w-7 h-7 rounded-md bg-red-50 text-red-600 hover:bg-red-100 inline-flex items-center justify-center transition-colors cursor-pointer"
+                        onClick={() => handleRemoveItem(idx)}
+                        title="លុបមុខសម្ភារនេះ"
+                      >
+                        <LuTrash2 className="w-3.5 h-3.5" />
+                      </button>
                     </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
 
-                    <div>
-                      <FormInput
-                        compact
-                        placeholder="ផ្សេងៗ..."
-                        value={it.remarks}
-                        onChange={(e) => handleItemChange(idx, "remarks", e.target.value)}
+        {/* Modal Footer */}
+        <div className="flex items-center justify-end gap-3 px-6 py-4 bg-slate-50 border-t border-slate-200">
+          <button
+            type="button"
+            className="px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200 rounded-lg transition-colors cursor-pointer"
+            onClick={closeModal}
+            disabled={saving}
+          >
+            បោះបង់
+          </button>
+          <button
+            type="button"
+            className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white rounded-lg text-sm font-semibold shadow-sm hover:shadow transition-all cursor-pointer disabled:opacity-50"
+            onClick={handleSubmit}
+            disabled={saving}
+          >
+            <LuSave className="w-4 h-4" />
+            <span>{saving ? "កំពុងរក្សាទុក..." : isEdit ? "រក្សាទុកការកែប្រែ" : "រក្សាទុក"}</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}e.target.value)}
                       />
                     </div>
 

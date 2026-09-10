@@ -10,11 +10,11 @@ import {
 import { toKhmerDigits, numberToKhmerWords } from "../../utils/khmerNumberSpelling";
 import {
   COMMON_UNITS,
-  normalizeKhmerDigits,
   sanitizeNumericInput,
 } from "../../utils/sponsorshipUtils";
 import FormInput from "../../components/FormInput";
 import FormDropdown from "../../components/FormDropdown";
+import { useToast } from "../../components/Toast";
 
 const PURPOSE_OPTIONS = [
   { value: "ឧបត្ថម្ភដល់ប្រជាពលរដ្ឋទីទ័លក្រ", label: "ឧបត្ថម្ភដល់ប្រជាពលរដ្ឋទីទ័លក្រ" },
@@ -32,6 +32,7 @@ export default function SponsorshipItemModal({
   materialOptions = [],
   defaultUsageDescription = "",
 }) {
+  const toast = useToast();
   const [form, setForm] = useState({
     item_name: "",
     item_qty: "",
@@ -40,7 +41,6 @@ export default function SponsorshipItemModal({
     expense_amount_khr: "",
     cash_allocation_usd: "",
     cash_allocation_khr: "",
-    is_expense_label: "",
     usage_description: "",
     remarks: "",
   });
@@ -49,21 +49,22 @@ export default function SponsorshipItemModal({
   useEffect(() => {
     if (open) {
       if (initialData) {
-        const usdVal = initialData.amount_usd !== undefined && initialData.amount_usd !== null && initialData.amount_usd !== ""
-          ? String(initialData.amount_usd)
-          : initialData.expense_amount_usd !== undefined && initialData.expense_amount_usd !== null && initialData.expense_amount_usd !== ""
+        const usdVal =
+          initialData.amount_usd !== undefined && initialData.amount_usd !== null && initialData.amount_usd !== ""
+            ? String(initialData.amount_usd)
+            : initialData.expense_amount_usd !== undefined && initialData.expense_amount_usd !== null && initialData.expense_amount_usd !== ""
             ? String(initialData.expense_amount_usd)
             : initialData.cash_allocation_usd !== undefined && initialData.cash_allocation_usd !== null && initialData.cash_allocation_usd !== ""
-              ? String(initialData.cash_allocation_usd)
-              : "";
-        const khrVal = initialData.amount_khr !== undefined && initialData.amount_khr !== null && initialData.amount_khr !== ""
-          ? String(initialData.amount_khr)
-          : initialData.expense_amount_khr !== undefined && initialData.expense_amount_khr !== null && initialData.expense_amount_khr !== ""
+            ? String(initialData.cash_allocation_usd)
+            : "";
+        const khrVal =
+          initialData.amount_khr !== undefined && initialData.amount_khr !== null && initialData.amount_khr !== ""
+            ? String(initialData.amount_khr)
+            : initialData.expense_amount_khr !== undefined && initialData.expense_amount_khr !== null && initialData.expense_amount_khr !== ""
             ? String(initialData.expense_amount_khr)
             : initialData.cash_allocation_khr !== undefined && initialData.cash_allocation_khr !== null && initialData.cash_allocation_khr !== ""
-              ? String(initialData.cash_allocation_khr)
-              : "";
-        const expLabel = initialData.is_expense_label || initialData.expense_label || "";
+            ? String(initialData.cash_allocation_khr)
+            : "";
 
         setForm({
           item_name: initialData.item_name || "",
@@ -75,7 +76,6 @@ export default function SponsorshipItemModal({
           expense_amount_khr: khrVal,
           cash_allocation_usd: usdVal,
           cash_allocation_khr: khrVal,
-          is_expense_label: expLabel,
           usage_description: initialData.usage_description || defaultUsageDescription || "",
           remarks: initialData.remarks || "",
         });
@@ -90,7 +90,6 @@ export default function SponsorshipItemModal({
           expense_amount_khr: "",
           cash_allocation_usd: "",
           cash_allocation_khr: "",
-          is_expense_label: "",
           usage_description: defaultUsageDescription || "",
           remarks: "",
         });
@@ -109,17 +108,23 @@ export default function SponsorshipItemModal({
 
     // Validate invalid non-numeric inputs
     if (usdInput && isNaN(Number(usdInput))) {
-      setError("ថវិកាជាប្រាក់ដុល្លារ ($ USD) មិនត្រឹមត្រូវ សូមបញ្ចូលជាលេខ");
+      const msg = "ថវិកាជាប្រាក់ដុល្លារ ($ USD) មិនត្រឹមត្រូវ សូមបញ្ចូលជាលេខ";
+      setError(msg);
+      toast?.error?.(msg);
       return;
     }
 
     if (khrInput && isNaN(Number(khrInput))) {
-      setError("ថវិកាជាប្រាក់រៀល (៛ KHR) មិនត្រឹមត្រូវ សូមបញ្ចូលជាលេខ");
+      const msg = "ថវិកាជាប្រាក់រៀល (៛ KHR) មិនត្រឹមត្រូវ សូមបញ្ចូលជាលេខ";
+      setError(msg);
+      toast?.error?.(msg);
       return;
     }
 
     if (form.item_qty && (isNaN(Number(form.item_qty)) || Number(form.item_qty) <= 0)) {
-      setError("បរិមាណ (Quantity) មិនត្រឹមត្រូវ សូមបញ្ចូលជាលេខធំជាង ០");
+      const msg = "បរិមាណ (Quantity) មិនត្រឹមត្រូវ សូមបញ្ចូលជាលេខធំជាង ០";
+      setError(msg);
+      toast?.error?.(msg);
       return;
     }
 
@@ -129,7 +134,9 @@ export default function SponsorshipItemModal({
     const hasCash = hasUsd || hasKhr;
 
     if (!hasMaterial && !hasCash) {
-      setError("សូមបញ្ចូលមុខសម្ភារ ឬថវិកាចំណាយ ($ USD / ៛ KHR)");
+      const msg = "សូមបញ្ចូលមុខសម្ភារ ឬថវិកាចំណាយ ($ USD / ៛ KHR)";
+      setError(msg);
+      toast?.error?.(msg);
       return;
     }
 
@@ -148,8 +155,6 @@ export default function SponsorshipItemModal({
       expense_amount_khr: sanitizedKhr,
       cash_allocation_usd: sanitizedUsd,
       cash_allocation_khr: sanitizedKhr,
-      is_expense_label: form.is_expense_label?.trim() || "",
-      expense_label: form.is_expense_label?.trim() || "",
       usage_description: form.usage_description?.trim() || "",
       remarks: form.remarks?.trim() || "",
     };
@@ -160,69 +165,24 @@ export default function SponsorshipItemModal({
 
   return (
     <div
-      style={{
-        position: "fixed",
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        background: "rgba(15, 23, 42, 0.65)",
-        backdropFilter: "blur(6px)",
-        WebkitBackdropFilter: "blur(6px)",
-        zIndex: 10000,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: "1rem",
-        animation: "fadeIn 0.2s ease-out",
-      }}
+      className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4"
       onClick={onClose}
     >
       <div
-        style={{
-          width: "min(640px, 96%)",
-          background: "#ffffff",
-          borderRadius: "14px",
-          boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.2), 0 10px 10px -5px rgba(0, 0, 0, 0.08)",
-          border: "1px solid #fed7aa",
-          overflow: "hidden",
-          maxHeight: "92vh",
-          display: "flex",
-          flexDirection: "column",
-        }}
+        className="w-full max-w-xl bg-white rounded-2xl shadow-2xl border border-orange-200 overflow-hidden max-h-[92vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Modal Header */}
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            padding: "1.1rem 1.4rem",
-            background: "linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%)",
-            borderBottom: "1px solid #fed7aa",
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
-            <div
-              style={{
-                width: "36px",
-                height: "36px",
-                borderRadius: "8px",
-                background: "#ea580c",
-                color: "#ffffff",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <LuPackage size={20} />
+        <div className="flex items-center justify-between px-6 py-4 bg-gradient-to-r from-orange-50 to-amber-50 border-b border-orange-200">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-orange-600 text-white flex items-center justify-center shadow-md shadow-orange-500/20 shrink-0">
+              <LuPackage className="w-5 h-5" />
             </div>
             <div>
-              <h3 style={{ margin: 0, fontSize: "1.05rem", fontWeight: "700", color: "#9a3412" }}>
+              <h3 className="text-base font-bold text-orange-950 leading-tight">
                 {editingIndex !== null ? "កែប្រែមុខសម្ភារ" : "បញ្ចូលមុខសម្ភារ និងថវិកា"}
               </h3>
-              <span style={{ fontSize: "0.8rem", color: "#c2410c" }}>
+              <span className="text-xs text-orange-700">
                 បញ្ជាក់ព័ត៌មានសម្ភារ បរិមាណ ឯកតា ថវិកា និងគោលបំណងប្រើប្រាស់
               </span>
             </div>
@@ -230,61 +190,46 @@ export default function SponsorshipItemModal({
 
           <button
             type="button"
-            className="btn-icon"
+            className="w-8 h-8 rounded-full bg-white border border-orange-200 hover:bg-orange-100 text-orange-800 flex items-center justify-center transition-colors cursor-pointer"
             onClick={onClose}
-            style={{
-              background: "#ffffff",
-              border: "1px solid #fdba74",
-              borderRadius: "50%",
-              width: "32px",
-              height: "32px",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              cursor: "pointer",
-            }}
+            aria-label="បិទ"
           >
-            <LuX size={16} color="#9a3412" />
+            <LuX className="w-4 h-4" />
           </button>
         </div>
 
         {/* Modal Body */}
-        <div style={{ padding: "1.4rem", overflowY: "auto", display: "flex", flexDirection: "column", gap: "1.1rem" }}>
+        <div className="p-6 overflow-y-auto flex flex-col gap-4">
           {error && (
-            <div className="alert alert-danger" style={{ margin: 0, padding: "0.6rem 0.9rem", fontSize: "0.88rem" }}>
+            <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-xs font-semibold text-red-700">
               {error}
             </div>
           )}
 
           {/* 1. Item Name */}
-          <div>
+          <div className="flex flex-col gap-1.5">
             <FormDropdown
               label="ឈ្មោះសម្ភារ (Material Name)"
               required
               editable
-              leadIcon={<LuPackage size={16} />}
+              leadIcon={<LuPackage className="w-4 h-4 text-orange-600" />}
               placeholder="ឧ. អង្ករ, មី, ទឹកបរិសុទ្ធ, ត្រីខ..."
               value={form.item_name}
               onChange={(e) => setForm({ ...form, item_name: e.target.value })}
               options={materialOptions}
             />
             {/* Quick Suggestion Chips */}
-            <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem", marginTop: "0.4rem" }}>
+            <div className="flex flex-wrap gap-1.5 mt-1">
               {["មី", "ទឹកបរិសុទ្ធ", "អង្ករ", "ត្រីខ", "ទឹកត្រី", "ទឹកស៊ីអ៊ីវ", "ទឹកក្រូច", "ភេសជ្ជៈ"].map((preset) => (
                 <button
                   key={preset}
                   type="button"
                   onClick={() => setForm({ ...form, item_name: preset })}
-                  style={{
-                    background: form.item_name === preset ? "#ea580c" : "#fff7ed",
-                    color: form.item_name === preset ? "#ffffff" : "#c2410c",
-                    border: "1px solid #fed7aa",
-                    borderRadius: "12px",
-                    padding: "0.15rem 0.55rem",
-                    fontSize: "0.78rem",
-                    cursor: "pointer",
-                    fontWeight: "500",
-                  }}
+                  className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-all cursor-pointer ${
+                    form.item_name === preset
+                      ? "bg-orange-600 text-white border-orange-600 shadow-sm"
+                      : "bg-orange-50 text-orange-800 border-orange-200 hover:bg-orange-100"
+                  }`}
                 >
                   {preset}
                 </button>
@@ -293,7 +238,7 @@ export default function SponsorshipItemModal({
           </div>
 
           {/* 2. Quantity & Unit Grid */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.85rem" }}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
             <FormInput
               label="បរិមាណ (Quantity)"
               required
@@ -313,13 +258,13 @@ export default function SponsorshipItemModal({
           </div>
 
           {/* 3. Cash Allocation USD & KHR */}
-          <div style={{ background: "#f8fafc", padding: "1rem", borderRadius: "10px", border: "1px solid #e2e8f0" }}>
-            <div style={{ fontSize: "0.85rem", fontWeight: "700", color: "#334155", marginBottom: "0.65rem", display: "flex", alignItems: "center", gap: "0.35rem" }}>
-              <LuDollarSign size={15} color="#059669" />
+          <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 flex flex-col gap-3">
+            <div className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+              <LuDollarSign className="w-4 h-4 text-emerald-600" />
               <span>ថវិកាចំណាយ / សាច់ប្រាក់ (Expense / Cash Allocation)</span>
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.85rem" }}>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
               <div>
                 <FormInput
                   label="ចំណាយជាប្រាក់ដុល្លារ ($ USD)"
@@ -329,11 +274,12 @@ export default function SponsorshipItemModal({
                     const val = sanitizeNumericInput(e.target.value, true);
                     setForm({ ...form, expense_amount_usd: val, cash_allocation_usd: val });
                   }}
-                  style={{ fontWeight: "600", color: "#059669" }}
+                  className="font-bold text-emerald-600"
                 />
                 {Number(form.expense_amount_usd || form.cash_allocation_usd) > 0 && (
-                  <div style={{ fontSize: "0.78rem", color: "#059669", marginTop: "0.2rem", fontWeight: "500" }}>
-                    = {toKhmerDigits(form.expense_amount_usd || form.cash_allocation_usd)} $ ({numberToKhmerWords(form.expense_amount_usd || form.cash_allocation_usd, "USD")})
+                  <div className="text-xs text-emerald-600 font-semibold mt-1">
+                    = {toKhmerDigits(form.expense_amount_usd || form.cash_allocation_usd)} $ (
+                    {numberToKhmerWords(form.expense_amount_usd || form.cash_allocation_usd, "USD")})
                   </div>
                 )}
               </div>
@@ -347,63 +293,33 @@ export default function SponsorshipItemModal({
                     const val = sanitizeNumericInput(e.target.value, false);
                     setForm({ ...form, expense_amount_khr: val, cash_allocation_khr: val });
                   }}
-                  style={{ fontWeight: "600", color: "#2563eb" }}
+                  className="font-bold text-blue-600"
                 />
                 {Number(form.expense_amount_khr || form.cash_allocation_khr) > 0 && (
-                  <div style={{ fontSize: "0.78rem", color: "#2563eb", marginTop: "0.2rem", fontWeight: "500" }}>
-                    = {toKhmerDigits(form.expense_amount_khr || form.cash_allocation_khr)} ៛ ({numberToKhmerWords(form.expense_amount_khr || form.cash_allocation_khr, "KHR")})
+                  <div className="text-xs text-blue-600 font-semibold mt-1">
+                    = {toKhmerDigits(form.expense_amount_khr || form.cash_allocation_khr)} ៛ (
+                    {numberToKhmerWords(form.expense_amount_khr || form.cash_allocation_khr, "KHR")})
                   </div>
                 )}
               </div>
             </div>
-
-            {/* Optional Expense Label on Item */}
-            <div style={{ marginTop: "0.75rem" }}>
-              <FormInput
-                label="ស្លាកសម្គាល់ចំណាយ / ចំណាំ (Expense Label - ស្រេចចិត្ត)"
-                placeholder="ឧ. ចំណាយក្នុងកម្មវិធី, សរុបការចំណាយ..."
-                value={form.is_expense_label ?? form.expense_label ?? ""}
-                onChange={(e) => setForm({ ...form, is_expense_label: e.target.value, expense_label: e.target.value })}
-              />
-            </div>
           </div>
 
           {/* 4. Purpose / Usage description (Textarea) */}
-          <div>
-            <label
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "0.35rem",
-                fontSize: "0.85rem",
-                fontWeight: "600",
-                color: "#334155",
-                marginBottom: "0.4rem",
-              }}
-            >
-              <LuMapPin size={15} color="#2563eb" />
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+              <LuMapPin className="w-4 h-4 text-blue-600" />
               <span>ទីកន្លែងទទួល និង ប្រើប្រាស់ (Location & Purpose)</span>
             </label>
             <textarea
-              className="form-control"
+              className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-lg text-sm text-slate-800 focus:bg-white focus:border-blue-600 focus:ring-2 focus:ring-blue-100 transition-all outline-none resize-y min-h-[75px]"
               rows={3}
               placeholder="បញ្ជាក់ទីតាំង និងគោលបំណងនៃការប្រើប្រាស់ថវិកា ឬសម្ភារ (អាចចុះបន្ទាត់បាន)..."
               value={form.usage_description}
               onChange={(e) => setForm({ ...form, usage_description: e.target.value })}
-              style={{
-                width: "100%",
-                resize: "vertical",
-                minHeight: "75px",
-                fontSize: "0.9rem",
-                lineHeight: "1.5",
-                padding: "0.6rem 0.75rem",
-                borderRadius: "8px",
-                border: "1px solid #cbd5e1",
-                fontFamily: "inherit",
-              }}
             />
             {/* Quick Purpose Suggestion Badges */}
-            <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem", marginTop: "0.45rem" }}>
+            <div className="flex flex-wrap gap-1.5 mt-1">
               {PURPOSE_OPTIONS.map((opt) => {
                 const isIncluded = form.usage_description?.includes(opt.value);
                 return (
@@ -417,17 +333,11 @@ export default function SponsorshipItemModal({
                         setForm({ ...form, usage_description: `${form.usage_description}\n${opt.value}` });
                       }
                     }}
-                    style={{
-                      background: isIncluded ? "#3b82f6" : "#eff6ff",
-                      color: isIncluded ? "#ffffff" : "#1e40af",
-                      border: "1px solid #bfdbfe",
-                      borderRadius: "12px",
-                      padding: "0.2rem 0.6rem",
-                      fontSize: "0.78rem",
-                      cursor: "pointer",
-                      fontWeight: "500",
-                      transition: "all 0.15s ease",
-                    }}
+                    className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-all cursor-pointer ${
+                      isIncluded
+                        ? "bg-blue-600 text-white border-blue-600 shadow-sm"
+                        : "bg-blue-50 text-blue-800 border-blue-200 hover:bg-blue-100"
+                    }`}
                   >
                     {opt.label}
                   </button>
@@ -440,7 +350,7 @@ export default function SponsorshipItemModal({
           <div>
             <FormInput
               label="ផ្សេងៗ (Remarks / Notes)"
-              leadIcon={<LuFileText size={16} />}
+              leadIcon={<LuFileText className="w-4 h-4 text-slate-500" />}
               placeholder="កំណត់សម្គាល់បន្ថែម..."
               value={form.remarks}
               onChange={(e) => setForm({ ...form, remarks: e.target.value })}
@@ -449,36 +359,18 @@ export default function SponsorshipItemModal({
         </div>
 
         {/* Modal Footer */}
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "flex-end",
-            alignItems: "center",
-            gap: "0.6rem",
-            padding: "0.9rem 1.4rem",
-            background: "#f8fafc",
-            borderTop: "1px solid #e2e8f0",
-          }}
-        >
-          <button type="button" className="btn btn-secondary" onClick={onClose}>
+        <div className="flex items-center justify-end gap-3 px-6 py-4 bg-slate-50 border-t border-slate-200">
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={onClose}
+          >
             បោះបង់
           </button>
           <button
             type="button"
-            className="btn"
+            className="btn btn-primary flex items-center gap-1.5 font-semibold"
             onClick={handleSave}
-            style={{
-              background: "#ea580c",
-              color: "#ffffff",
-              border: "none",
-              borderRadius: "8px",
-              padding: "0.55rem 1.3rem",
-              fontWeight: "600",
-              display: "flex",
-              alignItems: "center",
-              gap: "0.35rem",
-              cursor: "pointer",
-            }}
           >
             <LuCheck size={16} />
             <span>{editingIndex !== null ? "រក្សាទុកការកែប្រែ" : "បន្ថែមចូលតារាង"}</span>
