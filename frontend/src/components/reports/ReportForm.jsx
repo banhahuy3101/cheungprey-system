@@ -18,6 +18,7 @@ import {
   isEmptyContent,
 } from "../../utils/reportForm";
 import { canAccess, FEATURES } from "../../utils/permissions";
+import PageHeader from "../PageHeader";
 import ReportStatusBadge from "./ReportStatusBadge";
 import ReportMoreInfoCard from "./ReportMoreInfoCard";
 import ReportWorkflowCard from "./ReportWorkflowCard";
@@ -74,9 +75,14 @@ export default function ReportForm({ mode = "create", reportId }) {
       setForm(docToSimpleForm(d));
       setReviews(r2.data?.data ?? r2.data ?? []);
       setWorkflow(r3.data?.data ?? r3.data ?? []);
+
+      // If user tries to edit a report that is not draft, redirect to view mode
+      if (isEdit && d && d.status && d.status !== "draft") {
+        navigate(`/reports/${reportId}`, { replace: true });
+      }
     }).catch(() => { }).finally(() => ok && setLoading(false));
     return () => { ok = false; };
-  }, [reportId, isCreate]);
+  }, [reportId, isCreate, isEdit, navigate]);
 
   const setField = (k, v) => { setForm(p => ({ ...p, [k]: v })); setFieldErrors(prev => { const n = { ...prev }; delete n[k]; return n; }); setValidationPopup(null); };
 
@@ -188,40 +194,89 @@ export default function ReportForm({ mode = "create", reportId }) {
     String(user.id) === String(activePending.approver_id);
   const canActOnPending = (status === "pending_review") && isAssignedApprover;
 
-  if (loading) return (
-    <div className="page report-form-page">
-      {/* Toolbar skeleton */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "1rem 1.5rem", marginBottom: "1.75rem", background: "rgba(255,255,255,0.85)", borderRadius: "16px", border: "1px solid var(--border)" }}>
-        <Skeleton w={180} h={34} r={8} />
-        <Skeleton w={100} h={34} r={8} />
-      </div>
+  if (loading) {
+    if (mode === "view") {
+      return (
+        <div className="page report-detail-page" style={{ width: "100%", maxWidth: "100%" }}>
+          {/* Header Skeleton via PageHeader.Skeleton */}
+          <PageHeader.Skeleton actionsCount={3} />
 
-      {/* 70/30 split skeleton */}
-      <div style={{ display: "flex", gap: "1.75rem", flexWrap: "wrap", alignItems: "flex-start" }}>
-        {/* LEFT 70% */}
-        <div style={{ flex: "3 1 640px", minWidth: "300px" }}>
-          <div style={{ padding: "1.5rem 2rem", borderRadius: "16px", background: "#fff", border: "1px solid rgba(0,0,0,0.06)", display: "flex", flexDirection: "column", gap: "0.85rem", marginBottom: "1.5rem" }}>
-            <Skeleton w="80%" h={42} r={6} />
-            <div style={{ height: "1px", background: "rgba(0,0,0,0.06)", width: "100%" }} />
-            <Skeleton w="55%" h={18} r={4} />
+          {/* 70/30 split skeleton */}
+          <div style={{ display: "flex", gap: "1.5rem", flexWrap: "wrap", alignItems: "flex-start" }}>
+            {/* LEFT 70% */}
+            <div style={{ flex: "3 1 640px", minWidth: "300px", display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+              {/* Description Card */}
+              <div style={{ padding: "1.25rem 1.5rem", borderRadius: "12px", background: "#f8fafc", border: "1px solid var(--border)", display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                <Skeleton w={120} h={12} r={4} />
+                <Skeleton w="90%" h={16} r={4} />
+              </div>
+
+              {/* Rich Text Editor Card */}
+              <div style={{ padding: "1.75rem 2rem", borderRadius: "12px", background: "#ffffff", border: "1px solid var(--border)", display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid var(--border)", paddingBottom: "0.85rem" }}>
+                  <Skeleton w={140} h={18} r={4} />
+                  <Skeleton w={110} h={28} r={6} />
+                </div>
+                <Skeleton w="100%" h={380} r={8} />
+              </div>
+            </div>
+
+            {/* RIGHT 30% */}
+            <div style={{ flex: "1 1 320px", minWidth: "280px", display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+              <div style={{ padding: "1.35rem", borderRadius: "12px", background: "#fff", border: "1px solid var(--border)", display: "flex", flexDirection: "column", gap: "1rem" }}>
+                <Skeleton w="50%" h={16} r={4} />
+                <Skeleton w="100%" h={48} r={8} />
+                <Skeleton w="100%" h={48} r={8} />
+              </div>
+              <div style={{ padding: "1.35rem", borderRadius: "12px", background: "#fff", border: "1px solid var(--border)", display: "flex", flexDirection: "column", gap: "0.85rem" }}>
+                <Skeleton w="60%" h={16} r={4} />
+                <Skeleton w="100%" h={14} r={4} />
+                <Skeleton w="80%" h={14} r={4} />
+                <Skeleton w="90%" h={14} r={4} />
+              </div>
+            </div>
           </div>
-          <Skeleton w="100%" h={280} r={10} />
         </div>
-        {/* RIGHT 30% */}
-        <div style={{ flex: "1 1 320px", minWidth: "280px" }}>
-          <div style={{ padding: "1.35rem", borderRadius: "12px", background: "#fff", border: "1px solid var(--border)", display: "flex", flexDirection: "column", gap: "1.15rem" }}>
-            <Skeleton w="60%" h={16} r={4} />
-            <Skeleton w="100%" h={38} r={8} />
-            <Skeleton w="100%" h={18} r={4} />
-            <div style={{ borderTop: "1px solid var(--border)", paddingTop: "0.85rem", display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-              <Skeleton w="100%" h={14} r={4} />
-              <Skeleton w="100%" h={14} r={4} />
+      );
+    }
+
+    return (
+      <div className="page report-form-page" style={{ width: "100%", maxWidth: "100%" }}>
+        {/* Toolbar skeleton */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "1rem 1.5rem", marginBottom: "1.75rem", background: "rgba(255,255,255,0.85)", borderRadius: "16px", border: "1px solid var(--border)" }}>
+          <Skeleton w={180} h={34} r={8} />
+          <div style={{ display: "flex", gap: "0.6rem" }}>
+            <Skeleton w={75} h={34} r={8} />
+            <Skeleton w={100} h={34} r={8} />
+          </div>
+        </div>
+
+        {/* 70/30 split skeleton */}
+        <div style={{ display: "flex", gap: "1.25rem", flexWrap: "wrap", alignItems: "flex-start" }}>
+          {/* LEFT 70% */}
+          <div style={{ flex: 1, minWidth: "320px", display: "flex", flexDirection: "column", gap: "1rem" }}>
+            <div style={{ padding: "1.5rem 2rem", borderRadius: "16px", background: "#fff", border: "1px solid var(--border)", display: "flex", flexDirection: "column", gap: "0.85rem" }}>
+              <Skeleton w="85%" h={40} r={8} />
+              <Skeleton w="60%" h={22} r={6} />
+            </div>
+            <Skeleton w="100%" h={420} r={12} />
+          </div>
+          {/* RIGHT 30% */}
+          <div style={{ width: "320px", minWidth: "280px" }}>
+            <div style={{ padding: "1.35rem", borderRadius: "12px", background: "#fff", border: "1px solid var(--border)", display: "flex", flexDirection: "column", gap: "1.15rem" }}>
+              <Skeleton w="60%" h={16} r={4} />
+              <Skeleton w="100%" h={38} r={8} />
+              <Skeleton w="100%" h={18} r={4} />
+              <div style={{ borderTop: "1px solid var(--border)", paddingTop: "0.85rem", display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                <Skeleton w="100%" h={14} r={4} />
+                <Skeleton w="100%" h={14} r={4} />
+              </div>
             </div>
           </div>
         </div>
       </div>
-    </div>
-  );
+    );
+  }
   if (!doc && !isCreate) return <div className="page"><div className="alert alert-error">រកមិនឃើញរបាយការណ៍</div></div>;
 
   /* ============================================
@@ -554,63 +609,73 @@ export default function ReportForm({ mode = "create", reportId }) {
      ============================================ */
   return (
     <div className="page report-detail-page">
-      {/* ---- TOP BAR NAVIGATION & ACTIONS ---- */}
-      <div
-        className="report-topbar"
-        style={{
-          display: "flex", alignItems: "center", justifyContent: "space-between", gap: "1rem",
-          padding: "0.85rem 1.25rem", marginBottom: "1.5rem", background: "#ffffff",
-          borderRadius: "12px", border: "1px solid var(--border)", boxShadow: "0 2px 8px rgba(0,0,0,0.03)", flexWrap: "wrap",
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-          <button type="button" className="btn btn-secondary btn-sm" onClick={() => navigate("/reports")}
-            style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem", fontWeight: "500" }}>
-            <LuArrowLeft size={16} /> ត្រឡប់ក្រោយ
-          </button>
-          <div style={{ height: "18px", width: "1px", background: "var(--border)" }} />
-          <span style={{ fontSize: "0.9rem", fontWeight: "600", color: "var(--text)", display: "flex", alignItems: "center", gap: "0.4rem" }}>
-            <LuFileText size={16} style={{ color: "#2563eb" }} /> ព័ត៌មានលម្អិតរបាយការណ៍
-          </span>
-        </div>
-
-        <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
-          <button className="btn btn-secondary btn-sm" onClick={doDownload} disabled={downloading}
-            style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}>
-            <LuDownload size={15} /> {downloading ? "កំពុងទាញយក..." : "ទាញយក PDF"}
-          </button>
-          {allowTransactionEdit && (status === "draft" || status === "rejected") && (canReview || doc?.created_by === user?.id) && (
-            <button className="btn btn-outline btn-sm" onClick={() => navigate(`/reports/${reportId}/edit`)}
+      {/* ---- PageHeader Component ---- */}
+      <PageHeader
+        title={form?.title || "ព័ត៌មានលម្អិតរបាយការណ៍"}
+        subtitle={
+          <div style={{ display: "flex", gap: "1rem", alignItems: "center", flexWrap: "wrap", marginTop: "0.2rem" }}>
+            <span style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
+              <LuCalendar size={14} /> ធ្វើបច្ចុប្បន្នភាព៖ {fmtDate(doc?.updated_at || doc?.created_at)}
+            </span>
+            {form?.category && (
+              <span style={{
+                display: "flex", alignItems: "center", gap: "0.35rem",
+                color: "#4b5563", fontWeight: "600",
+                background: "#f3f4f6", padding: "0.1rem 0.5rem", borderRadius: "6px",
+                fontSize: "0.8rem",
+              }}>
+                <LuTag size={12} /> {form.category}
+              </span>
+            )}
+          </div>
+        }
+        showBack={() => navigate("/reports")}
+        backText="ត្រឡប់ក្រោយ"
+        breadcrumbs={[
+          { label: "ផ្ទាំងគ្រប់គ្រង", path: "/dashboard" },
+          { label: "របាយការណ៍", path: "/reports" },
+          { label: form?.title ? (form.title.length > 35 ? form.title.slice(0, 35) + "..." : form.title) : "ព័ត៌មានលម្អិត" },
+        ]}
+        badge={<ReportStatusBadge status={status} />}
+        actions={
+          <>
+            <button className="btn btn-secondary btn-sm" onClick={doDownload} disabled={downloading}
               style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}>
-              <LuPencil size={15} /> កែប្រែ
+              <LuDownload size={15} /> {downloading ? "កំពុងទាញយក..." : "ទាញយក PDF"}
             </button>
-          )}
-          {(status === "draft" || status === "rejected") && (
-            <button className="btn btn-primary btn-sm" onClick={doSubmit} disabled={submitting}
-              style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}>
-              <LuSend size={15} /> {submitting ? "កំពុងដាក់ស្នើ..." : "ដាក់ស្នើសម្រាប់ពិនិត្យ"}
-            </button>
-          )}
-          {status === "pending_review" && canActOnPending && (
-            <button className="btn btn-outline btn-sm" onClick={doRevertToDraft} disabled={submitting}
-              style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}>
-              <LuRotateCcw size={15} /> បង្វែរទៅជាព្រាង
-            </button>
-          )}
-          {status === "pending_review" && canActOnPending && (
-            <>
-              <button className="btn btn-danger btn-sm" onClick={() => setRejectOpen(true)}
+            {allowTransactionEdit && (status === "draft" || status === "rejected" || !status) && (canReview || doc?.created_by === user?.id) && (
+              <button className="btn btn-outline btn-sm" onClick={() => navigate(`/reports/${reportId}/edit`)}
                 style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}>
-                <LuCircleX size={15} /> បដិសេធ
+                <LuPencil size={15} /> កែប្រែ
               </button>
-              <button className="btn btn-success btn-sm" onClick={doPublish} disabled={submitting}
+            )}
+            {(status === "draft" || status === "rejected" || !status) && (
+              <button className="btn btn-primary btn-sm" onClick={doSubmit} disabled={submitting}
                 style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}>
-                <LuCircleCheck size={15} /> {reportsNeedApproval ? "អនុម័តជំហាននេះ" : "អនុម័តរបាយការណ៍"}
+                <LuSend size={15} /> {submitting ? "កំពុងដាក់ស្នើ..." : "ដាក់ស្នើសម្រាប់ពិនិត្យ"}
               </button>
-            </>
-          )}
-        </div>
-      </div>
+            )}
+            {status === "pending_review" && canActOnPending && (
+              <button className="btn btn-outline btn-sm" onClick={doRevertToDraft} disabled={submitting}
+                style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}>
+                <LuRotateCcw size={15} /> បង្វែរទៅជាព្រាង
+              </button>
+            )}
+            {status === "pending_review" && canActOnPending && (
+              <>
+                <button className="btn btn-danger btn-sm" onClick={() => setRejectOpen(true)}
+                  style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}>
+                  <LuCircleX size={15} /> បដិសេធ
+                </button>
+                <button className="btn btn-success btn-sm" onClick={doPublish} disabled={submitting}
+                  style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}>
+                  <LuCircleCheck size={15} /> {reportsNeedApproval ? "អនុម័តជំហាននេះ" : "អនុម័តរបាយការណ៍"}
+                </button>
+              </>
+            )}
+          </>
+        }
+      />
 
       {msg && <div className="alert alert-success" style={{ marginBottom: "1.25rem", borderRadius: "8px" }}>{msg}</div>}
       {error && <div className="alert alert-error" style={{ marginBottom: "1.25rem", borderRadius: "8px" }}>{error}</div>}
@@ -619,42 +684,20 @@ export default function ReportForm({ mode = "create", reportId }) {
       <div style={{ display: "flex", gap: "1.5rem", flexWrap: "wrap", alignItems: "flex-start" }}>
         {/* LEFT: Main Content */}
         <div style={{ flex: "3 1 640px", minWidth: "300px" }}>
-          <div className="card" style={{
-            padding: "1.75rem 2rem", marginBottom: "1.25rem", borderRadius: "12px",
-            background: "#ffffff", border: "1px solid var(--border)", boxShadow: "0 2px 10px rgba(0,0,0,0.03)",
-          }}>
-            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "1rem", marginBottom: "0.75rem", flexWrap: "wrap" }}>
-              <h1 style={{ margin: 0, fontSize: "1.75rem", fontWeight: "700", lineHeight: "1.35", color: "var(--text)" }}>
-                {form?.title || "—"}
-              </h1>
-              <ReportStatusBadge status={status} />
-            </div>
-
-            <div style={{ display: "flex", gap: "1.25rem", alignItems: "center", flexWrap: "wrap", color: "var(--text-muted)", fontSize: "0.85rem", marginBottom: "1rem" }}>
-              <span style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
-                <LuCalendar size={15} /> ធ្វើបច្ចុប្បន្នភាព៖ {fmtDate(doc?.updated_at || doc?.created_at)}
-              </span>
-              {form?.category && (
-                <span style={{
-                  display: "flex", alignItems: "center", gap: "0.35rem",
-                  color: "#4b5563", fontWeight: "600",
-                  background: "#f3f4f6", padding: "0.15rem 0.5rem", borderRadius: "6px",
-                }}>
-                  <LuTag size={13} /> {form.category}
-                </span>
-              )}
-            </div>
-
-            {form?.description?.trim() && (
-              <div style={{
-                background: "#f8fafc", borderLeft: "3px solid #3b82f6",
-                padding: "0.85rem 1.15rem", borderRadius: "0 8px 8px 0",
-                fontSize: "0.95rem", color: "#334155", lineHeight: "1.6",
-              }}>
+          {form?.description?.trim() && (
+            <div className="card" style={{
+              padding: "1rem 1.25rem", marginBottom: "1.25rem", borderRadius: "12px",
+              background: "#f8fafc", borderLeft: "4px solid #3b82f6", border: "1px solid var(--border)",
+              boxShadow: "0 1px 3px rgba(0,0,0,0.02)",
+            }}>
+              <div style={{ fontSize: "0.82rem", fontWeight: 700, color: "#64748b", marginBottom: "0.25rem", textTransform: "uppercase", letterSpacing: "0.03em" }}>
+                ការពិពណ៌នាសង្ខេប
+              </div>
+              <div style={{ fontSize: "0.95rem", color: "#334155", lineHeight: "1.6" }}>
                 {form.description}
               </div>
-            )}
-          </div>
+            </div>
+          )}
 
           <div className="card report-form-view-content" style={{
             padding: "1.75rem 2rem", borderRadius: "12px",
@@ -708,7 +751,7 @@ export default function ReportForm({ mode = "create", reportId }) {
         error={fieldErrors.description}
       />
 
-{fullscreenOpen && (
+      {fullscreenOpen && (
         <div style={{
           position: "fixed", inset: 0, zIndex: 9999,
           background: "#eef2f7",

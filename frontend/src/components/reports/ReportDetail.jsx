@@ -295,7 +295,7 @@ export default function ReportDetail({ reportId }) {
             <LuDownload size={16} /> {downloading ? "កំពុងទាញយក..." : "ទាញយក PDF"}
           </button>
 
-          {(status === "draft" || status === "rejected") && (
+          {(status === "draft" || status === "rejected" || !status) && (
             <button
               className="btn btn-outline btn-sm"
               onClick={() => navigate(`/reports/${reportId}/edit`)}

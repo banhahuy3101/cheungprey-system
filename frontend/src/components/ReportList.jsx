@@ -72,8 +72,19 @@ export default function ReportList({ onView, onEdit, onCreate }) {
   const [trashRecords, setTrashRecords] = useState([]);
   const [trashLoading, setTrashLoading] = useState(false);
   const [statusFilter, setStatusFilter] = useState("all");
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
+
+  const isAdmin = canAccess(user, FEATURES.reports) || canAccess(user, FEATURES.users);
 
   const getZoneParams = () => {
+    if (isAdmin) {
+      return {
+        userZone: "",
+        initialZoneCode: "",
+      };
+    }
     const code = user?.zone_code || "";
     if (code.length >= 6) {
       const districtCode = code.slice(0, 4);
@@ -92,7 +103,7 @@ export default function ReportList({ onView, onEdit, onCreate }) {
 
   const zoneHook = useZoneCascade({
     userZone,
-    isAdmin: canAccess(user, FEATURES.reports) || canAccess(user, FEATURES.users),
+    isAdmin,
     initialZoneCode,
     showVillage: false,
   });
@@ -198,6 +209,37 @@ export default function ReportList({ onView, onEdit, onCreate }) {
     }
   };
 
+  const toggleSelect = (id) => {
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  };
+
+  const toggleAll = () => {
+    if (selectedIds.length === filteredRecords.length && filteredRecords.length > 0) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(filteredRecords.map((r) => r.id));
+    }
+  };
+
+  const confirmBulkDelete = async () => {
+    if (selectedIds.length === 0) return;
+    setBulkDeleting(true);
+    try {
+      await Promise.all(selectedIds.map((id) => reportDocumentsAPI.delete(id)));
+      setMessage(`បានផ្លាស់ទីរបាយការណ៍ចំនួន ${selectedIds.length} ទៅកាន់ធុងសំរាមដោយជោគជ័យ`);
+      setSelectedIds([]);
+      setShowBulkDeleteConfirm(false);
+      fetchRecords();
+      setTimeout(() => setMessage(""), 2500);
+    } catch {
+      setMessage("លុបរបាយការណ៍មួយចំនួនមិនបានជោគជ័យ");
+    } finally {
+      setBulkDeleting(false);
+    }
+  };
+
   const handleConfirm = async (record) => {
     setMessage("");
     try {
@@ -262,6 +304,7 @@ export default function ReportList({ onView, onEdit, onCreate }) {
         title="របាយការណ៍"
         subtitle="ប្រព័ន្ធគ្រប់គ្រង និងតាមដានរបាយការណ៍"
         breadcrumbs={[
+          { label: "ផ្ទាំងគ្រប់គ្រង", path: "/dashboard" },
           { label: "របាយការណ៍" },
         ]}
         actions={
@@ -442,8 +485,50 @@ export default function ReportList({ onView, onEdit, onCreate }) {
         </div>
       </div>
 
+      {/* Bulk actions */}
+      {selectedIds.length > 0 && (
+        <div style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "0.75rem",
+          marginBottom: "0.85rem",
+          padding: "0.6rem 1rem",
+          background: "#eff6ff",
+          border: "1px solid #bfdbfe",
+          borderRadius: "10px",
+          flexWrap: "wrap",
+        }}>
+          <span style={{ fontSize: "0.85rem", fontWeight: 600, color: "#1e40af" }}>
+            បានជ្រើសរើស {selectedIds.length} របាយការណ៍
+          </span>
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            style={{ fontSize: "0.8rem", borderRadius: "6px" }}
+            onClick={() => setSelectedIds([])}
+          >
+            សម្អាត
+          </button>
+          {canDelete && (
+            <button
+              type="button"
+              className="btn btn-danger-solid btn-sm"
+              style={{ fontSize: "0.8rem", borderRadius: "6px", display: "inline-flex", alignItems: "center", gap: "0.35rem" }}
+              onClick={() => setShowBulkDeleteConfirm(true)}
+              disabled={bulkDeleting}
+            >
+              <LuTrash2 size={14} /> {bulkDeleting ? "កំពុងលុប..." : "លុបដែលបានជ្រើស"}
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Report DataTable */}
       <DataTable
+        selectable={true}
+        selectedIds={selectedIds}
+        onSelectRow={toggleSelect}
+        onSelectAll={toggleAll}
         columns={[
           {
             key: "idx",
@@ -506,7 +591,7 @@ export default function ReportList({ onView, onEdit, onCreate }) {
                 <button type="button" className="btn-icon" onClick={() => onView(r.id)} title="មើល">
                   <LuEye />
                 </button>
-                {canUpdate && (canAccess(user, FEATURES.reports, "update") || r.created_by === user?.id) && (
+                {canUpdate && (r.status === "draft" || !r.status || r.status === "") && (canAccess(user, FEATURES.reports, "update") || r.created_by === user?.id) && (
                   <button type="button" className="btn-icon" onClick={() => onEdit(r.id)} title="កែប្រែ">
                     <LuPencil />
                   </button>
@@ -633,6 +718,32 @@ export default function ReportList({ onView, onEdit, onCreate }) {
               </button>
               <button type="button" className="btn btn-primary btn-danger-solid" onClick={confirmDelete} disabled={deleting}>
                 {deleting ? "កំពុងលុប..." : "លុប"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showBulkDeleteConfirm && (
+        <div className="modal-overlay modal-overlay-top" onClick={() => !bulkDeleting && setShowBulkDeleteConfirm(false)}>
+          <div className="modal modal-confirm" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>លុបរបាយការណ៍</h3>
+              <button type="button" className="btn-icon" onClick={() => setShowBulkDeleteConfirm(false)} disabled={bulkDeleting}>
+                <LuX />
+              </button>
+            </div>
+            <div className="modal-body">
+              <p className="reset-confirm-text">
+                តើអ្នកពិតជាចង់លុបរបាយការណ៍ចំនួន <strong>{selectedIds.length}</strong> ដែលបានជ្រើសរើសមែនទេ?
+              </p>
+            </div>
+            <div className="modal-footer">
+              <button type="button" className="btn btn-secondary" onClick={() => setShowBulkDeleteConfirm(false)} disabled={bulkDeleting}>
+                បោះបង់
+              </button>
+              <button type="button" className="btn btn-primary btn-danger-solid" onClick={confirmBulkDelete} disabled={bulkDeleting}>
+                {bulkDeleting ? "កំពុងលុប..." : "លុប"}
               </button>
             </div>
           </div>

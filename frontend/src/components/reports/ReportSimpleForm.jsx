@@ -52,6 +52,9 @@ export default function ReportSimpleForm({ mode = "create", reportId, initialDoc
         const doc = res.data?.data ?? res.data;
         setForm(docToSimpleForm(doc));
         setMeta({ status: doc.status, updated_at: doc.updated_at });
+        if (isEdit && doc && doc.status && doc.status !== "draft") {
+          navigate(`/reports/${reportId}`, { replace: true });
+        }
       })
       .catch(() => {
         if (!cancelled) setError("ផ្ទុករបាយការណ៍មិនបាន");
@@ -169,9 +172,11 @@ export default function ReportSimpleForm({ mode = "create", reportId, initialDoc
                 <button type="button" className="btn btn-secondary" onClick={handleDownload} disabled={downloading}>
                   <LuDownload size={14} /> {downloading ? "..." : "ទាញយក PDF"}
                 </button>
-                <button type="button" className="btn btn-primary" onClick={() => navigate(`/reports/${reportId}/edit`)}>
-                  <LuPencil size={14} /> កែប្រែ
-                </button>
+                {(meta.status === "draft" || !meta.status) && (
+                  <button type="button" className="btn btn-primary" onClick={() => navigate(`/reports/${reportId}/edit`)}>
+                    <LuPencil size={14} /> កែប្រែ
+                  </button>
+                )}
               </>
             }
           />
