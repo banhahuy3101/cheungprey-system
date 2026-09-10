@@ -114,7 +114,7 @@ export default function MembershipEdit() {
     setSubmitting(true);
     try {
       const payload = { ...form, registered_village_code: getVillageCode() };
-      
+
       const updatePayload = {
         membership_card_no: payload.membership_card_no,
         national_id: payload.national_id,
@@ -157,7 +157,7 @@ export default function MembershipEdit() {
 
   if (loading) {
     return (
-      <div className="page" style={{ maxWidth: "840px", margin: "0 auto" }}>
+      <div className="page">
         <SkeletonGrid count={3} />
       </div>
     );

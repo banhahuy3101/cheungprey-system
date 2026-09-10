@@ -270,15 +270,20 @@ export default function PerformanceList({ onView, onEdit, onCreate }) {
   return (
     <div className="page">
       <PageHeader
-        title="បញ្ជីរបាយការណ៍លទ្ធផលការងារ"
+        title="របាយការណ៍លទ្ធផលការងារ"
         subtitle="តាមដាន និងវាយតម្លៃសូចនាករសមិទ្ធកម្មតាមតំបន់"
         breadcrumbs={[
-          { label: "Performance", path: "/performance" },
-          { label: "របាយការណ៍លទ្ធផលការងារ" },
+          { label: "ផ្ទាំងគ្រប់គ្រង", path: "/dashboard" },
+          { label: "លទ្ធផលការងារ" },
         ]}
         actions={
-          <button className="btn btn-primary" onClick={onCreate}>
-            <LuPlus /> បង្កើតថ្មី
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={onCreate}
+            style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem", minHeight: "2.1rem" }}
+          >
+            <LuPlus size={16} /> បង្កើតថ្មី
           </button>
         }
       />

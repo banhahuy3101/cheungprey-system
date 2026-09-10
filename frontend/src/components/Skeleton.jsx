@@ -34,3 +34,5 @@ export function SkeletonGrid({ count = 4 }) {
     </div>
   );
 }
+
+export { SkeletonPageHeader } from "./PageHeader";

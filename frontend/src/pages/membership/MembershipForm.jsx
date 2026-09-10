@@ -31,7 +31,7 @@ export default function MembershipForm({
 
   const formFields = (
     <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
-      
+
       {/* 1. Identification Section */}
       <div style={{
         background: "#f8fafc",
@@ -388,41 +388,60 @@ export default function MembershipForm({
   );
 
   if (isFullPage) {
-    return (
-      <div className="page" style={{ maxWidth: "860px", margin: "0 auto" }}>
-        <div className="page-header" style={{ marginBottom: "1.25rem" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-            <button
-              type="button"
-              className="btn btn-secondary"
-              onClick={onClose}
-              style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem", borderRadius: "8px", fontWeight: "600" }}
-            >
-              <LuArrowLeft size={16} /> ត្រឡប់ក្រោយ
-            </button>
-            <div>
-              <h2 className="section-title" style={{ margin: 0, fontSize: "1.35rem" }}>
-                {editing ? `កែប្រែព័ត៌មានសមាជិក (${editing.last_name_kh} ${editing.first_name_kh})` : "បន្ថែមសមាជិកថ្មី"}
-              </h2>
-              <span style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>
-                {editing ? `លេខប័ណ្ណ: ${editing.membership_card_no}` : "បំពេញទិន្នន័យដើម្បីបង្កើតសមាជិកថ្មីក្នុងប្រព័ន្ធ"}
-              </span>
-            </div>
-          </div>
-        </div>
+    const breadcrumbs = [
+      { label: "ផ្ទាំងគ្រប់គ្រង", path: "/dashboard" },
+      { label: "សមាជិក", path: "/membership" },
+      ...(editing && editing.id
+        ? [{ label: `${editing.last_name_kh || ""} ${editing.first_name_kh || ""}`.trim() || "ព័ត៌មានសមាជិក", path: `/membership/${editing.id}` }]
+        : []),
+      { label: editing ? "កែប្រែ" : "បន្ថែមសមាជិកថ្មី" },
+    ];
 
-        <div className="card" style={{ padding: "1.75rem", borderRadius: "16px", border: "1px solid #e2e8f0", boxShadow: "0 4px 20px rgba(0,0,0,0.03)" }}>
+    const actions = (
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          className="btn btn-secondary flex items-center gap-1.5 font-medium"
+          onClick={onClose}
+          disabled={submitting}
+        >
+          <span>បោះបង់</span>
+        </button>
+        <button
+          type="button"
+          className="btn btn-primary flex items-center gap-1.5 font-semibold"
+          onClick={onSubmit}
+          disabled={submitting}
+        >
+          <LuSave size={16} />
+          <span>{submitting ? "រក្សាទុក..." : editing ? "ធ្វើបច្ចុប្បន្នភាព" : "រក្សាទុកសមាជិក"}</span>
+        </button>
+      </div>
+    );
+
+    return (
+      <div className="page">
+        <PageHeader
+          title={editing ? `កែប្រែព័ត៌មានសមាជិក (${editing.last_name_kh} ${editing.first_name_kh})` : "បន្ថែមសមាជិកថ្មី"}
+          subtitle={editing ? (editing.membership_card_no ? `លេខប័ណ្ណ: ${editing.membership_card_no}` : "កែប្រែព័ត៌មានលម្អិតសមាជិក") : "បំពេញទិន្នន័យដើម្បីបង្កើតសមាជិកថ្មីក្នុងប្រព័ន្ធ"}
+          showBack={onClose}
+          backText="ត្រឡប់ក្រោយ"
+          breadcrumbs={breadcrumbs}
+          actions={actions}
+        />
+
+        <div>
           <form onSubmit={onSubmit}>
             {formFields}
             <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.75rem", marginTop: "1.75rem", paddingTop: "1.25rem", borderTop: "1px solid #e2e8f0" }}>
-              <button type="button" className="btn btn-secondary" onClick={onClose} style={{ borderRadius: "8px", px: "1.25rem" }}>
+              <button type="button" className="btn btn-secondary" onClick={onClose} style={{ borderRadius: "8px" }} disabled={submitting}>
                 បោះបង់
               </button>
               <button
                 type="submit"
                 className="btn btn-primary"
                 disabled={submitting}
-                style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem", borderRadius: "8px", px: "1.5rem", fontWeight: "600" }}
+                style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem", borderRadius: "8px", fontWeight: "600" }}
               >
                 <LuSave size={16} /> {submitting ? "រក្សាទុក..." : editing ? "ធ្វើបច្ចុប្បន្នភាព" : "រក្សាទុកសមាជិក"}
               </button>
@@ -435,7 +454,7 @@ export default function MembershipForm({
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "720px", borderRadius: "16px" }}>
+      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ borderRadius: "16px" }}>
         <div className="modal-header">
           <h3 style={{ margin: 0 }}>{editing ? "កែប្រែសមាជិក" : "បន្ថែមសមាជិកថ្មី"}</h3>
           <button className="btn-icon" onClick={onClose}><LuX size={18} /></button>
@@ -459,6 +478,6 @@ export default function MembershipForm({
           </div>
         </form>
       </div>
-    </div>
+    </div >
   );
 }

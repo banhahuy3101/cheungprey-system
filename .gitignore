@@ -1,6 +1,7 @@
 backend/supabase/.temp/
 supabase/.temp/
 backend/.env
+backend/.env.*
 frontend/.env
 frontend/.env.local
 frontend/.env.development.local

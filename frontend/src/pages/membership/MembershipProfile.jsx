@@ -311,10 +311,13 @@ export default function MembershipProfile({ profile: initialProfile, onBack, onE
                       </div>
                       <div style={{ flex: 1 }}>
                         <div style={{ fontWeight: 700, fontSize: "0.85rem" }}>
-                          Step {a.step_order} — {a.approver_role === "commune_chief" ? "ប្រធានឃុំ" :
+                          {a.step_label || `Step ${a.step_order} — ${
+                            a.approver_role === "commune_chief" ? "ប្រធានឃុំ" :
                             a.approver_role === "district_chief" ? "ប្រធានស្រុក" :
                             a.approver_role === "province_chief" ? "ប្រធានខេត្ត" :
-                            a.approver_role || "—"}
+                            a.approver_role === "village_chief" ? "ប្រធានភូមិ" :
+                            a.approver_role || "—"
+                          }`}
                         </div>
                         <div style={{ fontSize: "0.72rem", color: "#94a3b8", marginTop: "0.1rem" }}>
                           {a.approver_name && <span>អ្នកទទួលបន្ទុក: <strong style={{ color: "#0f172a" }}>{a.approver_name}</strong> · </span>}

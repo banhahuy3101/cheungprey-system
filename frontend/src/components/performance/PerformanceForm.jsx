@@ -9,6 +9,7 @@ import { partyAPI } from "../../api/party";
 import { reportDocumentsAPI } from "../../api/reportDocuments";
 import { modulesAPI, approvalsAPI } from "../../api/modules";
 import Select from "../Select";
+import PageHeader from "../PageHeader";
 import { formatPerformancePeriodLabel } from "../../utils/periodLabel";
 import { unwrapZone, zoneCodeOf, loadZoneHierarchy, resolveSelectedZone } from "../../utils/zone";
 
@@ -499,74 +500,113 @@ export default function PerformanceForm({ mode, zoneCode, periodId }) {
           <div className="report-linear-loader-fill" />
         </div>
       )}
-      <div className="page-header">
-        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-          <button className="btn-icon" onClick={() => navigate("/performance")} title="ត្រឡប់">
-            <LuArrowLeft size={20} />
-          </button>
-          <h2 className="section-title">
-            {mode === "create" ? "បង្កើតរបាយការណ៍ថ្មី"
-              : mode === "edit" ? "កែប្រែរបាយការណ៍"
-                : "មើលរបាយការណ៍"}
-          </h2>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-          {/* Expandable Workflow Drawer Toggle Button */}
-          <button
-            type="button"
-            className={`btn ${showWorkflowDrawer ? "btn-primary" : "btn-secondary"}`}
-            onClick={() => setShowWorkflowDrawer(!showWorkflowDrawer)}
-            style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem", borderRadius: "10px", fontWeight: "600" }}
-            title="មើលអ្នកអនុម័ត (Approval Workflow)"
-          >
-            <LuListOrdered size={16} /> អ្នកអនុម័ត {workflowSteps.length > 0 && `(${workflowSteps.length})`}
-          </button>
-
-          {isView && (
-            <>
-              <button
-                className="btn btn-primary"
-                onClick={() => navigate(`/performance/edit?zone_id=${reportZone}&period_id=${reportPeriod}`)}
-              >
-                <LuPencil /> កែប្រែ
-              </button>
-              <button
-                className="btn btn-secondary"
-                onClick={handleSaveToReport}
-                disabled={savingToReport || !reportZone || !reportPeriod}
-                title="បង្កើតជាឯកសាររបាយការណ៍ផ្លូវការ"
-              >
-                <LuFileText /> {savingToReport ? "កំពុងបង្កើត..." : "រក្សាទុកជារបាយការណ៍"}
-              </button>
-            </>
-          )}
-          {(isView || mode === "edit") && (
-            <button
-              className="btn btn-secondary"
-              onClick={handleDownloadPdf}
-              disabled={downloading || !reportZone || !reportPeriod}
+      <PageHeader
+        title={
+          mode === "create" ? "បង្កើតរបាយការណ៍លទ្ធផលការងារ"
+            : mode === "edit" ? "កែប្រែរបាយការណ៍លទ្ធផលការងារ"
+              : "មើលរបាយការណ៍លទ្ធផលការងារ"
+        }
+        subtitle={
+          zoneName && periodRangeLabel
+            ? `តំបន់៖ ${zoneName} | រយៈពេល៖ ${periodRangeLabel}`
+            : "បញ្ចូល និងគ្រប់គ្រងទិន្នន័យសូចនាករតាមតំបន់"
+        }
+        showBack={() => navigate("/performance")}
+        backText="ត្រឡប់ក្រោយ"
+        breadcrumbs={[
+          { label: "ផ្ទាំងគ្រប់គ្រង", path: "/dashboard" },
+          { label: "លទ្ធផលការងារ", path: "/performance" },
+          {
+            label: mode === "create" ? "បង្កើតថ្មី"
+              : mode === "edit" ? "កែប្រែ"
+                : "មើលរបាយការណ៍"
+          },
+        ]}
+        badge={
+          submissionStatus ? (
+            <span
+              className={`badge badge-${submissionStatus === "approved" ? "success" : submissionStatus === "pending_review" ? "warning" : submissionStatus === "rejected" ? "danger" : "info"}`}
             >
-              <LuDownload /> {downloading ? "កំពុងទាញយក..." : "ទាញយក PDF"}
+              {submissionStatus === "approved" ? "បានអនុម័ត"
+                : submissionStatus === "pending_review" ? "កំពុងពិនិត្យ"
+                  : submissionStatus === "rejected" ? "បានបដិសេធ"
+                    : "សេចក្តីព្រាង"}
+            </span>
+          ) : null
+        }
+        actions={
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+            {/* Expandable Workflow Drawer Toggle Button */}
+            <button
+              type="button"
+              className={`btn ${showWorkflowDrawer ? "btn-primary" : "btn-secondary"} btn-sm`}
+              onClick={() => setShowWorkflowDrawer(!showWorkflowDrawer)}
+              style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem", borderRadius: "8px", fontWeight: "600" }}
+              title="មើលអ្នកអនុម័ត (Approval Workflow)"
+            >
+              <LuListOrdered size={15} /> អ្នកអនុម័ត {workflowSteps.length > 0 && `(${workflowSteps.length})`}
             </button>
-          )}
-          {!isView && (
-            <>
-              {targetZone && selectedPeriod && (
+
+            {isView && (
+              <>
                 <button
-                  className="btn btn-secondary"
-                  onClick={handleCopyFromPrevious}
-                  disabled={copying || saving}
+                  type="button"
+                  className="btn btn-outline btn-sm"
+                  onClick={() => navigate(`/performance/edit?zone_id=${reportZone}&period_id=${reportPeriod}`)}
+                  style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}
                 >
-                  {copying ? "កំពុងចម្លង..." : "ចម្លងពីរយៈពេលមុន"}
+                  <LuPencil size={15} /> កែប្រែ
                 </button>
-              )}
-              <button className="btn btn-primary" onClick={handleSave} disabled={saving || copying}>
-                <LuSave /> {saving ? "កំពុងរក្សាទុក..." : "រក្សាទុកទិន្នន័យ"}
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={handleSaveToReport}
+                  disabled={savingToReport || !reportZone || !reportPeriod}
+                  title="បង្កើតជាឯកសាររបាយការណ៍ផ្លូវការ"
+                  style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}
+                >
+                  <LuFileText size={15} /> {savingToReport ? "កំពុងបង្កើត..." : "រក្សាទុកជារបាយការណ៍"}
+                </button>
+              </>
+            )}
+            {(isView || mode === "edit") && (
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={handleDownloadPdf}
+                disabled={downloading || !reportZone || !reportPeriod}
+                style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}
+              >
+                <LuDownload size={15} /> {downloading ? "កំពុងទាញយក..." : "ទាញយក PDF"}
               </button>
-            </>
-          )}
-        </div>
-      </div>
+            )}
+            {!isView && (
+              <>
+                {targetZone && selectedPeriod && (
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={handleCopyFromPrevious}
+                    disabled={copying || saving}
+                    style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}
+                  >
+                    {copying ? "កំពុងចម្លង..." : "ចម្លងពីរយៈពេលមុន"}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="btn btn-primary btn-sm"
+                  onClick={handleSave}
+                  disabled={saving || copying}
+                  style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}
+                >
+                  <LuSave size={15} /> {saving ? "កំពុងរក្សាទុក..." : "រក្សាទុកទិន្នន័យ"}
+                </button>
+              </>
+            )}
+          </div>
+        }
+      />
 
       <div style={{ display: "flex", gap: "1.25rem", alignItems: "flex-start", width: "100%" }}>
         {/* Main Content Area */}
