@@ -508,110 +508,64 @@ func (h *AdminHandler) GetSettingsCatalog(c *gin.Context) {
 	}
 
 	dbMenuItems, err := h.repo.ListMenuItems()
-	if err == nil && len(dbMenuItems) > 0 {
-		var dynamicCatalog []SettingsNavItem
-		for _, mi := range dbMenuItems {
-			if mi.ModuleKey == "settings" && mi.ParentID != nil && mi.IsActive && mi.IsVisible {
-				dynamicCatalog = append(dynamicCatalog, SettingsNavItem{
-					Key:       mi.FeatureKey,
-					ModuleKey: mi.SubModule,
-					Icon:      mi.Icon,
-					Title:     mi.Title,
-					Desc:      mi.TitleEN,
-					Path:      mi.Path,
-				})
-			}
-		}
+	if err != nil {
+		utils.InternalError(c, "Failed to fetch settings catalog: "+err.Error())
+		return
+	}
 
-		if len(dynamicCatalog) > 0 {
-			var filtered []SettingsNavItem
-			for _, item := range dynamicCatalog {
-				funcModule := resolveFunctionalModuleKey(item.ModuleKey)
-				if funcModule != "" {
-					if enabled, ok := enabledMap[funcModule]; ok && !enabled {
-						continue
-					}
-				}
-				filtered = append(filtered, item)
-			}
-			utils.JSON(c, http.StatusOK, filtered)
-			return
+	var rootSettingsID *uuid.UUID
+	for _, mi := range dbMenuItems {
+		if mi.Path == "/settings" || (mi.ModuleKey == "settings" && mi.ParentID == nil) {
+			id := mi.ID
+			rootSettingsID = &id
+			break
 		}
 	}
 
-	catalog := []SettingsNavItem{
-		{
-			Key:   string(models.FeatureUsers),
-			Icon:  "LuShield",
-			Title: "គ្រប់គ្រងអ្នកប្រើប្រាស់ និងសិទ្ធិតួនាទី",
-			Desc:  "គ្រប់គ្រងគណនីអ្នកប្រើប្រាស់ កំណត់សិទ្ធិ និងតួនាទីប្រព័ន្ធ (User & Role Permissions)",
-			Path:  "/settings/users",
-		},
-		{
-			Key:       string(models.FeatureUsers),
-			ModuleKey: "zone_chiefs",
-			Icon:      "LuMapPin",
-			Title:     "កំណត់ប្រធានភូមិសាស្ត្រ",
-			Desc:      "ចាត់តាំងប្រធានខេត្ត ស្រុក ឃុំ ភូមិ",
-			Path:      "/settings/zone-chiefs",
-		},
-		{
-			Key:       string(models.FeatureReports),
-			ModuleKey: "reports",
-			Icon:      "LuFileText",
-			Title:     "គំរូរបាយការណ៍",
-			Desc:      "បញ្ចូល និងគ្រប់គ្រងគំរូ .docx / .html សម្រាប់របាយការណ៍",
-			Path:      "/settings/report-templates",
-		},
-		{
-			Key:   string(models.FeatureTechnical),
-			Icon:  "LuWrench",
-			Title: "Technical",
-			Desc:  "System settings — ពាក្យសម្ងាត់ដើម និងការកំណត់ប្រព័ន្ធ",
-			Path:  "/settings/technical",
-		},
-		{
-			Features: []string{string(models.FeatureTechnical), string(models.FeatureUsers)},
-			Icon:     "LuSettings2",
-			Title:    "អ្នកអនុម័ត",
-			Desc:     "បើក/បិទការអនុម័ត និងកំណត់ជំហានអនុម័តតាមម៉ូឌុល",
-			Path:     "/settings/modules/workflow",
-		},
-		{
-			Features: []string{string(models.FeatureTechnical), string(models.FeatureUsers)},
-			Icon:     "LuLayers",
-			Title:    "គ្រប់គ្រងម៉ឺនុយប្រព័ន្ធ",
-			Desc:     "រៀបចំ ម៉ូឌុល ម៉ូឌុលរង លក្ខណៈពិសេស និងម៉ឺនុយកូនតាមឋានានុក្រម",
-			Path:     "/settings/menu-items",
-		},
-		{
-			Key:       string(models.FeaturePerformanceAdmin),
-			ModuleKey: "performance",
-			Icon:      "LuTarget",
-			Title:     "គ្រប់គ្រង Performance",
-			Desc:      "គ្រប់គ្រងដែន ចំណុចរង សូចនាករ និងរយៈពេល",
-			Path:      "/settings/performance",
-		},
-		{
-			Features: []string{string(models.FeatureTechnical), string(models.FeatureUsers), string(models.FeatureSettings)},
-			Icon:     "LuClock",
-			Title:    "ការងារ Cron & ថែទាំប្រព័ន្ធ",
-			Desc:     "ពិនិត្យស្ថានភាព Cron nightly, ដំណើរការថែទាំ Supabase និងកំណត់ហេតុ",
-			Path:     "/settings/cron",
-		},
-	}
-
-	var filtered []SettingsNavItem
-	for _, item := range catalog {
-		if item.ModuleKey != "" {
-			if enabled, ok := enabledMap[item.ModuleKey]; ok && !enabled {
+	var catalog []SettingsNavItem
+	for _, mi := range dbMenuItems {
+		// Only direct child items of Settings that are active and visible
+		if mi.ModuleKey == "settings" && mi.ParentID != nil && mi.IsActive && mi.IsVisible {
+			if rootSettingsID != nil && *mi.ParentID != *rootSettingsID {
 				continue
 			}
+
+			funcModule := resolveFunctionalModuleKey(mi.SubModule)
+			if funcModule != "" {
+				if enabled, ok := enabledMap[funcModule]; ok && !enabled {
+					continue
+				}
+			}
+
+			desc := mi.Description
+			if desc == "" {
+				desc = mi.TitleEN
+			}
+
+			item := SettingsNavItem{
+				Key:       mi.FeatureKey,
+				ModuleKey: mi.SubModule,
+				Icon:      mi.Icon,
+				Title:     mi.Title,
+				Desc:      desc,
+				Path:      mi.Path,
+			}
+
+			if mi.SubModule == "workflow" || mi.SubModule == "menu_items" {
+				item.Features = []string{string(models.FeatureTechnical), string(models.FeatureUsers)}
+			} else if mi.SubModule == "cron" {
+				item.Features = []string{string(models.FeatureTechnical), string(models.FeatureUsers), string(models.FeatureSettings)}
+			}
+
+			catalog = append(catalog, item)
 		}
-		filtered = append(filtered, item)
 	}
 
-	utils.JSON(c, http.StatusOK, filtered)
+	if catalog == nil {
+		catalog = []SettingsNavItem{}
+	}
+
+	utils.JSON(c, http.StatusOK, catalog)
 }
 
 func (h *AdminHandler) GetSettings(c *gin.Context) {

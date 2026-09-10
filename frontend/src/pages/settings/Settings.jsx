@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { LuKeyRound, LuShield, LuTarget, LuWrench, LuFileText, LuMapPin, LuSettings2, LuClock, LuSettings } from "react-icons/lu";
+import { LuKeyRound, LuShield, LuTarget, LuWrench, LuFileText, LuMapPin, LuSettings2, LuClock, LuSettings, LuUsers } from "react-icons/lu";
 import PageHeader from "../../components/PageHeader";
 import { useAuth } from "../../hooks/useAuth";
 import { canAccess, hasAnyFeature } from "../../utils/permissions";
@@ -8,6 +8,7 @@ import api from "../../api/client";
 
 const ICON_MAP = {
   LuShield,
+  LuUsers,
   LuKeyRound,
   LuMapPin,
   LuFileText,

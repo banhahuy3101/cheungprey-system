@@ -63,25 +63,7 @@ export default function Layout() {
         const res = await menuItemsAPI.getTree();
         const data = res.data?.data || res.data || [];
         if (mounted && Array.isArray(data) && data.length > 0) {
-          let topLevel = data.filter((item) => !item.parent_id);
-          const hasSponsorships = topLevel.some(
-            (item) => item.path === "/sponsorships" || item.module_key === "sponsorships"
-          );
-          if (!hasSponsorships) {
-            topLevel.push({
-              id: "sponsorships-module-nav",
-              title: "តារាងឧបសម្ព័ន្ធ ថវិកា សម្ភារ",
-              title_en: "Sponsorships & Materials",
-              module_key: "sponsorships",
-              feature_key: "sponsorships",
-              path: "/sponsorships",
-              icon: "LuScrollText",
-              sort_order: 45,
-              is_active: true,
-              is_visible: true,
-            });
-            topLevel.sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
-          }
+          const topLevel = data.filter((item) => !item.parent_id);
           setMenuTree(topLevel);
           cacheService.setMenuItems(topLevel);
         }
@@ -132,6 +114,7 @@ export default function Layout() {
     ? []
     : menuTree.filter((item) => {
       if (item.is_active === false || item.is_visible === false) return false;
+      if (item.type && item.type !== "module" && item.type !== "menu") return false;
       const fKey = resolveFeatureKey(item.feature_key);
       const hasPerm = !fKey || canAccess(user, fKey);
       const hasMod = checkModuleEnabled(item);
@@ -161,6 +144,7 @@ export default function Layout() {
           {filteredNav.map((item) => {
             const validChildren = (item.children || []).filter((child) => {
               if (child.is_active === false || child.is_visible === false) return false;
+              if (child.type && child.type !== "menu") return false;
               const fKey = resolveFeatureKey(child.feature_key);
               const hasPerm = !fKey || canAccess(user, fKey);
               const hasMod = checkModuleEnabled(child);

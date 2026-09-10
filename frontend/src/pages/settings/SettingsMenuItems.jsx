@@ -9,6 +9,14 @@ import { useToast } from "../../components/Toast";
 import { menuItemsAPI } from "../../api/menuItems";
 import cacheService from "../../services/cacheService";
 
+const TYPE_CONFIG = {
+  module: { label: "ម៉ូឌុល (Module)", bg: "#f3e8ff", color: "#7e22ce", border: "#e9d5ff" },
+  menu: { label: "ម៉ឺនុយ (Menu)", bg: "#eff6ff", color: "#1d4ed8", border: "#bfdbfe" },
+  tab: { label: "ផ្ទាំង (Tab)", bg: "#f0fdf4", color: "#15803d", border: "#bbf7d0" },
+  option: { label: "ជម្រើស (Option)", bg: "#fffbeb", color: "#b45309", border: "#fde68a" },
+  action: { label: "សកម្មភាព (Action)", bg: "#fff7ed", color: "#c2410c", border: "#fed7aa" },
+};
+
 export default function SettingsMenuItems() {
   const navigate = useNavigate();
   const toast = useToast();
@@ -46,6 +54,9 @@ export default function SettingsMenuItems() {
 
   const renderTreeRow = (item, level = 0) => {
     const isChild = level > 0;
+    const itemType = item.type || (level === 0 ? "module" : "menu");
+    const typeCfg = TYPE_CONFIG[itemType] || { label: itemType, bg: "#f1f5f9", color: "#475569", border: "#e2e8f0" };
+
     return (
       <tr key={item.id} style={{ background: isChild ? "#fafafa" : "#ffffff" }}>
         <td style={{ textAlign: "center" }}>
@@ -76,6 +87,21 @@ export default function SettingsMenuItems() {
               <span style={{ fontSize: "0.78rem", color: "#64748b" }}>({item.title_en})</span>
             )}
           </div>
+        </td>
+        <td style={{ textAlign: "center" }}>
+          <span style={{
+            fontSize: "0.74rem",
+            padding: "0.15rem 0.55rem",
+            borderRadius: "8px",
+            fontWeight: 700,
+            background: typeCfg.bg,
+            color: typeCfg.color,
+            border: `1px solid ${typeCfg.border}`,
+            display: "inline-block",
+            whiteSpace: "nowrap"
+          }}>
+            {typeCfg.label}
+          </span>
         </td>
         <td style={{ textAlign: "left" }}>
           {item.module_key ? (
@@ -191,15 +217,16 @@ export default function SettingsMenuItems() {
           <table className="table" style={{ width: "100%", margin: 0, borderCollapse: "separate", borderSpacing: 0 }}>
             <thead>
               <tr style={{ background: "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
-                <th style={{ textAlign: "center", width: "7%" }}>លំដាប់</th>
-                <th style={{ textAlign: "left", width: "25%" }}>ឈ្មោះម៉ឺនុយ (Title)</th>
-                <th style={{ textAlign: "left", width: "12%" }}>ម៉ូឌុល (Module)</th>
-                <th style={{ textAlign: "left", width: "12%" }}>ម៉ូឌុលរង (Sub Module)</th>
-                <th style={{ textAlign: "left", width: "13%" }}>លក្ខណៈពិសេស (Feature)</th>
+                <th style={{ textAlign: "center", width: "6%" }}>លំដាប់</th>
+                <th style={{ textAlign: "left", width: "23%" }}>ឈ្មោះម៉ឺនុយ (Title)</th>
+                <th style={{ textAlign: "center", width: "11%" }}>ប្រភេទ (Type)</th>
+                <th style={{ textAlign: "left", width: "10%" }}>ម៉ូឌុល (Module)</th>
+                <th style={{ textAlign: "left", width: "10%" }}>ម៉ូឌុលរង (Sub Module)</th>
+                <th style={{ textAlign: "left", width: "11%" }}>លក្ខណៈពិសេស (Feature)</th>
                 <th style={{ textAlign: "left", width: "13%" }}>ផ្លូវ (Path)</th>
-                <th style={{ textAlign: "center", width: "8%" }}>រូបតំណាង</th>
-                <th style={{ textAlign: "center", width: "6%" }}>ស្ថានភាព</th>
-                <th style={{ textAlign: "center", width: "8%" }}>សកម្មភាព</th>
+                <th style={{ textAlign: "center", width: "6%" }}>រូបតំណាង</th>
+                <th style={{ textAlign: "center", width: "5%" }}>ស្ថានភាព</th>
+                <th style={{ textAlign: "center", width: "7%" }}>សកម្មភាព</th>
               </tr>
             </thead>
             <tbody>

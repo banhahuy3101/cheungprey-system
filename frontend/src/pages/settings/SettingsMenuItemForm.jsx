@@ -242,6 +242,13 @@ const FEATURE_KEY_OPTIONS = [
   { value: "performance_admin", label: "performance_admin - Performance Admin" },
 ];
 
+const MENU_TYPE_OPTIONS = [
+  { value: "module", label: "ម៉ូឌុល (Module) — ម៉ឺនុយកម្រិតកំពូលនៃប្រព័ន្ធ" },
+  { value: "menu", label: "ម៉ឺនុយ (Menu) — ម៉ឺនុយរុករកចំហៀង (Sidebar Navigation)" },
+  { value: "tab", label: "ផ្ទាំង (Tab) — ផ្ទាំងរងខាងក្នុងទំព័រ (In-Page Tab)" },
+  { value: "option", label: "ជម្រើស / សកម្មភាព (Option / Action) — ប៊ូតុង ឬជម្រើសប្រតិបត្តិការ" },
+];
+
 export default function SettingsMenuItemForm() {
   const navigate = useNavigate();
   const { id: paramId } = useParams();
@@ -260,8 +267,10 @@ export default function SettingsMenuItemForm() {
 
   // Form State
   const [parentId, setParentId] = useState(defaultParentId);
+  const [type, setType] = useState(defaultParentId ? "menu" : "module");
   const [title, setTitle] = useState("");
   const [titleEn, setTitleEn] = useState("");
+  const [description, setDescription] = useState("");
   const [moduleKey, setModuleKey] = useState("");
   const [subModule, setSubModule] = useState("");
   const [featureKey, setFeatureKey] = useState("");
@@ -284,8 +293,10 @@ export default function SettingsMenuItemForm() {
           const item = flatList.find((i) => String(i.id) === String(id));
           if (item) {
             setParentId(item.parent_id || "");
+            setType(item.type || (item.parent_id ? "menu" : "module"));
             setTitle(item.title || "");
             setTitleEn(item.title_en || "");
+            setDescription(item.description || "");
             setModuleKey(item.module_key || "");
             setSubModule(item.sub_module || "");
             setFeatureKey(item.feature_key || "");
@@ -319,8 +330,10 @@ export default function SettingsMenuItemForm() {
     try {
       const payload = {
         parent_id: parentId || null,
+        type: type.trim() || "menu",
         title: title.trim(),
         title_en: titleEn.trim(),
+        description: description.trim(),
         module_key: moduleKey.trim(),
         sub_module: subModule.trim(),
         feature_key: featureKey.trim(),
@@ -374,8 +387,8 @@ export default function SettingsMenuItemForm() {
       <div className="card shadow-sm" style={{ padding: "1.75rem", borderRadius: "14px", background: "#ffffff", border: "1px solid #e2e8f0" }}>
         <form onSubmit={handleSave} style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
 
-          {/* Order & Parent Menu Item */}
-          <div style={{ display: "grid", gridTemplateColumns: "140px 1fr", gap: "1.25rem" }}>
+          {/* Order, Type & Parent Menu Item */}
+          <div style={{ display: "grid", gridTemplateColumns: "120px 240px 1fr", gap: "1.25rem" }}>
             <div className="form-group">
               <label className="form-label" style={{ fontWeight: 600, fontSize: "0.88rem", color: "#334155" }}>
                 លំដាប់ (Order) <span style={{ color: "#dc2626" }}>*</span>
@@ -391,6 +404,22 @@ export default function SettingsMenuItemForm() {
             </div>
             <div className="form-group">
               <label className="form-label" style={{ fontWeight: 600, fontSize: "0.88rem", color: "#334155" }}>
+                ប្រភេទ (Type) <span style={{ color: "#dc2626" }}>*</span>
+              </label>
+              <Select
+                value={type}
+                onChange={(e) => setType(e.target.value)}
+                style={{ width: "100%", fontWeight: 600 }}
+              >
+                {MENU_TYPE_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <div className="form-group">
+              <label className="form-label" style={{ fontWeight: 600, fontSize: "0.88rem", color: "#334155" }}>
                 ម៉ឺនុយមេ (Parent Menu Item)
               </label>
               <Select
@@ -403,7 +432,7 @@ export default function SettingsMenuItemForm() {
                   .filter((item) => !isEdit || String(item.id) !== String(id))
                   .map((item) => (
                     <option key={item.id} value={item.id}>
-                      {item.module_key ? `[${item.module_key}] ` : ""}{item.title}
+                      {item.module_key ? `[${item.module_key}] ` : ""}{item.title} ({item.type || "menu"})
                     </option>
                   ))}
               </Select>
@@ -437,6 +466,20 @@ export default function SettingsMenuItemForm() {
                 placeholder="e.g. User Management"
               />
             </div>
+          </div>
+
+          {/* Description */}
+          <div className="form-group">
+            <label className="form-label" style={{ fontWeight: 600, fontSize: "0.88rem", color: "#334155" }}>
+              ការពិពណ៌នាសង្ខេប (Description)
+            </label>
+            <input
+              type="text"
+              className="form-control"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="ឧ. គ្រប់គ្រងគណនីអ្នកប្រើប្រាស់ កំណត់តួនាទី និងពាក្យសម្ងាត់ប្រព័ន្ធ"
+            />
           </div>
 
           {/* Module Key, Sub Module, Feature Key Dropdowns */}

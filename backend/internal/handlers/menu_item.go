@@ -54,22 +54,33 @@ func (h *MenuItemHandler) Create(c *gin.Context) {
 		isVisible = *req.IsVisible
 	}
 
+	itemType := req.Type
+	if itemType == "" {
+		if req.ParentID == nil || *req.ParentID == uuid.Nil {
+			itemType = "module"
+		} else {
+			itemType = "menu"
+		}
+	}
+
 	now := time.Now()
 	item := &models.MenuItem{
-		ID:         uuid.New(),
-		ParentID:   req.ParentID,
-		Title:      req.Title,
-		TitleEN:    req.TitleEN,
-		ModuleKey:  req.ModuleKey,
-		SubModule:  req.SubModule,
-		FeatureKey: req.FeatureKey,
-		Path:       req.Path,
-		Icon:       req.Icon,
-		SortOrder:  req.SortOrder,
-		IsActive:   isActive,
-		IsVisible:  isVisible,
-		CreatedAt:  now,
-		UpdatedAt:  now,
+		ID:          uuid.New(),
+		ParentID:    req.ParentID,
+		Title:       req.Title,
+		TitleEN:     req.TitleEN,
+		Description: req.Description,
+		Type:        itemType,
+		ModuleKey:   req.ModuleKey,
+		SubModule:   req.SubModule,
+		FeatureKey:  req.FeatureKey,
+		Path:        req.Path,
+		Icon:        req.Icon,
+		SortOrder:   req.SortOrder,
+		IsActive:    isActive,
+		IsVisible:   isVisible,
+		CreatedAt:   now,
+		UpdatedAt:   now,
 	}
 
 	if err := h.repo.CreateMenuItem(item); err != nil {
@@ -108,6 +119,12 @@ func (h *MenuItemHandler) Update(c *gin.Context) {
 	}
 	if req.TitleEN != "" {
 		data["title_en"] = req.TitleEN
+	}
+	if req.Description != "" {
+		data["description"] = req.Description
+	}
+	if req.Type != "" {
+		data["type"] = req.Type
 	}
 	if req.ModuleKey != "" {
 		data["module_key"] = req.ModuleKey
