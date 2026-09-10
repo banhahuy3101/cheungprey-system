@@ -189,14 +189,30 @@ func (h *PartyHandler) CreateMember(c *gin.Context) {
 	if member.Status == "Pending" {
 		steps, _ := h.repo.ListWorkflowSteps("membership")
 		for _, step := range steps {
+			approverID := step.ApproverID
+			if approverID == nil && member.RegisteredVillageCode != "" {
+				role := step.ZoneLevel
+				if role == "" {
+					role = step.ApproverRole
+				}
+				if chief, _ := h.repo.GetZoneChief(member.RegisteredVillageCode, role); chief != nil {
+					uid := chief.UserID
+					approverID = &uid
+				}
+			}
+
 			approval := &models.WorkflowApproval{
-				ID:         uuid.New(),
-				ModuleKey:  "membership",
-				ItemID:     member.ID,
-				StepOrder:  step.StepOrder,
-				ApproverID: step.ApproverID,
-				Status:     "pending",
-				CreatedAt:  time.Now(),
+				ID:           uuid.New(),
+				ModuleKey:    "membership",
+				ItemID:       member.ID,
+				StepOrder:    step.StepOrder,
+				StepLabel:    step.StepLabel,
+				ApproverRole: step.ApproverRole,
+				ApproverID:   approverID,
+				CanReject:    step.CanReject,
+				CanEdit:      step.CanEdit,
+				Status:       "pending",
+				CreatedAt:    time.Now(),
 			}
 			_ = h.repo.CreateWorkflowApproval(approval)
 		}

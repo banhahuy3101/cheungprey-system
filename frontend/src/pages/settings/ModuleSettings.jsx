@@ -14,28 +14,11 @@ import PageHeader from "../../components/PageHeader";
 import Select from "../../components/Select";
 import FormModal from "../../components/FormModal";
 
-const ROLES = [
-  { value: "super_admin", label: "អ្នកគ្រប់គ្រងជាន់ខ្ពស់ (Super Admin)" },
-  { value: "admin", label: "អ្នកគ្រប់គ្រង (Admin)" },
-  { value: "district_chief", label: "ប្រធានស្រុក (District Chief)" },
-  { value: "commune_chief", label: "មេឃុំ/ប្រធានឃុំ (Commune Chief)" },
-  { value: "commune_clerk", label: "ស្មៀនឃុំ (Commune Clerk)" },
-  { value: "village_chief", label: "ប្រធានភូមិ (Village Chief)" },
-  { value: "recorder", label: "អ្នកកត់ត្រា (Recorder)" },
-  { value: "regular_user", label: "អ្នកប្រើប្រាស់ទូទៅ (Regular User)" },
-];
+const ROLES = [];
 
-const MODULE_LABELS = {
-  dashboard: "ទំព័រដើម",
-  settings: "ការកំណត់",
-  membership: "សមាជិក",
-  voters: "អ្នកបោះឆ្នោត",
-  finances: "ហិរញ្ញវត្ថុ",
-  files: "ឯកសារ",
-  reports: "របាយការណ៍",
-  performance: "លទ្ធផលការងារ",
-  zone_chiefs: "ថ្នាក់ដឹកនាំតំបន់",
-};
+const ZONE_CHIEF_KEYS = [];
+
+const MODULE_LABELS = {};
 
 const MODULE_ICONS = {
   dashboard: LuHouse,
@@ -61,11 +44,12 @@ export default function ModuleSettings() {
   const [originalSteps, setOriginalSteps] = useState({});
   const [draftSteps, setDraftSteps] = useState({});
   const [users, setUsers] = useState([]);
+  const [zoneKeys, setZoneKeys] = useState([]);
 
   // Workflow Modal State
   const [workflowModalKey, setWorkflowModalKey] = useState(null);
 
-  const fetchUsersIfNeeded = () => {
+  const fetchWorkflowDataIfNeeded = () => {
     if (users.length === 0) {
       adminAPI.getUsers()
         .then((uRes) => {
@@ -74,14 +58,28 @@ export default function ModuleSettings() {
         })
         .catch(() => setUsers([]));
     }
+    if (zoneKeys.length === 0) {
+      modulesAPI.getZoneKeys()
+        .then((res) => {
+          const data = res.data?.data || res.data || [];
+          setZoneKeys(Array.isArray(data) ? data : []);
+        })
+        .catch(() => setZoneKeys([]));
+    }
   };
 
   const openWorkflowModal = (moduleKey) => {
-    fetchUsersIfNeeded();
+    fetchWorkflowDataIfNeeded();
     setWorkflowModalKey(moduleKey);
   };
 
   useEffect(() => {
+    modulesAPI.getZoneKeys()
+      .then((res) => {
+        const data = res.data?.data || res.data || [];
+        setZoneKeys(Array.isArray(data) ? data : []);
+      })
+      .catch(() => {});
     setLoading(true);
     modulesAPI.list()
       .then((res) => {
@@ -132,15 +130,17 @@ export default function ModuleSettings() {
   const addStepLocal = (moduleKey) => {
     const current = draftSteps[moduleKey] || [];
     const maxOrder = current.reduce((max, s) => Math.max(max, s.step_order || 0), 0);
-    const firstUser = users[0] || null;
     const tempStep = {
       id: "new-" + Date.now(),
       module_key: moduleKey,
       step_order: maxOrder + 1,
       step_label: "",
-      approver_role: firstUser?.role || "district_chief",
-      approver_id: firstUser?.id || null,
+      assign_type: "zone_chief",
+      zone_level: "commune_chief",
+      approver_role: "commune_chief",
+      approver_id: null,
       can_reject: true,
+      can_edit: false,
       _new: true,
     };
     setDraftSteps((prev) => ({ ...prev, [moduleKey]: [...current, tempStep] }));
@@ -202,31 +202,50 @@ export default function ModuleSettings() {
         const origSteps = originalSteps[m.module_key] || [];
         const curSteps = draftSteps[m.module_key] || [];
 
-        for (const s of curSteps) {
-          if (s._new) {
-            await modulesAPI.createStep(m.module_key, {
-              step_label: s.step_label || "",
-              approver_role: s.approver_role,
-              approver_id: s.approver_id || null,
-              can_reject: s.can_reject,
-            });
-          } else {
-            const origStep = origSteps.find((o) => o.id === s.id);
-            if (origStep && (s.step_label !== origStep.step_label || s.approver_role !== origStep.approver_role || s.can_reject !== origStep.can_reject || s.approver_id !== origStep.approver_id || s.step_order !== origStep.step_order)) {
-              await modulesAPI.updateStep(m.module_key, s.id, {
-                step_label: s.step_label || "",
-                approver_role: s.approver_role,
-                approver_id: s.approver_id || null,
-                can_reject: s.can_reject,
-              });
-            }
-          }
-        }
-
+        // 1. Delete removed steps first
         const curIds = new Set(curSteps.filter((s) => !s._new).map((s) => s.id));
         for (const s of origSteps) {
           if (!curIds.has(s.id)) {
             await modulesAPI.deleteStep(m.module_key, s.id);
+          }
+        }
+
+        // 2. Create new steps or update existing ones
+        for (const s of curSteps) {
+          const zoneLevel = s.approver_id ? "" : (s.zone_level || s.approver_role || "commune_chief");
+          const assignType = s.approver_id ? "custom" : "zone_chief";
+
+          if (s._new) {
+            await modulesAPI.createStep(m.module_key, {
+              step_label: s.step_label || "",
+              assign_type: assignType,
+              zone_level: zoneLevel,
+              approver_id: s.approver_id || null,
+              can_reject: s.can_reject !== false,
+              can_edit: !!s.can_edit,
+            });
+          } else {
+            const origStep = origSteps.find((o) => o.id === s.id);
+            if (
+              origStep &&
+              (s.step_label !== origStep.step_label ||
+                s.zone_level !== origStep.zone_level ||
+                s.approver_role !== origStep.approver_role ||
+                s.can_reject !== origStep.can_reject ||
+                s.can_edit !== origStep.can_edit ||
+                s.approver_id !== origStep.approver_id ||
+                s.step_order !== origStep.step_order)
+            ) {
+              await modulesAPI.updateStep(m.module_key, s.id, {
+                step_order: s.step_order,
+                step_label: s.step_label || "",
+                assign_type: assignType,
+                zone_level: zoneLevel,
+                approver_id: s.approver_id || null,
+                can_reject: s.can_reject !== false,
+                can_edit: !!s.can_edit,
+              });
+            }
           }
         }
       }
@@ -435,6 +454,58 @@ export default function ModuleSettings() {
               </label>
             </div>
 
+            {/* Visual Workflow Sequence Flow */}
+            {(draftSteps[workflowModule.module_key] || []).length > 0 && (
+              <div
+                style={{
+                  background: "#f0f9ff",
+                  padding: "0.75rem 1rem",
+                  borderRadius: "10px",
+                  border: "1px solid #bae6fd",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.5rem",
+                  overflowX: "auto",
+                }}
+              >
+                <div style={{ fontSize: "0.75rem", fontWeight: 700, color: "#0369a1", flexShrink: 0, marginRight: "0.25rem" }}>
+                  លំដាប់ដំណើរការ (Workflow Flow) ៖
+                </div>
+                {(draftSteps[workflowModule.module_key] || []).sort((a, b) => a.step_order - b.step_order).map((s, sIdx, arr) => {
+                  const label = s.step_label || `Step ${sIdx + 1}`;
+                  const approverTxt = s.approver_id
+                    ? users.find((u) => u.id === s.approver_id)?.full_name || "Profile"
+                    : zoneKeys.find((r) => (r.key || r.value) === (s.zone_level || s.approver_role))?.key || s.zone_level || s.approver_role || "commune_chief";
+                  return (
+                    <div key={s.id} style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexShrink: 0 }}>
+                      <span
+                        style={{
+                          background: "#ffffff",
+                          border: "1px solid #7dd3fc",
+                          borderRadius: "8px",
+                          padding: "0.3rem 0.65rem",
+                          fontSize: "0.78rem",
+                          fontWeight: 700,
+                          color: "#0c4a6e",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "0.35rem",
+                        }}
+                      >
+                        <span style={{ width: "18px", height: "18px", borderRadius: "50%", background: "#0284c7", color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: "0.68rem" }}>
+                          {sIdx + 1}
+                        </span>
+                        {label} <span style={{ color: "#64748b", fontWeight: 500, fontSize: "0.72rem" }}>({approverTxt})</span>
+                      </span>
+                      {sIdx < arr.length - 1 && (
+                        <span style={{ color: "#0284c7", fontWeight: 800, fontSize: "0.85rem" }}>➔</span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
             {/* Steps Chain List */}
             <div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.6rem" }}>
@@ -512,21 +583,21 @@ export default function ModuleSettings() {
                       </div>
 
                       {/* Form Body: 2-Column Layout */}
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1.2fr", gap: "0.75rem", alignItems: "center" }}>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1.25fr", gap: "0.85rem", alignItems: "flex-start" }}>
                         {/* Step Label */}
                         <div>
-                          <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 600, color: "#64748b", marginBottom: "0.25rem" }}>
-                            ឈ្មោះជំហាន (Custom Step Label)
+                          <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, color: "#475569", marginBottom: "0.35rem" }}>
+                            ឈ្មោះជំហាន (Step Label)
                           </label>
                           <input
                             type="text"
-                            placeholder={`ឧទាហរណ៍ ៖ ពិនិត្យដំបូង, មេឃុំអនុម័ត`}
+                            placeholder="ឧ. Line Manager, Second Line, មេឃុំពិនិត្យ..."
                             value={step.step_label || ""}
                             onChange={(e) => updateStepLocal(workflowModule.module_key, step.id, "step_label", e.target.value)}
                             style={{
                               width: "100%",
-                              padding: "0.45rem 0.65rem",
-                              borderRadius: "6px",
+                              padding: "0.5rem 0.65rem",
+                              borderRadius: "8px",
                               border: "1px solid #cbd5e1",
                               fontSize: "0.82rem",
                               background: "#ffffff",
@@ -534,41 +605,115 @@ export default function ModuleSettings() {
                           />
                         </div>
 
-                        {/* Approver Select */}
+                        {/* Approver Selection */}
                         <div>
-                          <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 600, color: "#64748b", marginBottom: "0.25rem" }}>
-                            បុគ្គលអនុម័ត (Approver Person)
+                          <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, color: "#475569", marginBottom: "0.35rem" }}>
+                            អ្នកអនុម័ត (Approver Assignment)
                           </label>
-                          <Select
-                            value={step.approver_id || ""}
-                            onChange={(e) => {
-                              const uid = e.target.value;
-                              const u = users.find((x) => x.id === uid);
-                              updateStepLocal(workflowModule.module_key, step.id, "approver_id", uid || null);
-                              updateStepLocal(workflowModule.module_key, step.id, "approver_role", u?.role || step.approver_role);
-                            }}
-                            style={{ width: "100%", fontSize: "0.82rem" }}
-                          >
-                            <option value="">— ជ្រើសរើសបុគ្គលអនុម័ត —</option>
-                            {users.map((u) => (
-                              <option key={u.id} value={u.id}>
-                                {u.full_name} ({ROLES.find((r) => r.value === u.role)?.label || u.role})
-                              </option>
-                            ))}
-                          </Select>
+
+                          {/* Approver Type Switcher (Radio Tabs) */}
+                          <div style={{ display: "flex", gap: "0.75rem", marginBottom: "0.4rem" }}>
+                            <label style={{ fontSize: "0.75rem", fontWeight: 600, display: "inline-flex", alignItems: "center", gap: "0.3rem", cursor: "pointer", color: !step.approver_id ? "#0284c7" : "#64748b" }}>
+                              <input
+                                type="radio"
+                                name={`assign_type_${step.id}`}
+                                checked={!step.approver_id}
+                                onChange={() => {
+                                  const curZone = step.zone_level || (zoneKeys.some((r) => (r.key || r.value) === step.approver_role) ? step.approver_role : "commune_chief");
+                                  updateStepLocal(workflowModule.module_key, step.id, "approver_id", null);
+                                  updateStepLocal(workflowModule.module_key, step.id, "assign_type", "zone_chief");
+                                  updateStepLocal(workflowModule.module_key, step.id, "zone_level", curZone);
+                                  updateStepLocal(workflowModule.module_key, step.id, "approver_role", curZone);
+                                }}
+                                style={{ accentColor: "#0284c7" }}
+                              />
+                              ប្រធានភូមិសាស្ត្រ (Zone Chief)
+                            </label>
+                            <label style={{ fontSize: "0.75rem", fontWeight: 600, display: "inline-flex", alignItems: "center", gap: "0.3rem", cursor: "pointer", color: !!step.approver_id ? "#0284c7" : "#64748b" }}>
+                              <input
+                                type="radio"
+                                name={`assign_type_${step.id}`}
+                                checked={!!step.approver_id}
+                                onChange={() => {
+                                  const firstUser = users[0];
+                                  updateStepLocal(workflowModule.module_key, step.id, "approver_id", firstUser?.id || null);
+                                  updateStepLocal(workflowModule.module_key, step.id, "assign_type", "custom");
+                                  updateStepLocal(workflowModule.module_key, step.id, "zone_level", "");
+                                  updateStepLocal(workflowModule.module_key, step.id, "approver_role", "custom");
+                                }}
+                                style={{ accentColor: "#0284c7" }}
+                              />
+                              បុគ្គលជាក់លាក់ (Profile)
+                            </label>
+                          </div>
+
+                          {!step.approver_id ? (
+                            <div>
+                              <Select
+                                value={step.zone_level || step.approver_role || "commune_chief"}
+                                onChange={(e) => {
+                                  updateStepLocal(workflowModule.module_key, step.id, "zone_level", e.target.value);
+                                  updateStepLocal(workflowModule.module_key, step.id, "approver_role", e.target.value);
+                                  updateStepLocal(workflowModule.module_key, step.id, "approver_id", null);
+                                }}
+                                style={{ width: "100%", fontSize: "0.82rem" }}
+                              >
+                                {zoneKeys.map((k) => (
+                                  <option key={k.key || k.value} value={k.key || k.value}>
+                                    {k.label || k.key || k.value}
+                                  </option>
+                                ))}
+                              </Select>
+                              <div style={{ fontSize: "0.71rem", color: "#0284c7", marginTop: "0.3rem" }}>
+                                💡 ផ្គូផ្គងមេឃុំ/ប្រធានតំបន់ស្វ័យប្រវត្តិតាមភូមិសាស្ត្រទិន្នន័យ (Dynamic by Zone)
+                              </div>
+                            </div>
+                          ) : (
+                            <div>
+                              <Select
+                                value={step.approver_id || ""}
+                                onChange={(e) => {
+                                  const uid = e.target.value;
+                                  updateStepLocal(workflowModule.module_key, step.id, "approver_id", uid || null);
+                                  updateStepLocal(workflowModule.module_key, step.id, "zone_level", "");
+                                  updateStepLocal(workflowModule.module_key, step.id, "approver_role", "custom");
+                                }}
+                                style={{ width: "100%", fontSize: "0.82rem" }}
+                              >
+                                <option value="">— ជ្រើសរើសបុគ្គលអនុម័តជាក់លាក់ —</option>
+                                {users.map((u) => (
+                                  <option key={u.id} value={u.id}>
+                                    {u.full_name} ({u.email || u.role})
+                                  </option>
+                                ))}
+                              </Select>
+                              <div style={{ fontSize: "0.71rem", color: "#64748b", marginTop: "0.3rem" }}>
+                                👤 បុគ្គលជាក់លាក់ដែលបានជ្រើសរើស នឹងទទួលបន្ទុកពិនិត្យអនុម័តគ្រប់ទិន្នន័យនៃជំហាននេះ
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </div>
 
-                      {/* Footer: Can Reject Checkbox */}
-                      <div style={{ paddingTop: "0.35rem", borderTop: "1px dashed #f1f5f9" }}>
+                      {/* Footer: Can Reject & Can Edit Checkboxes */}
+                      <div style={{ display: "flex", gap: "1.5rem", paddingTop: "0.5rem", borderTop: "1px dashed #f1f5f9", flexWrap: "wrap", alignItems: "center" }}>
                         <label style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem", fontSize: "0.78rem", fontWeight: "600", color: "#334155", cursor: "pointer" }}>
                           <input
                             type="checkbox"
-                            checked={step.can_reject}
+                            checked={step.can_reject !== false}
                             onChange={(e) => updateStepLocal(workflowModule.module_key, step.id, "can_reject", e.target.checked)}
                             style={{ cursor: "pointer", accentColor: "#dc2626" }}
                           />
-                          អនុញ្ញាតឱ្យបុគ្គលនេះបដិសេធបាន (Allow Approver to Reject)
+                          អនុញ្ញាតឱ្យបដិសេធ (Can Reject)
+                        </label>
+                        <label style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem", fontSize: "0.78rem", fontWeight: "600", color: "#334155", cursor: "pointer" }}>
+                          <input
+                            type="checkbox"
+                            checked={!!step.can_edit}
+                            onChange={(e) => updateStepLocal(workflowModule.module_key, step.id, "can_edit", e.target.checked)}
+                            style={{ cursor: "pointer", accentColor: "#2563eb" }}
+                          />
+                          អនុញ្ញាតឱ្យកែប្រែទិន្នន័យក្នុងជំហាននេះ (Can Edit)
                         </label>
                       </div>
                     </div>

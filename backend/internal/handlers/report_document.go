@@ -271,6 +271,17 @@ func (h *ReportDocumentHandler) Update(c *gin.Context) {
 		return
 	}
 
+	doc, err := h.repo.GetReportDocumentByID(id)
+	if err != nil || doc == nil {
+		utils.Error(c, http.StatusNotFound, "Report not found")
+		return
+	}
+
+	if doc.Status != "draft" && doc.Status != "" {
+		utils.BadRequest(c, "មិនអាចកែប្រែបានទេ — អនុញ្ញាតឲ្យកែប្រែតែរបាយការណ៍ព្រាង (Draft) ប៉ុណ្ណោះ")
+		return
+	}
+
 	var req models.UpdateReportDocumentRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.ValidationErrors(c, err)
@@ -289,6 +300,17 @@ func (h *ReportDocumentHandler) UpdateSimple(c *gin.Context) {
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		utils.BadRequest(c, "Invalid report ID")
+		return
+	}
+
+	doc, err := h.repo.GetReportDocumentByID(id)
+	if err != nil || doc == nil {
+		utils.Error(c, http.StatusNotFound, "Report not found")
+		return
+	}
+
+	if doc.Status != "draft" && doc.Status != "" {
+		utils.BadRequest(c, "មិនអាចកែប្រែបានទេ — អនុញ្ញាតឲ្យកែប្រែតែរបាយការណ៍ព្រាង (Draft) ប៉ុណ្ណោះ")
 		return
 	}
 
@@ -492,14 +514,30 @@ func (h *ReportDocumentHandler) Submit(c *gin.Context) {
 	steps, _ := h.repo.ListWorkflowSteps("reports")
 	if len(steps) > 0 {
 		for _, step := range steps {
+			approverID := step.ApproverID
+			if approverID == nil && doc.ZoneCode != "" {
+				role := step.ZoneLevel
+				if role == "" {
+					role = step.ApproverRole
+				}
+				if chief, _ := h.repo.GetZoneChief(doc.ZoneCode, role); chief != nil {
+					uid := chief.UserID
+					approverID = &uid
+				}
+			}
+
 			approval := &models.WorkflowApproval{
-				ID:         uuid.New(),
-				ModuleKey:  "reports",
-				ItemID:     doc.ID,
-				StepOrder:  step.StepOrder,
-				ApproverID: step.ApproverID,
-				Status:     "pending",
-				CreatedAt:  time.Now(),
+				ID:           uuid.New(),
+				ModuleKey:    "reports",
+				ItemID:       doc.ID,
+				StepOrder:    step.StepOrder,
+				StepLabel:    step.StepLabel,
+				ApproverRole: step.ApproverRole,
+				ApproverID:   approverID,
+				CanReject:    step.CanReject,
+				CanEdit:      step.CanEdit,
+				Status:       "pending",
+				CreatedAt:    time.Now(),
 			}
 			_ = h.repo.CreateWorkflowApproval(approval)
 		}

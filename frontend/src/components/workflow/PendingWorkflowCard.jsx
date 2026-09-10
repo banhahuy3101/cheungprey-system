@@ -82,18 +82,24 @@ export default function PendingWorkflowCard({
     ? steps.find((s) => s.step_order === activeApproval.step_order)
     : null;
 
-  // Check if current user is authorized for the active step
-  const requiredRole = activeStepDef?.approver_role;
-  const userRoles = user?.roles || (user?.role ? [user.role] : []);
+  // Check if current user is authorized for the active step (strictly assigned person or super admin)
   const isAssignedPerson =
-    !!activeApproval?.approver_id &&
-    user?.id &&
-    String(user.id) === String(activeApproval.approver_id);
-  const canUserApprove =
-    !!activeApproval &&
-    (isAssignedPerson ||
-      (user?.roles && user.roles.includes("super_admin")) ||
-      user?.role === "super_admin");
+    (!!activeApproval?.approver_id &&
+      user?.id &&
+      String(user.id) === String(activeApproval.approver_id)) ||
+    (!!activeApproval?.approver_name &&
+      user?.full_name &&
+      user.full_name === activeApproval.approver_name);
+
+  const isSuperAdmin =
+    (user?.roles && user.roles.includes("super_admin")) ||
+    user?.role === "super_admin" ||
+    user?.role === "admin";
+
+  const canUserApprove = !!activeApproval && (isAssignedPerson || isSuperAdmin);
+
+  const canRejectStep = (activeApproval?.can_reject ?? activeStepDef?.can_reject ?? true) || isSuperAdmin;
+  const canEditStep = (activeApproval?.can_edit ?? activeStepDef?.can_edit ?? false) || isSuperAdmin;
 
   const handleApproveStep = async () => {
     if (!activeApproval) return;
@@ -274,11 +280,13 @@ export default function PendingWorkflowCard({
             const isDone = histItem?.status === "approved";
             const isStepRejected = histItem?.status === "rejected";
             const isCurrent = activeApproval?.step_order === stepNum;
-            const roleName =
+            const stepLabel =
+              s.step_label ||
+              histItem?.step_label ||
+              `Step ${stepNum}`;
+            const approverText =
               histItem?.approver_name ||
-              ROLE_LABELS_KM[s.approver_role] ||
-              s.approver_role ||
-              `ជំហានទី ${stepNum}`;
+              (s.approver_id ? "" : ROLE_LABELS_KM[s.approver_role] || s.approver_role);
 
             return (
               <div
@@ -347,7 +355,7 @@ export default function PendingWorkflowCard({
                     </span>
                   )}
                   <span>
-                    {stepNum}. {roleName}
+                    {stepNum}. {stepLabel} {approverText ? `(${approverText})` : ""}
                   </span>
                 </div>
 
@@ -394,6 +402,11 @@ export default function PendingWorkflowCard({
                 >
                   <LuUserCheck size={18} />
                   <span>
+                    {activeApproval?.step_label && (
+                      <span style={{ marginRight: "0.4rem", color: "#1d4ed8" }}>
+                        [{activeApproval.step_label}]
+                      </span>
+                    )}
                     រង់ចាំការពិនិត្យពី ៖{" "}
                     <strong>
                       {activeApproval?.approver_name ||
@@ -416,9 +429,7 @@ export default function PendingWorkflowCard({
                       ✓ អ្នកមានសិទ្ធិពិនិត្យ និងអនុម័តក្នុងជំហាននេះ
                     </span>
                   ) : (
-                    `គណនីរបស់អ្នកមិនមានតួនាទីជា ${
-                      ROLE_LABELS_KM[requiredRole] || requiredRole
-                    } ទេ`
+                    "គណនីរបស់អ្នកមិនមែនជាអ្នកទទួលបន្ទុកអនុម័តក្នុងជំហាននេះទេ"
                   )}
                 </div>
               </div>
@@ -432,15 +443,34 @@ export default function PendingWorkflowCard({
                     gap: "0.5rem",
                   }}
                 >
-                  <button
-                    type="button"
-                    className="btn btn-secondary btn-sm"
-                    onClick={() => setShowRejectInput(!showRejectInput)}
-                    disabled={processing}
-                    style={{ color: "#dc2626", borderColor: "#fca5a5" }}
-                  >
-                    <LuCircleX size={15} /> បដិសេធ
-                  </button>
+                  {canEditStep && (
+                    <span
+                      style={{
+                        padding: "0.3rem 0.6rem",
+                        borderRadius: "6px",
+                        fontSize: "0.75rem",
+                        fontWeight: 700,
+                        background: "#dbeafe",
+                        color: "#1d4ed8",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "0.3rem",
+                      }}
+                    >
+                      <LuPenTool size={13} /> អាចកែប្រែក្នុងជំហាននេះ
+                    </span>
+                  )}
+                  {canRejectStep && (
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => setShowRejectInput(!showRejectInput)}
+                      disabled={processing}
+                      style={{ color: "#dc2626", borderColor: "#fca5a5" }}
+                    >
+                      <LuCircleX size={15} /> បដិសេធ
+                    </button>
+                  )}
                   <button
                     type="button"
                     className="btn btn-primary btn-sm"

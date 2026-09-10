@@ -282,6 +282,7 @@ func main() {
 			modules := protected.Group("/modules")
 			{
 				modules.GET("", moduleConfigHandler.ListModules)
+				modules.GET("/zone-keys", moduleConfigHandler.ListZoneKeys)
 				modules.GET("/:key/steps", moduleConfigHandler.ListSteps)
 
 				adminModules := modules.Group("")

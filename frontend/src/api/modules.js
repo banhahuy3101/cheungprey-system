@@ -8,6 +8,7 @@ export const modulesAPI = {
   updateStep: (key, stepId, data) => client.put(`/modules/${key}/steps/${stepId}`, data),
   deleteStep: (key, stepId) => client.delete(`/modules/${key}/steps/${stepId}`),
   reorderSteps: (key, stepIds) => client.put(`/modules/${key}/steps/reorder`, { step_ids: stepIds }),
+  getZoneKeys: () => client.get("/modules/zone-keys"),
 };
 
 export const approvalsAPI = {

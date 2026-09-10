@@ -2,6 +2,7 @@ package repository
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -90,6 +91,33 @@ func (r *Repository) GetZoneChiefAssignment(zoneCode string) (*models.ZoneChiefA
 	}
 
 	if len(rows) == 0 {
+		// Fallback: check if a user in profiles has this exact zone_code
+		var profileRows []struct {
+			ID       string `json:"id"`
+			FullName string `json:"full_name"`
+			ZoneCode string `json:"zone_code"`
+		}
+		_, err := r.AdminClient.From("profiles").
+			Select("id,full_name,zone_code", "exact", false).
+			Eq("zone_code", zoneCode).
+			Limit(1, "").
+			ExecuteTo(&profileRows)
+		if err == nil && len(profileRows) > 0 {
+			p := profileRows[0]
+			uid, _ := uuid.Parse(p.ID)
+			zoneInfoMap := fetchZoneInfo(r, []string{zoneCode})
+			zi := zoneInfoMap[zoneCode]
+			return &models.ZoneChiefAssignment{
+				ID:         uid,
+				ZoneCode:   zoneCode,
+				ZoneName:   zi.Name,
+				ZoneType:   zi.Type,
+				UserID:     uid,
+				UserName:   p.FullName,
+				AssignedAt: time.Now(),
+				UpdatedAt:  time.Now(),
+			}, nil
+		}
 		return nil, nil
 	}
 
@@ -225,38 +253,91 @@ func fetchUserNames(r *Repository, userIDs []string) map[string]string {
 	return result
 }
 
-func (r *Repository) GetZoneChiefName(villageCode string, role string) (string, error) {
+func (r *Repository) GetZoneChief(villageCode string, role string) (*models.ZoneChiefAssignment, error) {
+	villageCode = strings.TrimSpace(villageCode)
 	if villageCode == "" {
-		return "", nil
+		return nil, nil
 	}
 
+	role = strings.ToLower(strings.TrimSpace(role))
 	var zoneCode string
 	switch role {
-	case "commune_chief":
+	case "village_chief", "village":
+		if len(villageCode) >= 8 {
+			zoneCode = villageCode[:8]
+		} else {
+			zoneCode = villageCode
+		}
+	case "commune_chief", "commune", "commune_clerk":
 		if len(villageCode) >= 6 {
 			zoneCode = villageCode[:6]
+		} else {
+			zoneCode = villageCode
 		}
-	case "district_chief":
+	case "district_chief", "district", "district_admin":
 		if len(villageCode) >= 4 {
 			zoneCode = villageCode[:4]
+		} else {
+			zoneCode = villageCode
 		}
-	case "province_chief":
+	case "province_chief", "province":
 		if len(villageCode) >= 2 {
 			zoneCode = villageCode[:2]
+		} else {
+			zoneCode = villageCode
 		}
 	default:
-		return "", nil
+		if len(villageCode) >= 6 {
+			zoneCode = villageCode[:6]
+		} else {
+			zoneCode = villageCode
+		}
 	}
 
 	if zoneCode == "" {
-		return "", nil
+		return nil, nil
 	}
 
-	assignment, err := r.GetZoneChiefAssignment(zoneCode)
+	return r.GetZoneChiefAssignment(zoneCode)
+}
+
+func (r *Repository) GetUserAssignedZones(userID uuid.UUID) ([]string, error) {
+	var rows []struct {
+		ZoneCode string `json:"zone_code"`
+	}
+	_, err := r.AdminClient.From("zone_chief_assignments").
+		Select("zone_code", "exact", false).
+		Eq("user_id", userID.String()).
+		ExecuteTo(&rows)
+	if err != nil {
+		return nil, err
+	}
+
+	zoneSet := make(map[string]bool)
+	var zones []string
+	for _, row := range rows {
+		if !zoneSet[row.ZoneCode] {
+			zoneSet[row.ZoneCode] = true
+			zones = append(zones, row.ZoneCode)
+		}
+	}
+
+	if profile, err := r.GetProfileByID(userID); err == nil && profile != nil && profile.ZoneCode != nil && *profile.ZoneCode != "" {
+		zc := strings.TrimSpace(*profile.ZoneCode)
+		if zc != "" && !zoneSet[zc] {
+			zoneSet[zc] = true
+			zones = append(zones, zc)
+		}
+	}
+
+	return zones, nil
+}
+
+func (r *Repository) GetZoneChiefName(villageCode string, role string) (string, error) {
+	assignment, err := r.GetZoneChief(villageCode, role)
 	if err != nil || assignment == nil {
 		return "", nil
 	}
-
 	return assignment.UserName, nil
 }
 

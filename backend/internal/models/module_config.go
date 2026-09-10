@@ -29,24 +29,31 @@ type WorkflowStep struct {
 	ModuleKey    string     `json:"module_key"`
 	StepOrder    int        `json:"step_order"`
 	StepLabel    string     `json:"step_label"`
-	ApproverRole string     `json:"approver_role"`
+	ZoneLevel    string     `json:"zone_level,omitempty"`
+	ApproverRole string     `json:"approver_role,omitempty"`
 	ApproverID   *uuid.UUID `json:"approver_id,omitempty"`
 	CanReject    bool       `json:"can_reject"`
+	CanEdit      bool       `json:"can_edit"`
 	CreatedAt    time.Time  `json:"created_at"`
 }
 
 type CreateWorkflowStepRequest struct {
-	StepLabel    string     `json:"step_label,omitempty"`
-	ApproverRole string     `json:"approver_role" binding:"required"`
-	ApproverID   *uuid.UUID `json:"approver_id,omitempty"`
-	CanReject    *bool      `json:"can_reject,omitempty"`
+	StepLabel  string     `json:"step_label,omitempty"`
+	AssignType string     `json:"assign_type,omitempty"` // "zone_chief" (by assign) or "custom" (by custom profile)
+	ZoneLevel  string     `json:"zone_level,omitempty"`  // "commune_chief", "district_chief", "province_chief", "village_chief"
+	ApproverID *uuid.UUID `json:"approver_id,omitempty"` // custom profile user ID
+	CanReject  *bool      `json:"can_reject,omitempty"`
+	CanEdit    *bool      `json:"can_edit,omitempty"`
 }
 
 type UpdateWorkflowStepRequest struct {
-	StepLabel    *string    `json:"step_label,omitempty"`
-	ApproverRole *string    `json:"approver_role,omitempty"`
-	ApproverID   *uuid.UUID `json:"approver_id,omitempty"`
-	CanReject    *bool      `json:"can_reject,omitempty"`
+	StepOrder  *int       `json:"step_order,omitempty"`
+	StepLabel  *string    `json:"step_label,omitempty"`
+	AssignType *string    `json:"assign_type,omitempty"`
+	ZoneLevel  *string    `json:"zone_level,omitempty"`
+	ApproverID *uuid.UUID `json:"approver_id,omitempty"`
+	CanReject  *bool      `json:"can_reject,omitempty"`
+	CanEdit    *bool      `json:"can_edit,omitempty"`
 }
 
 type ReorderStepsRequest struct {
@@ -61,6 +68,7 @@ type WorkflowApproval struct {
 	StepLabel    string     `json:"step_label"`
 	ApproverRole string     `json:"approver_role"`
 	CanReject    bool       `json:"can_reject"`
+	CanEdit      bool       `json:"can_edit"`
 	Status       string     `json:"status"`
 	ApproverID   *uuid.UUID `json:"approver_id,omitempty"`
 	ApprovedBy   *uuid.UUID `json:"approved_by,omitempty"`

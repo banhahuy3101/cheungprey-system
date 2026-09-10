@@ -2,6 +2,7 @@ package repository
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -164,7 +165,35 @@ func (r *Repository) InitializeWorkflowForItem(moduleKey string, rawItemID strin
 		return nil
 	}
 
+	var zoneCode string
+	if moduleKey == "membership" {
+		if m, err := r.GetMemberByID(itemID); err == nil && m != nil {
+			zoneCode = m.RegisteredVillageCode
+		}
+	} else if moduleKey == "reports" {
+		if d, err := r.GetReportDocumentByID(itemID); err == nil && d != nil {
+			zoneCode = d.ZoneCode
+		}
+	} else if moduleKey == "performance" {
+		parts := strings.Split(rawItemID, "_")
+		if len(parts) > 0 {
+			zoneCode = parts[0]
+		}
+	}
+
 	for _, s := range steps {
+		approverID := s.ApproverID
+		if approverID == nil && zoneCode != "" {
+			role := s.ZoneLevel
+			if role == "" {
+				role = s.ApproverRole
+			}
+			if chief, _ := r.GetZoneChief(zoneCode, role); chief != nil {
+				uid := chief.UserID
+				approverID = &uid
+			}
+		}
+
 		approval := &models.WorkflowApproval{
 			ID:           uuid.New(),
 			ModuleKey:    moduleKey,
@@ -172,8 +201,9 @@ func (r *Repository) InitializeWorkflowForItem(moduleKey string, rawItemID strin
 			StepOrder:    s.StepOrder,
 			StepLabel:    s.StepLabel,
 			ApproverRole: s.ApproverRole,
-			ApproverID:   s.ApproverID,
+			ApproverID:   approverID,
 			CanReject:    s.CanReject,
+			CanEdit:      s.CanEdit,
 			Status:       "pending",
 			CreatedAt:    time.Now(),
 		}
@@ -268,13 +298,20 @@ func (r *Repository) ListApprovalHistory(moduleKey string, itemID uuid.UUID) ([]
 
 func (r *Repository) ListPendingApprovalsForApprover(moduleKey string, approverRole string, zonePrefix string) ([]models.WorkflowApproval, error) {
 	var approvals []models.WorkflowApproval
-	_, err := r.AdminClient.From("workflow_approvals").
+	q := r.AdminClient.From("workflow_approvals").
 		Select("*", "exact", false).
-		Eq("module_key", moduleKey).
-		Eq("status", "pending").
+		Eq("status", "pending")
+	if moduleKey != "" {
+		q = q.Eq("module_key", moduleKey)
+	}
+	_, err := q.Order("step_order", &postgrest.OrderOpts{Ascending: true}).
 		ExecuteTo(&approvals)
 	if err != nil {
 		return nil, fmt.Errorf("list pending approvals: %w", err)
+	}
+
+	if approverRole == "" {
+		return approvals, nil
 	}
 
 	var steps []models.WorkflowStep
