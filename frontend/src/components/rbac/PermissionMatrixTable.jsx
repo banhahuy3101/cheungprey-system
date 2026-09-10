@@ -1,5 +1,15 @@
 import React from "react";
 import { LuSearch, LuUndo2, LuSave } from "react-icons/lu";
+import * as Icons from "react-icons/lu";
+
+function DynamicIcon({ name, size = 16, style = {} }) {
+  if (!name) return null;
+  const IconComp = Icons[name] || Icons.LuFolder;
+  return <IconComp size={size} style={style} />;
+}
+
+const getKey = (val) => (typeof val === "object" && val !== null ? val.key : val);
+const getLabel = (val) => (typeof val === "object" && val !== null ? val.label : "");
 
 export default function PermissionMatrixTable({
   selectedRole,
@@ -18,110 +28,26 @@ export default function PermissionMatrixTable({
   search,
   setSearch,
 }) {
-  // Flattened clean matrix rows definition with module-level Access keys
-  const ROWS = [
-    {
-      group: "សមាជិក (Members)",
-      items: [
-        {
-          key: "members",
-          label: "គ្រប់គ្រងសមាជិក (Members)",
-          accessKey: "members",
-          actions: { read: "members_read", create: "members_create", update: "members_update", delete: "members_delete" },
-        },
-        {
-          key: "membership_sub",
-          label: "សមាជិកភាព (Dues, Cards, Write)",
-          actions: { read: "membership_dues", create: "membership_cards", update: "membership_write", delete: "membership_delete" },
-        },
-      ],
-    },
-    {
-      group: "អ្នកបោះឆ្នោត (Voters)",
-      items: [
-        {
-          key: "voters",
-          label: "គ្រប់គ្រងអ្នកបោះឆ្នោត (Voters)",
-          accessKey: "voters",
-          actions: { read: "voters_read", create: "voters_create", update: "voters_update", delete: "voters_delete" },
-        },
-      ],
-    },
-    {
-      group: "ឯកសារ (Files)",
-      items: [
-        {
-          key: "files",
-          label: "គ្រប់គ្រងឯកសារ (Files)",
-          accessKey: "files",
-          actions: { read: "files_read", create: "files_create", update: "files_update", delete: "files_delete" },
-        },
-      ],
-    },
-    {
-      group: "កំណត់ត្រា (Records Log)",
-      items: [
-        {
-          key: "records",
-          label: "គ្រប់គ្រងកំណត់ត្រា (Records Log)",
-          accessKey: "records",
-          actions: { read: "records_read", create: "records_create", update: "records_update", delete: "records_delete" },
-        },
-      ],
-    },
-    {
-      group: "របាយការណ៍ (Reports)",
-      items: [
-        {
-          key: "reports",
-          label: "គ្រប់គ្រងរបាយការណ៍ (Reports)",
-          accessKey: "reports",
-          actions: { read: "reports_read", create: "reports_create", update: "reports_update", delete: "reports_delete" },
-        },
-      ],
-    },
-    {
-      group: "លទ្ធផលការងារ (Performance)",
-      items: [
-        {
-          key: "performance",
-          label: "លទ្ធផលការងារ (Performance)",
-          accessKey: "performance",
-          actions: { read: "performance_read", create: "performance_create", update: "performance_update", delete: "performance_delete" },
-        },
-      ],
-    },
-    {
-      group: "ប្រព័ន្ធ និងការកំណត់ (System & Settings)",
-      items: [
-        { key: "dashboard", label: "ទំព័រដើម (Dashboard)", accessKey: "dashboard", actions: {} },
-        { key: "settings", label: "ការកំណត់ប្រព័ន្ធ (Settings)", accessKey: "settings", actions: {} },
-        {
-          key: "users",
-          label: "គ្រប់គ្រងអ្នកប្រើប្រាស់ (Users)",
-          accessKey: "users",
-          actions: { read: "users_read", create: "users_create", update: "users_update", delete: "users_delete" },
-        },
-        { key: "membership_admin", label: "រដ្ឋបាលសមាជិក (Membership Admin)", accessKey: "membership_admin", actions: { update: "membership_admin" } },
-        { key: "performance_admin", label: "គ្រប់គ្រង Performance (Admin)", accessKey: "performance_admin", actions: { update: "performance_admin" } },
-        { key: "technical", label: "ជំនួយបច្ចេកទេស (Technical)", accessKey: "technical", actions: {} },
-      ],
-    },
-  ];
-
-  // Filter rows by search term
-  const displayRows = ROWS.map((g) => ({
-    ...g,
-    items: g.items.filter((it) => {
-      if (!search) return true;
-      const s = search.toLowerCase();
-      return (
-        it.label.toLowerCase().includes(s) ||
-        (it.accessKey && it.accessKey.toLowerCase().includes(s)) ||
-        Object.values(it.actions || {}).some((k) => k.toLowerCase().includes(s))
-      );
-    }),
-  })).filter((g) => g.items.length > 0);
+  // Filter rows from backend API data by search term
+  const displayRows = (filteredModules || [])
+    .map((g) => ({
+      ...g,
+      group: g.label || g.group,
+      items: (g.items || []).filter((it) => {
+        if (!search) return true;
+        const s = search.toLowerCase();
+        const groupMatch = (g.label || g.group || "").toLowerCase().includes(s);
+        const itemMatch = (it.label || "").toLowerCase().includes(s);
+        const accessMatch = (it.accessKey || it.key || "").toLowerCase().includes(s);
+        const actionMatch = Object.values(it.actions || {}).some((act) => {
+          const k = getKey(act);
+          const l = getLabel(act);
+          return (k && k.toLowerCase().includes(s)) || (l && l.toLowerCase().includes(s));
+        });
+        return groupMatch || itemMatch || accessMatch || actionMatch;
+      }),
+    }))
+    .filter((g) => g.items.length > 0);
 
   return (
     <div className="rbac-panel">
@@ -217,21 +143,24 @@ export default function PermissionMatrixTable({
               </thead>
               <tbody>
                 {displayRows.map((g) => (
-                  <React.Fragment key={g.group}>
+                  <React.Fragment key={g.group || g.key}>
                     {/* Module Group Header Row */}
                     <tr style={{ background: "#f8fafc", borderTop: "1px solid #e2e8f0", borderBottom: "1px solid #e2e8f0" }}>
-                      <td colSpan={6} style={{ padding: "0.45rem 1rem", fontWeight: "700", fontSize: "0.8rem", color: "#475569", textTransform: "uppercase", letterSpacing: "0.03em" }}>
-                        {g.group}
+                      <td colSpan={6} style={{ padding: "0.55rem 1rem", fontWeight: "700", fontSize: "0.82rem", color: "#334155", letterSpacing: "0.02em" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                          <DynamicIcon name={g.icon} size={16} style={{ color: "#2563eb", flexShrink: 0 }} />
+                          <span>{g.label || g.group}</span>
+                        </div>
                       </td>
                     </tr>
 
                     {/* Module Sub-Rows */}
                     {g.items.map((row) => {
                       const accessKey = row.accessKey;
-                      const readKey = row.actions?.read;
-                      const createKey = row.actions?.create;
-                      const updateKey = row.actions?.update;
-                      const deleteKey = row.actions?.delete;
+                      const readKey = getKey(row.actions?.read);
+                      const createKey = getKey(row.actions?.create);
+                      const updateKey = getKey(row.actions?.update);
+                      const deleteKey = getKey(row.actions?.delete);
 
                       const isAccessOn = accessKey ? !!currentPerms[accessKey] : false;
                       const isReadOn = readKey ? !!currentPerms[readKey] : false;
@@ -272,7 +201,7 @@ export default function PermissionMatrixTable({
                                 disabled={isSuperAdmin || !canUpdatePermissions}
                                 onChange={() => togglePermission(readKey)}
                                 style={{ width: "18px", height: "18px", accentColor: "#2563eb", cursor: isSuperAdmin || !canUpdatePermissions ? "default" : "pointer" }}
-                                title={`Read Permission (${readKey})`}
+                                title={getLabel(row.actions?.read) || `Read Permission (${readKey})`}
                               />
                             ) : (
                               <span style={{ color: "#cbd5e1", fontSize: "0.9rem" }}>—</span>
@@ -288,7 +217,7 @@ export default function PermissionMatrixTable({
                                 disabled={isSuperAdmin || !canUpdatePermissions}
                                 onChange={() => togglePermission(createKey)}
                                 style={{ width: "18px", height: "18px", accentColor: "#2563eb", cursor: isSuperAdmin || !canUpdatePermissions ? "default" : "pointer" }}
-                                title={`Create Permission (${createKey})`}
+                                title={getLabel(row.actions?.create) || `Create Permission (${createKey})`}
                               />
                             ) : (
                               <span style={{ color: "#cbd5e1", fontSize: "0.9rem" }}>—</span>
@@ -304,7 +233,7 @@ export default function PermissionMatrixTable({
                                 disabled={isSuperAdmin || !canUpdatePermissions}
                                 onChange={() => togglePermission(updateKey)}
                                 style={{ width: "18px", height: "18px", accentColor: "#2563eb", cursor: isSuperAdmin || !canUpdatePermissions ? "default" : "pointer" }}
-                                title={`Update Permission (${updateKey})`}
+                                title={getLabel(row.actions?.update) || `Update Permission (${updateKey})`}
                               />
                             ) : (
                               <span style={{ color: "#cbd5e1", fontSize: "0.9rem" }}>—</span>
@@ -320,7 +249,7 @@ export default function PermissionMatrixTable({
                                 disabled={isSuperAdmin || !canUpdatePermissions}
                                 onChange={() => togglePermission(deleteKey)}
                                 style={{ width: "18px", height: "18px", accentColor: "#2563eb", cursor: isSuperAdmin || !canUpdatePermissions ? "default" : "pointer" }}
-                                title={`Delete Permission (${deleteKey})`}
+                                title={getLabel(row.actions?.delete) || `Delete Permission (${deleteKey})`}
                               />
                             ) : (
                               <span style={{ color: "#cbd5e1", fontSize: "0.9rem" }}>—</span>

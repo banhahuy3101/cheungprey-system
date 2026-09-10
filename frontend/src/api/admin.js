@@ -14,6 +14,7 @@ export const adminAPI = {
   getSettings: () => client.get("/admin/settings"),
   getStatistics: () => client.get("/admin/statistics"),
   getRolePermissions: () => client.get("/admin/role-permissions"),
+  getPermissionModules: () => client.get("/admin/permission-modules"),
   updateRolePermissions: (role, permissions) =>
     client.put(`/admin/role-permissions/${role}`, { permissions }),
   getFeatures: () => client.get("/permissions/features"),

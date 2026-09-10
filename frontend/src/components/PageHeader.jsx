@@ -193,3 +193,111 @@ export default function PageHeader({
     </div>
   );
 }
+
+export function SkeletonPageHeader({ showBreadcrumbs = true, showBack = true, actionsCount = 2, style = {} }) {
+  return (
+    <div
+      className="page-header-global skeleton-page-header"
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: "0.5rem",
+        marginBottom: "1.5rem",
+        paddingBottom: "1rem",
+        borderBottom: "1px solid var(--border, #e2e8f0)",
+        ...style,
+      }}
+    >
+      {showBreadcrumbs && (
+        <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+          <div style={{ width: "65px", height: "13px", borderRadius: "4px", background: "linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%)", backgroundSize: "200% 100%", animation: "skeleton-pulse 1.5s ease-in-out infinite" }} />
+          <div style={{ width: "8px", height: "8px", borderRadius: "2px", background: "#e2e8f0" }} />
+          <div style={{ width: "80px", height: "13px", borderRadius: "4px", background: "linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%)", backgroundSize: "200% 100%", animation: "skeleton-pulse 1.5s ease-in-out infinite" }} />
+          <div style={{ width: "8px", height: "8px", borderRadius: "2px", background: "#e2e8f0" }} />
+          <div style={{ width: "130px", height: "13px", borderRadius: "4px", background: "linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%)", backgroundSize: "200% 100%", animation: "skeleton-pulse 1.5s ease-in-out infinite" }} />
+        </div>
+      )}
+
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          flexWrap: "wrap",
+          gap: "1rem",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flex: "1 1 auto", minWidth: 0 }}>
+          {showBack && (
+            <div
+              style={{
+                width: "36px",
+                height: "36px",
+                borderRadius: "8px",
+                background: "linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%)",
+                backgroundSize: "200% 100%",
+                animation: "skeleton-pulse 1.5s ease-in-out infinite",
+                flexShrink: 0,
+              }}
+            />
+          )}
+
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+              <div
+                style={{
+                  width: "240px",
+                  height: "24px",
+                  borderRadius: "6px",
+                  background: "linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%)",
+                  backgroundSize: "200% 100%",
+                  animation: "skeleton-pulse 1.5s ease-in-out infinite",
+                }}
+              />
+              <div
+                style={{
+                  width: "60px",
+                  height: "20px",
+                  borderRadius: "12px",
+                  background: "linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%)",
+                  backgroundSize: "200% 100%",
+                  animation: "skeleton-pulse 1.5s ease-in-out infinite",
+                }}
+              />
+            </div>
+            <div
+              style={{
+                width: "160px",
+                height: "14px",
+                borderRadius: "4px",
+                background: "linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%)",
+                backgroundSize: "200% 100%",
+                animation: "skeleton-pulse 1.5s ease-in-out infinite",
+              }}
+            />
+          </div>
+        </div>
+
+        {actionsCount > 0 && (
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+            {Array.from({ length: actionsCount }).map((_, idx) => (
+              <div
+                key={idx}
+                style={{
+                  width: idx === 0 ? "105px" : idx === 1 ? "80px" : "110px",
+                  height: "34px",
+                  borderRadius: "8px",
+                  background: "linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%)",
+                  backgroundSize: "200% 100%",
+                  animation: "skeleton-pulse 1.5s ease-in-out infinite",
+                }}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+PageHeader.Skeleton = SkeletonPageHeader;

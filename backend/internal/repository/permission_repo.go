@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+	"github.com/supabase-community/postgrest-go"
 
 	"github.com/banhahuy/cheungprey-system/backend/internal/models"
 )
@@ -351,4 +352,20 @@ func (r *Repository) SeedRolePermissionsIfEmpty() error {
 		return nil
 	}
 	return r.UpdateRolePermissions(models.RoleSuperAdmin, models.DefaultPermissionsForRole(models.RoleSuperAdmin))
+}
+
+func (r *Repository) ListPermissionModules() ([]models.PermissionModuleDB, error) {
+	var rows []models.PermissionModuleDB
+	_, err := r.AdminClient.From("permission_modules").
+		Select("*", "exact", false).
+		Eq("is_active", "true").
+		Order("sort_order", &postgrest.OrderOpts{Ascending: true}).
+		ExecuteTo(&rows)
+	if err != nil {
+		return nil, fmt.Errorf("list permission modules: %w", err)
+	}
+	if rows == nil {
+		rows = []models.PermissionModuleDB{}
+	}
+	return rows, nil
 }

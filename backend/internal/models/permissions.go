@@ -1,6 +1,10 @@
 package models
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/google/uuid"
+)
 
 // Feature keys used in role_permissions JSON and API responses.
 type Feature string
@@ -43,6 +47,12 @@ const (
 	FeatureFilesUpdate Feature = "files_update"
 	FeatureFilesDelete Feature = "files_delete"
 
+	FeatureRecords       Feature = "records"
+	FeatureRecordsCreate Feature = "records_create"
+	FeatureRecordsRead   Feature = "records_read"
+	FeatureRecordsUpdate Feature = "records_update"
+	FeatureRecordsDelete Feature = "records_delete"
+
 	FeatureMembersCreate     Feature = "members_create"
 	FeatureMembersRead       Feature = "members_read"
 	FeatureMembersUpdate     Feature = "members_update"
@@ -78,6 +88,11 @@ var AllFeatures = []Feature{
 	FeatureFilesRead,
 	FeatureFilesUpdate,
 	FeatureFilesDelete,
+	FeatureRecords,
+	FeatureRecordsCreate,
+	FeatureRecordsRead,
+	FeatureRecordsUpdate,
+	FeatureRecordsDelete,
 	FeatureReports,
 	FeatureReportsCreate,
 	FeatureReportsRead,
@@ -127,6 +142,11 @@ var FeatureLabels = map[Feature]string{
 	FeatureFilesRead:           "មើលឯកសារ (Read)",
 	FeatureFilesUpdate:         "កែប្រែឯកសារ (Update)",
 	FeatureFilesDelete:         "លុបឯកសារ (Delete)",
+	FeatureRecords:             "កំណត់ត្រា",
+	FeatureRecordsCreate:       "បង្កើតកំណត់ត្រា (Create)",
+	FeatureRecordsRead:         "មើលកំណត់ត្រា (Read)",
+	FeatureRecordsUpdate:       "កែប្រែកំណត់ត្រា (Update)",
+	FeatureRecordsDelete:       "លុបកំណត់ត្រា (Delete)",
 	FeatureReports:             "របាយការណ៍",
 	FeatureReportsCreate:       "បង្កើតរបាយការណ៍ (Create)",
 	FeatureReportsRead:         "មើលរបាយការណ៍ (Read)",
@@ -262,6 +282,8 @@ func FeatureModule(f Feature) string {
 		return "voters"
 	case FeatureFiles, FeatureFilesCreate, FeatureFilesRead, FeatureFilesUpdate, FeatureFilesDelete:
 		return "files"
+	case FeatureRecords, FeatureRecordsCreate, FeatureRecordsRead, FeatureRecordsUpdate, FeatureRecordsDelete:
+		return "records"
 	case FeatureReports, FeatureReportsCreate, FeatureReportsRead, FeatureReportsUpdate, FeatureReportsDelete:
 		return "reports"
 	case FeaturePerformance, FeaturePerformanceCreate, FeaturePerformanceRead, FeaturePerformanceUpdate, FeaturePerformanceDelete, FeaturePerformanceAdmin:
@@ -283,4 +305,42 @@ func DefaultPermissionsForRole(role UserRole) PermissionSet {
 		}
 	}
 	return p
+}
+
+type PermissionAction struct {
+	Key   string `json:"key"`
+	Label string `json:"label"`
+}
+
+type PermissionItem struct {
+	Key       string                      `json:"key"`
+	Label     string                      `json:"label"`
+	AccessKey string                      `json:"accessKey,omitempty"`
+	Actions   map[string]PermissionAction `json:"actions"`
+}
+
+type PermissionGroup struct {
+	Key   string           `json:"key"`
+	Label string           `json:"label"`
+	Icon  string           `json:"icon"`
+	Items []PermissionItem `json:"items"`
+}
+
+type PermissionMatrixSchema struct {
+	Modules     []PermissionGroup `json:"modules"`
+	ModuleIcons map[string]string `json:"module_icons"`
+	HumanLabels map[string]string `json:"human_labels"`
+}
+
+type PermissionModuleDB struct {
+	ID         uuid.UUID                   `json:"id"`
+	GroupKey   string                      `json:"group_key"`
+	GroupLabel string                      `json:"group_label"`
+	GroupIcon  string                      `json:"group_icon"`
+	ItemKey    string                      `json:"item_key"`
+	ItemLabel  string                      `json:"item_label"`
+	AccessKey  string                      `json:"access_key"`
+	Actions    map[string]PermissionAction `json:"actions"`
+	SortOrder  int                         `json:"sort_order"`
+	IsActive   bool                        `json:"is_active"`
 }

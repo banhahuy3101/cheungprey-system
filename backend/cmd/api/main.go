@@ -133,6 +133,8 @@ func main() {
 			// Roles and permissions listing accessible by all authenticated users
 			protected.GET("/admin/roles", permissionHandler.ListRoles)
 			protected.GET("/admin/role-permissions", permissionHandler.ListRolePermissions)
+			protected.GET("/admin/permission-modules", permissionHandler.ListPermissionModules)
+			protected.GET("/permissions/modules", permissionHandler.ListPermissionModules)
 			protected.GET("/settings/catalog", adminHandler.GetSettingsCatalog)
 
 			admin := protected.Group("/admin")
